@@ -214,7 +214,4 @@ sudo cp -r $(pwd)/files ${BUILDDIR}/${IMAGEBUILDER_NAME}/
 echo "Building ${VERSION} using ${CORES} cores..."
 ( cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && sudo make -j${CORES} image PROFILE="$PROFILE" PACKAGES="$COMBINED_PACKAGE_LIST" FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files" )
 
-# echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
-# echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
-# echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${TARGET_DEVICE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
 echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${VERSION}-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
