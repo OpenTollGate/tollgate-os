@@ -206,7 +206,12 @@ echo "Combined package list ${COMBINED_PACKAGE_LIST}"
 
 CORES=$(nproc)
 
-echo "Building ${VERSION} using ${CORES} cores..."
-( cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && sudo make -j${CORES} image PROFILE="$PROFILE" PACKAGES="$COMBINED_PACKAGE_LIST" )
+# Add these lines just before the final make command
+echo "Copying custom files..."
+sudo cp -r $(pwd)/files ${BUILDDIR}/${IMAGEBUILDER_NAME}/
 
-echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
+# Then modify the make command to include FILES parameter
+echo "Building ${VERSION} using ${CORES} cores..."
+( cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && sudo make -j${CORES} image PROFILE="$PROFILE" PACKAGES="$COMBINED_PACKAGE_LIST" FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files" )
+
+echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${VERSION}-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"
