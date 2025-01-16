@@ -1,0 +1,28 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=15
+
+EXTRA_COMMANDS="status"
+EXTRA_HELP="        status          Check service status"
+
+start() {
+    echo "Starting TollGate relay"/relay.log 2>&1
+    /root/relay >> /tmp/relay.log 2>&1 &
+    echo "PID: $!" >> /tmp/relay.log 2>&1
+}
+
+stop() {
+    echo "Stopping TollGate relay"
+    killall relay
+}
+
+status() {
+    if pgrep -f "/root/relay" >/dev/null; then
+        echo "TollGate relay is running"
+        return 0
+    else
+        echo "TollGate relay is not running"
+        return 1
+    fi
+}

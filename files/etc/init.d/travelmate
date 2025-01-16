@@ -1,0 +1,28 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=15
+
+EXTRA_COMMANDS="status"
+EXTRA_HELP="        status          Check service status"
+
+start() {
+    echo "Starting travelmate captive portal forwarding"/travelmate.log 2>&1
+    travelmate.sh >> /tmp/travelmate.log 2>&1 &
+    echo "PID: $!" >> /tmp/travelmate.log 2>&1
+}
+
+stop() {
+    echo "Stopping travelmate captive portal forwarding"
+    killall travelmate.sh
+}
+
+status() {
+    if pgrep -f "travelmate.sh" >/dev/null; then
+        echo "travelmate.sh is running"
+        return 0
+    else
+        echo "travelmate.sh is not running"
+        return 1
+    fi
+}
