@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Exit if not running interactively
+[ -t 0 ] || exit 0
+
+# Exit if setup is already done
+[ -f /etc/first_login_done ] && exit 0
+
+# Create debug log
+echo "First login setup script started" > /tmp/first_login_debug.log
+service opennds stop
+touch /etc/first_login_done
+echo "First login setup completed" >> /tmp/first_login_debug.log
