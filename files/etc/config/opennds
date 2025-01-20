@@ -1,8 +1,5 @@
 config opennds
 	option login_option_enabled '3'
-	#option themespec_path '/usr/lib/opennds/theme_voucher.sh'
-	#option binauth '/usr/lib/opennds/custombinauth.sh'
-	#option statuspath '/opennds_status/'
 	option allow_preemptive_authentication '0'
 	option allowlocal '0'
 	option auth_mode 'normal'
@@ -12,18 +9,14 @@ config opennds
 	option binauth_support '1'
 	option binauth_session '1'
 	option binauth_log '1'
-	#option firewall_type 'nftables'
-	#option fw_mark_authenticated '0x20000'
-	#option fw_mark_trusted '0x30000'
-	#option fw_mark_blocked '0x40000'
+	option firewall_type 'nftables'
 	list users_to_router 'allow tcp port 3334' # Relay port
 	list users_to_router 'allow tcp port 2121'
 	list preauthenticated_users 'allow tcp port 2121 to 192.168.21.21'
-	# list trusted_users 'allow tcp port 2121 to 192.168.21.21'
-	option maxclients '250'
 
-	# User access to the router
-	#
+	list users_to_router 'allow tcp port 2122' # Whoami port
+	list preauthenticated_users 'allow tcp port 2122 to 192.168.21.21' # Whoami port
+
 	# Essential - Allow ports for DNS and DHCP (disabling these will soft brick your router):
 	list users_to_router 'allow tcp port 53'
 	list users_to_router 'allow udp port 53'
