@@ -1,0 +1,28 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=15
+
+EXTRA_COMMANDS="status"
+EXTRA_HELP="        status          Check service status"
+
+start() {
+    echo "Starting TollGate valve"/valve.log 2>&1
+    /root/valve >> /tmp/valve.log 2>&1 &
+    echo "PID: $!" >> /tmp/valve.log 2>&1
+}
+
+stop() {
+    echo "Stopping TollGate valve"
+    killall valve
+}
+
+status() {
+    if pgrep -f "/root/valve" >/dev/null; then
+        echo "TollGate valve is running"
+        return 0
+    else
+        echo "TollGate valve is not running"
+        return 1
+    fi
+}
