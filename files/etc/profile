@@ -48,4 +48,7 @@ fi
 # service relay start
 # service travelmate start
 # service whoami start
+# service crowsnest start
+# service valve start
+# service merchant start
 
