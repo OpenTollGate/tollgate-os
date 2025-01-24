@@ -41,6 +41,7 @@ BASE_PACKAGES=" \
   openssh-sftp-server \
   opennds \
   travelmate \
+  luci-app-travelmate \
   "
 
 # opennds: our captive portal dependency (for ndsctl)
