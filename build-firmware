@@ -42,6 +42,11 @@ BASE_PACKAGES=" \
   opennds \
   travelmate \
   luci-app-travelmate \
+  curl \
+  jshn \
+  jsonfilter \
+  rpcd \
+  rpcd-mod-rpcsys \
   "
 
 # opennds: our captive portal dependency (for ndsctl)
