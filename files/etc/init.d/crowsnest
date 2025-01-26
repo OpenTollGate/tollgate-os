@@ -7,18 +7,18 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status          Check service status"
 
 start() {
-    echo "Starting TollGate crowsnest"/crowsnest.log 2>&1
-    /root/crowsnest >> /tmp/crowsnest.log 2>&1 &
+    echo "Starting TollGate crowsnest" > /tmp/crowsnest.log 2>&1
+    tollgate-crowsnest >> /tmp/crowsnest.log 2>&1 &
     echo "PID: $!" >> /tmp/crowsnest.log 2>&1
 }
 
 stop() {
     echo "Stopping TollGate crowsnest"
-    killall crowsnest
+    killall tollgate-crowsnest
 }
 
 status() {
-    if pgrep -f "/root/crowsnest" >/dev/null; then
+    if pgrep -f "tollgate-crowsnest" >/dev/null; then
         echo "TollGate crowsnest is running"
         return 0
     else

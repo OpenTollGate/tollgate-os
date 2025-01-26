@@ -7,18 +7,18 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status          Check service status"
 
 start() {
-    echo "Starting TollGate relay"/relay.log 2>&1
-    /root/relay >> /tmp/relay.log 2>&1 &
+    echo "Starting TollGate relay" > /tmp/relay.log 2>&1
+    tollgate-relay >> /tmp/relay.log 2>&1 &
     echo "PID: $!" >> /tmp/relay.log 2>&1
 }
 
 stop() {
     echo "Stopping TollGate relay"
-    killall relay
+    killall tollgate-relay
 }
 
 status() {
-    if pgrep -f "/root/relay" >/dev/null; then
+    if pgrep -f "tollgate-relay" >/dev/null; then
         echo "TollGate relay is running"
         return 0
     else

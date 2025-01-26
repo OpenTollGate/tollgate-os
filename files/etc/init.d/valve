@@ -7,18 +7,18 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status          Check service status"
 
 start() {
-    echo "Starting TollGate valve"/valve.log 2>&1
-    /root/valve >> /tmp/valve.log 2>&1 &
+    echo "Starting TollGate valve" > /tmp/valve.log 2>&1
+    tollgate-valve >> /tmp/valve.log 2>&1 &
     echo "PID: $!" >> /tmp/valve.log 2>&1
 }
 
 stop() {
     echo "Stopping TollGate valve"
-    killall valve
+    killall tollgate-valve
 }
 
 status() {
-    if pgrep -f "/root/valve" >/dev/null; then
+    if pgrep -f "tollgate-valve" >/dev/null; then
         echo "TollGate valve is running"
         return 0
     else
