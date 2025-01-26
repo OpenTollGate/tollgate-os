@@ -7,18 +7,18 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status          Check service status"
 
 start() {
-    echo "Starting TollGate merchant"/merchant.log 2>&1
-    /root/merchant >> /tmp/merchant.log 2>&1 &
+    echo "Starting TollGate merchant" > /tmp/merchant.log 2>&1
+    tollgate-merchant >> /tmp/merchant.log 2>&1 &
     echo "PID: $!" >> /tmp/merchant.log 2>&1
 }
 
 stop() {
     echo "Stopping TollGate merchant"
-    killall merchant
+    killall tollgate-merchant
 }
 
 status() {
-    if pgrep -f "/root/merchant" >/dev/null; then
+    if pgrep -f "tollgate-merchant" >/dev/null; then
         echo "TollGate merchant is running"
         return 0
     else

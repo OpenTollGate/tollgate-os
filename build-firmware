@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
+set -x
 
 # Install packages if needed
-sudo apt install -y gawk
+# sudo apt install -y gawk
+# sudo apt-get install -y coreutils
 
 # Build openwrt image
 MODEL=$1
@@ -219,10 +221,86 @@ CORES=$(nproc)
 
 # Add these lines just before the final make command
 echo "Copying custom files..."
-sudo cp -r $(pwd)/files ${BUILDDIR}/${IMAGEBUILDER_NAME}/
+cp -r $(pwd)/files ${BUILDDIR}/${IMAGEBUILDER_NAME}/
 
-# Then modify the make command to include FILES parameter
+# Determine architecture based on platform/type
+case "${PLATFORM}-${TYPE}" in
+  "ath79-generic")
+    BLOSSOM_ARCH="mips_24kc"
+    ;;
+  "mediatek-filogic")
+    BLOSSOM_ARCH="aarch64_cortex-a53"
+    ;;
+  *)
+    echo "Unsupported platform-type combination for blossom downloads: ${PLATFORM}-${TYPE}"
+    exit 1
+    ;;
+esac
+
+# Create packages directory in image builder
+PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+mkdir -p "${PACKAGES_DIR}"
+
+# Download IPK files using blossom_download.py
+echo "Downloading IPK files for architecture ${BLOSSOM_ARCH}..."
+python3 $(pwd)/blossom_download.py "${PACKAGES_DIR}" "${BLOSSOM_ARCH}"
+
+# Generate package index
+echo "Generating package index..."
+(cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && \
+ sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+ export -f mkhash; \
+ export MKHASH=mkhash; \
+ ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
+ gzip -9c packages/local/Packages > packages/local/Packages.gz')
+
+# Add tollgate packages to the package list
+TOLLGATE_PACKAGES="\
+  tollgate-module-relay-go \
+  tollgate-module-whoami-go \
+  tollgate-module-crowsnest-go \
+  tollgate-module-merchant-go \
+  tollgate-module-valve-go \
+  golang-doc \
+"
+
+# Update the combined package list to include tollgate packages
+COMBINED_PACKAGE_LIST="${COMBINED_PACKAGE_LIST} ${TOLLGATE_PACKAGES}"
+
+# Replace the build command and error checking with:
 echo "Building ${VERSION} using ${CORES} cores..."
-( cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && sudo make -j${CORES} image PROFILE="$PROFILE" PACKAGES="$COMBINED_PACKAGE_LIST" FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files" )
+BUILD_OUTPUT=$(cd ${BUILDDIR}/${IMAGEBUILDER_NAME} && \
+  sudo make -j${CORES} image PROFILE="$PROFILE" \
+  PACKAGES="$COMBINED_PACKAGE_LIST" \
+  FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files" 2>&1 | tee >(cat))
 
+echo "${BUILD_OUTPUT}"
+
+# Check for common error patterns
+if echo "$BUILD_OUTPUT" | grep -q "Failed to open firmware file"; then
+    echo "Error: Build failed - firmware file creation error"
+    exit 1
+fi
+
+if echo "$BUILD_OUTPUT" | grep -q "No such file or directory"; then
+    echo "Error: Build failed - missing files"
+    exit 1
+fi
+
+# Extract the filesystem size from the output
+FILESYSTEM_SIZE=$(echo "$BUILD_OUTPUT" | grep "Filesystem size" | grep -o '[0-9.]\+ Kbytes' | awk '{print $1/1024}')
+
+# After the build command, add:
+OUTPUT_FILE="${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${VERSION}-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin"
+
+if [ ! -f "$OUTPUT_FILE" ]; then
+    echo "Error: Build failed - output file not created"
+    exit 1
+fi
+
+echo "Build successful! Firmware image created at:"
+echo "Image size (${FILESYSTEM_SIZE}MB)"
+echo "${OUTPUT_FILE}"
+echo
+echo "To deploy, use:"
 echo "scp -O ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/openwrt-${VERSION}-${TARGET_DEVICE}-${PROFILE}-squashfs-sysupgrade.bin root@<dest>:/tmp"

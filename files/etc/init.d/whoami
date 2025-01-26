@@ -7,18 +7,18 @@ EXTRA_COMMANDS="status"
 EXTRA_HELP="        status          Check service status"
 
 start() {
-    echo "Starting TollGate whoami"/whoami.log 2>&1
-    /root/whoami >> /tmp/whoami.log 2>&1 &
+    echo "Starting TollGate whoami" > /tmp/whoami.log 2>&1
+    tollgate-whoami >> /tmp/whoami.log 2>&1 &
     echo "PID: $!" >> /tmp/whoami.log 2>&1
 }
 
 stop() {
     echo "Stopping TollGate whoami"
-    killall whoami
+    killall tollgate-whoami
 }
 
 status() {
-    if pgrep -f "/root/whoami" >/dev/null; then
+    if pgrep -f "tollgate-whoami" >/dev/null; then
         echo "TollGate whoami is running"
         return 0
     else
