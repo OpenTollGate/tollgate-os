@@ -44,11 +44,11 @@ if [ ! -f /etc/first_login_done ] && [ -t 0 ] && [ -t 1 ]; then
     /usr/local/bin/first-login-setup
 fi
 
-# I think the services already start automatically on boot
-# service relay start
+
+service relay start
 # service travelmate start
-# service whoami start
-# service crowsnest start
-# service valve start
-# service merchant start
+service whoami start
+service crowsnest start
+service valve start
+service merchant start
 
