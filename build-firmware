@@ -42,14 +42,14 @@ BASE_PACKAGES=" \
   urngd \
   openssh-sftp-server \
   opennds \
-  travelmate \
-  luci-app-travelmate \
-  curl \
-  jshn \
-  jsonfilter \
-  rpcd \
-  rpcd-mod-rpcsys \
   "
+#  travelmate \
+#  luci-app-travelmate \
+#  curl \
+#  jshn \
+#  jsonfilter \
+#  rpcd \
+#  rpcd-mod-rpcsys \
 
 # opennds: our captive portal dependency (for ndsctl)
 # travelmate: lets upstream captive portals through the firewall for user to click ok
