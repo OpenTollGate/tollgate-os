@@ -2,6 +2,11 @@
 
 This script uses OpenWRT's image-builder to create a base firmware for supported devices without needing to recompile all packages. 
 
+### Prepare dependencies before build
+```
+pip3 install nostr
+```
+
 ### To build
 
 ```bash
