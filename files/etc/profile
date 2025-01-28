@@ -45,10 +45,11 @@ if [ ! -f /etc/first_login_done ] && [ -t 0 ] && [ -t 1 ]; then
 fi
 
 
-service relay start
+
 # service travelmate start
-service whoami start
-service crowsnest start
-service valve start
-service merchant start
+# service relay start
+# service whoami start
+# service crowsnest start
+# service valve start
+# service merchant start
 
