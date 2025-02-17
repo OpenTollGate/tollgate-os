@@ -87,3 +87,5 @@ root@OpenWrt:~# ps | grep "tollgate"
  5019 root     1201m S    tollgate-whoami
 ```
 
+## License
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
