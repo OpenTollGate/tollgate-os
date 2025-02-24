@@ -18,17 +18,24 @@ A GitHub Action that uses OpenWRT's image-builder to create base firmware for su
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `model` | Device model to build firmware for | Yes | - |
-| `relays` | Comma-separated list of Nostr relays | No | - |
-| `nsec` | Nostr private key for publishing metadata | No | - |
+| `model` | Device model to build firmware for (gl-ar300m, gl-mt3000, gl-mt6000) | Yes | - |
+| `nostr_secret_key` | Nostr secret key for signing | No | - |
+| `nostr_public_key` | Nostr public key for identification | No | - |
+| `nostr_relays` | Comma-separated list of Nostr relays | No | wss://relay.damus.io,wss://nos.lol,wss://nostr.mom |
 
 ### Outputs
 
 | Output | Description |
 |--------|-------------|
 | `firmware_path` | Path to the built firmware file |
-| `firmware_hash` | SHA256 hash of the firmware file |
+| `firmware_name` | Name of the generated firmware file |
 
+### Supported Models
+
+Currently supported device models:
+- gl-ar300m
+- gl-mt3000
+- gl-mt6000
 
 ### Installation on Device
 
