@@ -1,0 +1,176 @@
+name: Build OpenWRT Firmware
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        model: [
+#          'gl-mt300n-v2',
+          'gl-ar300m',
+          'gl-mt3000',
+          'gl-mt6000',
+#          'gl-e750',
+#          'archer_mr200'
+        ]
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+    name: Build ${{ matrix.model }}
+
+    env:
+      VERSION: "23.05.3"
+      BUILDDIR: "/tmp/openwrt-build"
+      BASE_PACKAGES: >-
+        base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
+        kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
+        libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
+        ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
+        uclient-fetch urandom-seed urngd openssh-sftp-server opennds
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gawk \
+            build-essential \
+            curl \
+            zstd \
+            libssl-dev
+          python -m pip install --upgrade pip
+          pip install nostr
+
+      - name: Set Build Variables
+        id: vars
+        run: |
+          case "${{ matrix.model }}" in
+            "gl-ar300m")
+              echo "PLATFORM=ath79" >> $GITHUB_ENV
+              echo "TYPE=generic" >> $GITHUB_ENV
+              echo "TARGET_DEVICE=ath79-generic" >> $GITHUB_ENV
+              echo "PROFILE=glinet_gl-ar300m16" >> $GITHUB_ENV
+              echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+              ;;
+            "gl-mt3000"|"gl-mt6000")
+              echo "PLATFORM=mediatek" >> $GITHUB_ENV
+              echo "TYPE=filogic" >> $GITHUB_ENV
+              echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
+              echo "PROFILE=glinet_${{ matrix.model }}" >> $GITHUB_ENV
+              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: Setup Build Directory
+        run: |
+          mkdir -p $BUILDDIR
+          
+          # First set IMAGEBUILDER_NAME
+          if [ "$VERSION" = "snapshot" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
+          else
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${VERSION}-${TARGET_DEVICE}.Linux-x86_64"
+          fi
+          echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
+          
+          # Then use IMAGEBUILDER_NAME to set DOWNLOAD_URL
+          if [ "$VERSION" = "snapshot" ]; then
+            DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+            echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+          else
+            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+            echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+          fi
+          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+          
+          # Debug output
+          echo "IMAGEBUILDER_NAME: ${IMAGEBUILDER_NAME}"
+          echo "DOWNLOAD_URL: ${DOWNLOAD_URL}"
+
+      - name: Download and Extract ImageBuilder
+        run: |
+          cd $BUILDDIR
+          echo "Downloading from: $DOWNLOAD_URL"
+          # First check if the URL exists
+          if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+            curl -L -C - -O "$DOWNLOAD_URL"
+            if [ "$VERSION" = "snapshot" ]; then
+              tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+            else
+              tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+            fi
+          else
+            echo "Error: URL $DOWNLOAD_URL does not exist"
+            exit 1
+          fi
+
+      - name: Setup Custom Files and Packages
+        env:
+          NOSTR_SECRET_KEY: ${{ secrets.NOSTR_SECRET_KEY }}
+          NOSTR_PUBLIC_KEY: ${{ secrets.NOSTR_PUBLIC_KEY }}
+          NOSTR_RELAYS: "wss://relay.damus.io,wss://nos.lol,wss://nostr.mom"
+        run: |
+          cp -r files $BUILDDIR/${IMAGEBUILDER_NAME}/
+          PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+          mkdir -p "${PACKAGES_DIR}"
+          # python3 blossom_download.py "${PACKAGES_DIR}" "${BLOSSOM_ARCH}"
+
+      - name: Generate Package Index
+        run: |
+          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+          export -f mkhash; \
+          export MKHASH=mkhash; \
+          ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
+          gzip -9c packages/local/Packages > packages/local/Packages.gz'
+
+      - name: Build Firmware
+        run: |
+          # TOLLGATE_PACKAGES="tollgate-module-relay-go tollgate-module-whoami-go tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go golang-doc"
+          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
+          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          sudo make -j$(nproc) image \
+            PROFILE="${PROFILE}" \
+            PACKAGES="${COMBINED_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+
+      - name: Find Firmware File
+        id: find-firmware
+        run: |
+          # Print the directory structure for debugging
+          echo "Directory structure of build output:"
+          ls -R ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/
+          # More specific find command using known path structure
+          FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*${PROFILE}*sysupgrade.bin" -type f)
+          if [ -f "$FIRMWARE_PATH" ]; then
+            echo "Found firmware at: ${FIRMWARE_PATH}"
+            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
+            echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
+          else
+            echo "Error: Firmware file not found!"
+            echo "Searched in: ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/"
+            exit 1
+          fi
+
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.model }}
+          path: ${{ steps.find-firmware.outputs.firmware_path }}
+          retention-days: 5

@@ -110,6 +110,26 @@ def get_architecture_event(pubkey, relays, target_arch):
         debug_print(f"Error getting event: {e}")
         return None
 
+# Replace the secrets file reading section with:
+def get_secrets_from_env():
+    """Get secrets from environment variables"""
+    required_vars = {
+        'NOSTR_SECRET_KEY': 'secret_key',
+        'NOSTR_PUBLIC_KEY': 'public_key_hex',
+        'NOSTR_RELAYS': 'relays'
+    }
+    
+    secrets = {}
+    for env_var, secret_key in required_vars.items():
+        value = os.environ.get(env_var)
+        if not value:
+            raise ValueError(f"Required environment variable {env_var} not set")
+        if secret_key == 'relays':
+            secrets[secret_key] = value.split(',')
+        else:
+            secrets[secret_key] = value
+    return secrets
+
 def main():
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <output_directory> <architecture>")
@@ -122,16 +142,13 @@ def main():
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    # Read secrets from the same directory as the script
-    secrets_file = os.path.join(os.path.dirname(__file__), 'blossom_secrets.json')
     try:
-        with open(secrets_file) as f:
-            secrets = json.load(f)
-            secret_key = secrets['secret_key']
-            relays = secrets['relays']
-            pubkey = secrets['public_key_hex']
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        print(f"Error reading secrets file: {str(e)}")
+        secrets = get_secrets_from_env()
+        secret_key = secrets['secret_key']
+        relays = secrets['relays']
+        pubkey = secrets['public_key_hex']
+    except ValueError as e:
+        print(f"Error reading secrets from environment: {str(e)}")
         sys.exit(1)
 
     # Get event for specified architecture
