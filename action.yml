@@ -30,6 +30,10 @@ inputs:
       libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
       ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
       uclient-fetch urandom-seed urngd openssh-sftp-server opennds
+  files_path:
+    description: 'Path to default files directory'
+    default: 'tollgate-image-builder/files'
+    required: false
 
 outputs:
   firmware_path:
@@ -127,7 +131,10 @@ runs:
         NOSTR_PUBLIC_KEY: ${{ inputs.nostr_public_key }}
         NOSTR_RELAYS: ${{ inputs.nostr_relays }}
       run: |
-        cp -r files $BUILDDIR/${IMAGEBUILDER_NAME}/
+        mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files
+        if [ -d "${{ inputs.files_path }}" ]; then
+          cp -r ${{ inputs.files_path }}/* $BUILDDIR/${IMAGEBUILDER_NAME}/files/
+        fi
         PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
 
