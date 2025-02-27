@@ -27,12 +27,13 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Build OpenWRT Image
-        id: build-openwrt-image  # Add this ID to reference outputs
+        id: build-openwrt-image
         uses: ./
         with:
           model: ${{ matrix.model }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
+          files_path: "./files"
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
