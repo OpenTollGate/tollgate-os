@@ -1,0 +1,167 @@
+{
+  "version": "0.0.1",
+  "modules": [
+    {
+      "name": "crowsnest",
+      "description": "TollGate Crowsnest Module - Network monitoring and visualization",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "janitor",
+      "description": "TollGate Janitor Module - System maintenance and cleanup",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "merchant",
+      "description": "TollGate Merchant Module - Payment processing and management",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "relay",
+      "description": "TollGate Relay Module - Nostr relay functionality",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "valve",
+      "description": "TollGate Valve Module - Traffic control and routing",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "whoami",
+      "description": "TollGate WhoAmI Module - Identity and authentication services",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    }
+  ]
+}
