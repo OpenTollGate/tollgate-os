@@ -113,34 +113,33 @@ runs:
         # Set up authentication
         git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
-        # Stash any existing changes
-        git stash
-        
-        # Fetch and checkout target branch
+        # Fetch and checkout target branch first
         git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
         git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
         
-        # Apply stashed changes if any
+        # Stash existing changes and apply after checkout
+        git stash
         git stash pop || true
         
-        # Add conflict resolution
-        if git diff --check --staged; then
-          echo "Found merge conflicts, aborting commit"
+        # Handle merge conflicts automatically
+        if git diff --check; then
+          echo "Resolving merge conflicts by accepting incoming changes..."
+          git diff --name-only --diff-filter=U | xargs -I {} git checkout --theirs {}
+          git add ${{ inputs.release_json_path }}
+        fi
+        
+        # Final conflict check
+        if grep -qE '^<<<<<<<|^=======|^>>>>>>>' ${{ inputs.release_json_path }}; then
+          echo "::error::Unresolved merge conflicts detected!"
           exit 1
         fi
         
-        # Add and commit only real changes
+        # Add and commit changes
         git add ${{ inputs.release_json_path }}
         
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          # Verify clean state before committing
-          if [ -f ${{ inputs.release_json_path }}.merge ]; then
-            echo "Found merge artifacts, cleaning up..."
-            rm ${{ inputs.release_json_path }}.merge*
-          fi
-          
           git commit -m "${{ inputs.commit_message }}"
           echo "Pushing changes to ${{ inputs.target_branch }}..."
           git push origin HEAD:${{ inputs.target_branch }}
