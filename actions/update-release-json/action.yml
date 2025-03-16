@@ -113,16 +113,15 @@ runs:
         # Set up authentication
         git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
-        # Make sure we're on the target branch
-        git fetch origin ${{ inputs.target_branch }}
+        # Stash any existing changes
+        git stash
         
-        # Check if the branch exists
-        if git rev-parse --verify origin/${{ inputs.target_branch }} >/dev/null 2>&1; then
-          git checkout ${{ inputs.target_branch }}
-          git pull origin ${{ inputs.target_branch }}
-        else
-          git checkout -b ${{ inputs.target_branch }}
-        fi
+        # Fetch and checkout target branch
+        git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
+        git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
+        
+        # Apply stashed changes if any
+        git stash pop || true
         
         # Add and commit only real changes
         git add ${{ inputs.release_json_path }}
