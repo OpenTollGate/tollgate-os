@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '*'
-    branches-ignore:
+    paths-ignore:
       - 'main'
       - 'develop'
     paths:
