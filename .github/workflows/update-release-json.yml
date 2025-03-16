@@ -4,8 +4,13 @@ name: Update Release JSON
 on:
   push:
     branches:
+      - '*'
+    branches-ignore:
       - 'main'
       - 'develop'
+    paths:
+      - '.github/workflows/update-release-json.yml'
+      - 'actions/update-release-json/**'
   workflow_dispatch:
     inputs:
       run_id:
