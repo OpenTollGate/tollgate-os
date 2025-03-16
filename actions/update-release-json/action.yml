@@ -26,6 +26,19 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: List Downloaded Artifacts
+      shell: bash
+      run: |
+        echo "Listing artifacts before checkout:"
+        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found yet"
+        
+        # Save artifacts to a safe location
+        if [ -d "${{ inputs.artifacts_path }}" ]; then
+          echo "Backing up artifacts directory..."
+          mkdir -p /tmp/artifacts-backup
+          cp -r ${{ inputs.artifacts_path }}/* /tmp/artifacts-backup/
+        fi
+
     - name: Setup Git and Checkout Target Branch
       shell: bash
       run: |
@@ -36,20 +49,29 @@ runs:
         # Set up authentication
         git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
-        # Clean workspace and ensure we're on a fresh branch
-        git clean -fdx
-        
         # Fetch and checkout target branch
         git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
+        
+        # Save current changes to release.json if it exists
+        if [ -f "${{ inputs.release_json_path }}" ]; then
+          cp ${{ inputs.release_json_path }} /tmp/release.json.backup || true
+        fi
+        
+        # Checkout target branch without removing untracked files
         git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
         
         # Make sure we're at the latest commit
         git reset --hard origin/${{ inputs.target_branch }} || echo "No existing branch to reset"
-
-    - name: List Downloaded Artifacts
-      shell: bash
-      run: |
-        find ${{ inputs.artifacts_path }} -type f | sort
+        
+        # Restore artifacts directory
+        mkdir -p ${{ inputs.artifacts_path }}
+        if [ -d "/tmp/artifacts-backup" ]; then
+          echo "Restoring artifacts from backup..."
+          cp -r /tmp/artifacts-backup/* ${{ inputs.artifacts_path }}/
+        fi
+        
+        echo "Listing artifacts after checkout:"
+        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found"
 
     - name: Update release.json
       shell: bash
