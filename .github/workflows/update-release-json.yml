@@ -23,7 +23,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: develop  # Always checkout the develop branch
+          ref: update-release-json  # Always checkout the develop branch
 
       - name: Create Artifacts Directory
         run: |
