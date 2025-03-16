@@ -95,4 +95,5 @@ jobs:
         with:
           artifacts_path: artifacts
           release_json_path: release.json
-          target_branch: develop  # Pass the target branch to the action
+          target_branch: develop
+          github_token: ${{ secrets.GITHUBTOKEN }}
