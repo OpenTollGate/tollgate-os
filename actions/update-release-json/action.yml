@@ -40,74 +40,61 @@ runs:
         # Process each artifact and update release.json
         for ARTIFACT_DIR in ${{ inputs.artifacts_path }}/package-*; do
           if [ -d "$ARTIFACT_DIR" ]; then
-            # Extract model and module from directory name
+            # Extract model and module from directory name using regex
             DIR_NAME=$(basename "$ARTIFACT_DIR")
-            MODEL=$(echo "$DIR_NAME" | cut -d'-' -f2)
-            MODULE_FULL=$(echo "$DIR_NAME" | cut -d'-' -f3-)
-            MODULE=$(echo "$MODULE_FULL" | sed 's/tollgate-module-//;s/-go//')
-            
-            # Find the IPK file
-            IPK_FILE=$(find "$ARTIFACT_DIR" -name "*.ipk" | head -1)
-            
-            if [ -n "$IPK_FILE" ]; then
-              # Get file hash and size
-              FILE_HASH=$(sha256sum "$IPK_FILE" | cut -d' ' -f1)
-              FILE_SIZE=$(stat -c%s "$IPK_FILE")
+            if [[ "$DIR_NAME" =~ ^package-gl-(.+)-tollgate-module-(.+)-go$ ]]; then
+              MODEL="${BASH_REMATCH[1]}"
+              MODULE="${BASH_REMATCH[2]}"
               
-              # Map model to architecture
-              if [[ "$MODEL" == "gl-ar300m" ]]; then
-                ARCH="mipsel_24kc"
-              elif [[ "$MODEL" == "gl-mt3000" || "$MODEL" == "gl-mt6000" ]]; then
-                ARCH="aarch64_cortex-a53"
-              else
-                ARCH="unknown"
+              echo "Processing module: $MODULE for model: $MODEL"
+              
+              # Find the IPK file
+              IPK_FILE=$(find "$ARTIFACT_DIR" -name "*.ipk" | head -1)
+              
+              if [ -n "$IPK_FILE" ]; then
+                # Get file hash and size
+                FILE_HASH=$(sha256sum "$IPK_FILE" | cut -d' ' -f1)
+                FILE_SIZE=$(stat -c%s "$IPK_FILE")
+                
+                # Map model to architecture
+                case "$MODEL" in
+                  "ar300m") ARCH="mipsel_24kc" ;;
+                  "mt3000"|"mt6000") ARCH="aarch64_cortex-a53" ;;
+                  *) ARCH="unknown" ;;
+                esac
+                
+                # Get event ID from workflow outputs
+                EVENT_FILE=$(find "${{ inputs.artifacts_path }}" -name "*${FILE_HASH}*" -exec grep -l "$FILE_HASH" {} + | head -1)
+                EVENT_ID=$(jq -r '.eventId' "$EVENT_FILE" 2>/dev/null || echo "[NIP94_EVENT_ID]")
+                
+                echo "Updating release.json for module: $MODULE, architecture: $ARCH"
+                echo "File hash: $FILE_HASH, Event ID: $EVENT_ID"
+                
+                # Update release.json using jq
+                TMP_FILE=$(mktemp)
+                jq --arg module "$MODULE" \
+                   --arg arch "$ARCH" \
+                   --arg url "https://blossom.swissdash.site/$FILE_HASH.ipk" \
+                   --arg hash "$FILE_HASH" \
+                   --arg eventId "$EVENT_ID" \
+                   '(.modules[] | select(.name == $module) | .versions[0].architectures[$arch]) |= {
+                     "url": $url,
+                     "hash": ("sha256:" + $hash),
+                     "eventId": $eventId
+                   }' \
+                   ${{ inputs.release_json_path }} > "$TMP_FILE"
+                
+                if [ $? -eq 0 ]; then
+                  mv "$TMP_FILE" ${{ inputs.release_json_path }}
+                  echo "Successfully updated $MODULE/$ARCH in release.json"
+                else
+                  echo "Error updating JSON for $MODULE/$ARCH"
+                  cat "$TMP_FILE"
+                  rm "$TMP_FILE"
+                fi
               fi
-              
-              # Get event ID from workflow outputs (if available)
-              EVENT_ID=$(grep -r "eventId.*$FILE_HASH" ${{ inputs.artifacts_path }} || echo "")
-              if [[ "$EVENT_ID" =~ eventId\":\"([a-f0-9]+) ]]; then
-                EVENT_ID="${BASH_REMATCH[1]}"
-              else
-                EVENT_ID="[NIP94_EVENT_ID]"
-              fi
-              
-              echo "Updating release.json for module $MODULE, model $MODEL, arch $ARCH"
-              echo "File hash: $FILE_HASH"
-              echo "Event ID: $EVENT_ID"
-              
-              # Debug: Check if module exists
-              if ! jq -e ".modules[] | select(.name == \"$MODULE\")" ${{ inputs.release_json_path }} > /dev/null; then
-                echo "WARNING: Module '$MODULE' not found in release.json"
-                continue
-              fi
-              
-              # Debug: Check if architecture exists for this module
-              if ! jq -e ".modules[] | select(.name == \"$MODULE\") | .versions[0].architectures[\"$ARCH\"]" ${{ inputs.release_json_path }} > /dev/null; then
-                echo "WARNING: Architecture '$ARCH' not found for module '$MODULE' in release.json"
-                continue
-              fi
-              
-              # Use jq to update the release.json file
-              # This is a complex operation that requires careful JSON manipulation
-              TMP_FILE=$(mktemp)
-              jq --arg module "$MODULE" \
-                 --arg arch "$ARCH" \
-                 --arg url "https://blossom.swissdash.site/$FILE_HASH.ipk" \
-                 --arg hash "$FILE_HASH" \
-                 --arg eventId "$EVENT_ID" \
-                 '(.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).url = $url |
-                  (.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).hash = ("sha256:" + $hash) |
-                  (.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).eventId = $eventId' \
-                 ${{ inputs.release_json_path }} > "$TMP_FILE"
-              
-              if [ $? -eq 0 ]; then
-                mv "$TMP_FILE" ${{ inputs.release_json_path }}
-                echo "Successfully updated $MODULE/$ARCH in release.json"
-              else
-                echo "Error updating JSON for $MODULE/$ARCH"
-                cat "$TMP_FILE"
-                rm "$TMP_FILE"
-              fi
+            else
+              echo "Skipping invalid directory format: $DIR_NAME"
             fi
           fi
         done
@@ -123,7 +110,7 @@ runs:
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
         
-        # Set up authentication - use only one method
+        # Set up authentication
         git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
         # Make sure we're on the target branch
@@ -137,18 +124,13 @@ runs:
           git checkout -b ${{ inputs.target_branch }}
         fi
         
-        # Force a change to ensure there's something to commit
-        echo "# Last updated: $(date)" >> ${{ inputs.release_json_path }}
-        
-        # Add and commit
+        # Add and commit only real changes
         git add ${{ inputs.release_json_path }}
         
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
           git commit -m "${{ inputs.commit_message }}"
-          
-          # Push using the configured credentials
           echo "Pushing changes to ${{ inputs.target_branch }}..."
           git push origin HEAD:${{ inputs.target_branch }}
         fi
