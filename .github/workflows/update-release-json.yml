@@ -32,6 +32,17 @@ jobs:
           echo "This workflow will update release.json with the latest package information"
           echo "No artifacts are downloaded here as they are referenced in release.json"
 
+
+      - name: Debug Directory Structure
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Repository contents:"
+          ls -la
+          echo "Actions directory:"
+          ls -la actions || echo "Actions directory not found"
+          echo "Update release json action directory:"
+          ls -la actions/update-release-json || echo "Update release json action directory not found"
+        
       - name: Update Release JSON
         uses: ./actions/update-release-json
         with:
