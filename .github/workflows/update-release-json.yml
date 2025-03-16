@@ -97,3 +97,4 @@ jobs:
           release_json_path: release.json
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
+          commit_message: "Update release.json with latest module packages [skip ci]"

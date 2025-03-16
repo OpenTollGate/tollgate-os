@@ -148,8 +148,14 @@ runs:
         
         # Add and commit
         git add ${{ inputs.release_json_path }}
-        git commit -m "${{ inputs.commit_message }}"
         
-        # Push using the configured remote
-        echo "Pushing changes to ${{ inputs.target_branch }}..."
-        git push origin ${{ inputs.target_branch }}
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "${{ inputs.commit_message }}"
+          
+          # Push using the configured remote
+          echo "Pushing changes to ${{ inputs.target_branch }}..."
+          git push origin ${{ inputs.target_branch }}
+        fi
