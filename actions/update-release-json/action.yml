@@ -117,9 +117,10 @@ runs:
         git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
         git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
         
-        # Stash existing changes and apply after checkout
-        git stash
-        git stash pop || true
+        # Force sync with remote branch
+        echo "Synchronizing with remote branch..."
+        git fetch origin ${{ inputs.target_branch }}
+        git reset --hard origin/${{ inputs.target_branch }} || echo "No existing branch to reset"
         
         # Handle merge conflicts by keeping our changes
         if git diff --check; then
@@ -141,6 +142,6 @@ runs:
           echo "No changes to commit"
         else
           git commit -m "${{ inputs.commit_message }}"
-          echo "Pushing changes to ${{ inputs.target_branch }}..."
-          git push origin HEAD:${{ inputs.target_branch }}
+          echo "Force pushing changes to ${{ inputs.target_branch }}..."
+          git push --force-with-lease origin HEAD:${{ inputs.target_branch }}
         fi
