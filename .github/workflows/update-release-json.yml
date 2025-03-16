@@ -2,6 +2,10 @@
 name: Update Release JSON
 
 on:
+  push:
+    branches:
+      - 'main'
+      - 'develop'
   workflow_dispatch:
     inputs:
       run_id:
@@ -16,18 +20,19 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Download Artifacts from Build Workflow
-        uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: build-firmware.yml
-          run_id: ${{ github.event.inputs.run_id || github.event.client_payload.run_id }}
-          repo: OpenTollGate/tollgate-sdk
-          path: artifacts
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          ref: develop  # Always checkout the develop branch
+
+      - name: Create Artifacts Directory
+        run: |
+          mkdir -p artifacts
+          echo "Created artifacts directory for the update-release-json action"
+          echo "This workflow will update release.json with the latest package information"
+          echo "No artifacts are downloaded here as they are referenced in release.json"
 
       - name: Update Release JSON
         uses: ./actions/update-release-json
         with:
           artifacts_path: artifacts
           release_json_path: release.json
+          target_branch: develop  # Pass the target branch to the action
