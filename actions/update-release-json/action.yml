@@ -123,12 +123,24 @@ runs:
         # Apply stashed changes if any
         git stash pop || true
         
+        # Add conflict resolution
+        if git diff --check --staged; then
+          echo "Found merge conflicts, aborting commit"
+          exit 1
+        fi
+        
         # Add and commit only real changes
         git add ${{ inputs.release_json_path }}
         
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
+          # Verify clean state before committing
+          if [ -f ${{ inputs.release_json_path }}.merge ]; then
+            echo "Found merge artifacts, cleaning up..."
+            rm ${{ inputs.release_json_path }}.merge*
+          fi
+          
           git commit -m "${{ inputs.commit_message }}"
           echo "Pushing changes to ${{ inputs.target_branch }}..."
           git push origin HEAD:${{ inputs.target_branch }}
