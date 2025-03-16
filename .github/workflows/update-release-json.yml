@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - '*'
-    paths-ignore:
-      - 'main'
-      - 'develop'
     paths:
       - '.github/workflows/update-release-json.yml'
       - 'actions/update-release-json/**'
