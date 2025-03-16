@@ -70,6 +70,19 @@ runs:
               
               echo "Updating release.json for module $MODULE, model $MODEL, arch $ARCH"
               echo "File hash: $FILE_HASH"
+              echo "Event ID: $EVENT_ID"
+              
+              # Debug: Check if module exists
+              if ! jq -e ".modules[] | select(.name == \"$MODULE\")" ${{ inputs.release_json_path }} > /dev/null; then
+                echo "WARNING: Module '$MODULE' not found in release.json"
+                continue
+              fi
+              
+              # Debug: Check if architecture exists for this module
+              if ! jq -e ".modules[] | select(.name == \"$MODULE\") | .versions[0].architectures[\"$ARCH\"]" ${{ inputs.release_json_path }} > /dev/null; then
+                echo "WARNING: Architecture '$ARCH' not found for module '$MODULE' in release.json"
+                continue
+              fi
               
               # Use jq to update the release.json file
               # This is a complex operation that requires careful JSON manipulation
@@ -86,6 +99,7 @@ runs:
               
               if [ $? -eq 0 ]; then
                 mv "$TMP_FILE" ${{ inputs.release_json_path }}
+                echo "Successfully updated $MODULE/$ARCH in release.json"
               else
                 echo "Error updating JSON for $MODULE/$ARCH"
                 cat "$TMP_FILE"
@@ -120,11 +134,12 @@ runs:
         
         git add ${{ inputs.release_json_path }}
         
-        # Only commit if there are changes
-        if git diff --staged --quiet; then
-          echo "No changes to release.json, skipping commit"
-        else
-          git commit -m "${{ inputs.commit_message }}"
-          # Always push to the target branch
-          git push origin ${{ inputs.target_branch }}
-        fi
+        # Force a change to ensure there's something to commit
+        echo "# Last updated: $(date)" >> ${{ inputs.release_json_path }}
+        git add ${{ inputs.release_json_path }}
+        
+        # Commit and push
+        git commit -m "${{ inputs.commit_message }}"
+        git push origin ${{ inputs.target_branch }}
+        
+        echo "Changes committed and pushed to ${{ inputs.target_branch }}"

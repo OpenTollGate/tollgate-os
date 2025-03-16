@@ -25,20 +25,55 @@ jobs:
         with:
           ref: update-release-json
 
-      - name: Create Test Artifacts
+      - name: Analyze release.json Structure
         run: |
-          # Create artifacts directory
+          echo "Analyzing release.json structure..."
+          
+          # List all modules in release.json
+          echo "Available modules:"
+          jq -r '.modules[].name' release.json
+          
+          # List all architectures for each module
+          echo "Available architectures for each module:"
+          jq -r '.modules[] | "\(.name): \((.versions[0].architectures | keys | join(", ")))"' release.json
+
+      - name: Create Test Artifacts for Existing Modules
+        run: |
+          # Create test artifacts for modules that exist in release.json
+          
+          # Create relay module artifacts for different architectures
           mkdir -p artifacts/package-gl-mt3000-tollgate-module-relay-go
+          mkdir -p artifacts/package-gl-ar300m-tollgate-module-relay-go
           
-          # Create a dummy IPK file
-          echo "This is a test IPK file" > artifacts/package-gl-mt3000-tollgate-module-relay-go/test-package.ipk
+          # Create whoami module artifacts
+          mkdir -p artifacts/package-gl-mt3000-tollgate-module-whoami-go
           
-          # Calculate and display the hash
-          HASH=$(sha256sum artifacts/package-gl-mt3000-tollgate-module-relay-go/test-package.ipk | cut -d' ' -f1)
-          echo "Created test IPK with hash: $HASH"
+          # Create valve module artifacts
+          mkdir -p artifacts/package-gl-mt6000-tollgate-module-valve-go
           
-          # Create a mock event ID file
-          echo "{\"eventId\":\"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"hash\":\"$HASH\"}" > artifacts/event-info.json
+          # Create dummy IPK files with unique content
+          echo "This is a relay test IPK for mt3000" > artifacts/package-gl-mt3000-tollgate-module-relay-go/relay-mt3000.ipk
+          echo "This is a relay test IPK for ar300m" > artifacts/package-gl-ar300m-tollgate-module-relay-go/relay-ar300m.ipk
+          echo "This is a whoami test IPK for mt3000" > artifacts/package-gl-mt3000-tollgate-module-whoami-go/whoami-mt3000.ipk
+          echo "This is a valve test IPK for mt6000" > artifacts/package-gl-mt6000-tollgate-module-valve-go/valve-mt6000.ipk
+          
+          # Calculate and display hashes
+          RELAY_MT3000_HASH=$(sha256sum artifacts/package-gl-mt3000-tollgate-module-relay-go/relay-mt3000.ipk | cut -d' ' -f1)
+          RELAY_AR300M_HASH=$(sha256sum artifacts/package-gl-ar300m-tollgate-module-relay-go/relay-ar300m.ipk | cut -d' ' -f1)
+          WHOAMI_MT3000_HASH=$(sha256sum artifacts/package-gl-mt3000-tollgate-module-whoami-go/whoami-mt3000.ipk | cut -d' ' -f1)
+          VALVE_MT6000_HASH=$(sha256sum artifacts/package-gl-mt6000-tollgate-module-valve-go/valve-mt6000.ipk | cut -d' ' -f1)
+          
+          echo "Created test IPKs with hashes:"
+          echo "Relay MT3000: $RELAY_MT3000_HASH"
+          echo "Relay AR300M: $RELAY_AR300M_HASH"
+          echo "Whoami MT3000: $WHOAMI_MT3000_HASH"
+          echo "Valve MT6000: $VALVE_MT6000_HASH"
+          
+          # Create mock event ID files with the correct format
+          echo "{\"eventId\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"hash\":\"$RELAY_MT3000_HASH\"}" > artifacts/relay-mt3000-event.json
+          echo "{\"eventId\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"hash\":\"$RELAY_AR300M_HASH\"}" > artifacts/relay-ar300m-event.json
+          echo "{\"eventId\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"hash\":\"$WHOAMI_MT3000_HASH\"}" > artifacts/whoami-mt3000-event.json
+          echo "{\"eventId\":\"4444444444444444444444444444444444444444444444444444444444444444\",\"hash\":\"$VALVE_MT6000_HASH\"}" > artifacts/valve-mt6000-event.json
           
           echo "Test artifacts created successfully:"
           find artifacts -type f | sort
