@@ -119,12 +119,16 @@ runs:
     - name: Commit and Push Changes
       shell: bash
       run: |
-        # Configure git with token-based authentication
+        # Configure git
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
         
-        # Use the token for authentication
-        REPO_URL="https://x-access-token:${{ inputs.github_token }}@github.com/${GITHUB_REPOSITORY}.git"
+        # Debug information
+        echo "Repository: $GITHUB_REPOSITORY"
+        echo "Target branch: ${{ inputs.target_branch }}"
+        
+        # Set up authentication with the token
+        git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
         # Make sure we're on the target branch
         git fetch origin ${{ inputs.target_branch }}
@@ -139,15 +143,13 @@ runs:
           git checkout -b ${{ inputs.target_branch }}
         fi
         
-        
-        git add ${{ inputs.release_json_path }}
-        
         # Force a change to ensure there's something to commit
         echo "# Last updated: $(date)" >> ${{ inputs.release_json_path }}
+        
+        # Add and commit
         git add ${{ inputs.release_json_path }}
-        
-        # Commit and push using the token URL
         git commit -m "${{ inputs.commit_message }}"
-        git push "$REPO_URL" ${{ inputs.target_branch }}
         
-        echo "Changes committed and pushed to ${{ inputs.target_branch }}"
+        # Push using the configured remote
+        echo "Pushing changes to ${{ inputs.target_branch }}..."
+        git push origin ${{ inputs.target_branch }}
