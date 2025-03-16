@@ -1,0 +1,167 @@
+name: 'Update Release JSON'
+description: 'Updates the release.json file with package information'
+author: 'OpenTollGate'
+
+inputs:
+  artifacts_path:
+    description: 'Path to the downloaded artifacts'
+    required: true
+    default: 'artifacts'
+  release_json_path:
+    description: 'Path to the release.json file'
+    required: true
+    default: 'release.json'
+  commit_message:
+    description: 'Commit message for the update'
+    required: false
+    default: 'Update release.json with latest module packages [skip ci]'
+  target_branch:
+    description: 'Branch to push changes to'
+    required: false
+    default: 'develop'
+  github_token:
+    description: 'GitHub token for authentication'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: List Downloaded Artifacts
+      shell: bash
+      run: |
+        echo "Listing artifacts before checkout:"
+        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found yet"
+        
+        # Save artifacts to a safe location
+        if [ -d "${{ inputs.artifacts_path }}" ]; then
+          echo "Backing up artifacts directory..."
+          mkdir -p /tmp/artifacts-backup
+          cp -r ${{ inputs.artifacts_path }}/* /tmp/artifacts-backup/
+        fi
+
+    - name: Setup Git and Checkout Target Branch
+      shell: bash
+      run: |
+        # Configure git
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+        
+        # Set up authentication
+        git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
+        
+        # Fetch and checkout target branch
+        git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
+        
+        # Save current changes to release.json if it exists
+        if [ -f "${{ inputs.release_json_path }}" ]; then
+          cp ${{ inputs.release_json_path }} /tmp/release.json.backup || true
+        fi
+        
+        # Checkout target branch without removing untracked files
+        git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
+        
+        # Make sure we're at the latest commit
+        git reset --hard origin/${{ inputs.target_branch }} || echo "No existing branch to reset"
+        
+        # Restore artifacts directory
+        mkdir -p ${{ inputs.artifacts_path }}
+        if [ -d "/tmp/artifacts-backup" ]; then
+          echo "Restoring artifacts from backup..."
+          cp -r /tmp/artifacts-backup/* ${{ inputs.artifacts_path }}/
+        fi
+        
+        echo "Listing artifacts after checkout:"
+        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found"
+
+    - name: Update release.json
+      shell: bash
+      run: |
+        # Create a backup of the original file
+        cp ${{ inputs.release_json_path }} ${{ inputs.release_json_path }}.bak
+        
+        # Process each artifact and update release.json
+        for ARTIFACT_DIR in ${{ inputs.artifacts_path }}/package-*; do
+          if [ -d "$ARTIFACT_DIR" ]; then
+            # Extract model and module from directory name using regex
+            DIR_NAME=$(basename "$ARTIFACT_DIR")
+            if [[ "$DIR_NAME" =~ ^package-gl-(.+)-tollgate-module-(.+)-go$ ]]; then
+              MODEL="${BASH_REMATCH[1]}"
+              MODULE="${BASH_REMATCH[2]}"
+              
+              echo "Processing module: $MODULE for model: $MODEL"
+              
+              # Find the IPK file
+              IPK_FILE=$(find "$ARTIFACT_DIR" -name "*.ipk" | head -1)
+              
+              if [ -n "$IPK_FILE" ]; then
+                # Get file hash and size
+                FILE_HASH=$(sha256sum "$IPK_FILE" | cut -d' ' -f1)
+                FILE_SIZE=$(stat -c%s "$IPK_FILE")
+                
+                # Map model to architecture
+                case "$MODEL" in
+                  "ar300m") ARCH="mipsel_24kc" ;;
+                  "mt3000"|"mt6000") ARCH="aarch64_cortex-a53" ;;
+                  *) ARCH="unknown" ;;
+                esac
+                
+                # Get event ID from workflow outputs
+                EVENT_FILE=$(find "${{ inputs.artifacts_path }}" -name "*${FILE_HASH}*" -exec grep -l "$FILE_HASH" {} + | head -1)
+                EVENT_ID=$(jq -r '.eventId' "$EVENT_FILE" 2>/dev/null || echo "[NIP94_EVENT_ID]")
+                
+                echo "Updating release.json for module: $MODULE, architecture: $ARCH"
+                echo "File hash: $FILE_HASH, Event ID: $EVENT_ID"
+                
+                # Update release.json using jq
+                TMP_FILE=$(mktemp)
+                jq --arg module "$MODULE" \
+                   --arg arch "$ARCH" \
+                   --arg url "https://blossom.swissdash.site/$FILE_HASH.ipk" \
+                   --arg hash "$FILE_HASH" \
+                   --arg eventId "$EVENT_ID" \
+                   '(.modules[] | select(.name == $module) | .versions[0].architectures[$arch]) |= {
+                     "url": $url,
+                     "hash": ("sha256:" + $hash),
+                     "eventId": $eventId
+                   }' \
+                   ${{ inputs.release_json_path }} > "$TMP_FILE"
+                
+                if [ $? -eq 0 ]; then
+                  mv "$TMP_FILE" ${{ inputs.release_json_path }}
+                  echo "Successfully updated $MODULE/$ARCH in release.json"
+                else
+                  echo "Error updating JSON for $MODULE/$ARCH"
+                  cat "$TMP_FILE"
+                  rm "$TMP_FILE"
+                fi
+              fi
+            else
+              echo "Skipping invalid directory format: $DIR_NAME"
+            fi
+          fi
+        done
+        
+        # Show the diff
+        echo "Changes to release.json:"
+        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }} || true
+
+    - name: Commit and Push Changes
+      shell: bash
+      run: |
+        # Check for merge conflicts
+        if grep -qE '^<<<<<<<|^=======|^>>>>>>>' ${{ inputs.release_json_path }}; then
+          echo "::error::Merge conflicts detected in release.json! Fixing..."
+          # Remove conflict markers and keep our version
+          sed -i '/^<<<<<<</d; /^=======/,/^>>>>>>>/d' ${{ inputs.release_json_path }}
+        fi
+        
+        # Add and commit changes
+        git add ${{ inputs.release_json_path }}
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "${{ inputs.commit_message }}"
+          echo "Force pushing changes to ${{ inputs.target_branch }}..."
+          git push --force origin HEAD:${{ inputs.target_branch }}
+        fi
