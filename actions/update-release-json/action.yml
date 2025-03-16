@@ -121,10 +121,10 @@ runs:
         git stash
         git stash pop || true
         
-        # Handle merge conflicts automatically
+        # Handle merge conflicts by keeping our changes
         if git diff --check; then
-          echo "Resolving merge conflicts by accepting incoming changes..."
-          git diff --name-only --diff-filter=U | xargs -I {} git checkout --theirs {}
+          echo "Resolving merge conflicts by keeping new changes..."
+          git diff --name-only --diff-filter=U | xargs -I {} git checkout --ours {}
           git add ${{ inputs.release_json_path }}
         fi
         
