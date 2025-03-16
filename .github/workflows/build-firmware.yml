@@ -2,6 +2,8 @@ name: Build OpenWRT Firmware
 
 on:
   push:
+    branches-ignore:
+      - 'update-release-json'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
