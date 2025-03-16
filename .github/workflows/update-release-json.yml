@@ -28,7 +28,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: update-release-json
-          token: ${{ secrets.REPOSCOPE }}  # Use PAT for checkout
+          token: ${{ secrets.REPOSCOPE }}
+          # Add this to clean existing credentials
+          clean: true
+          persist-credentials: false
 
       - name: Analyze release.json Structure
         run: |
