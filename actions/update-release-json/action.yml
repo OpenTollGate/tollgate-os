@@ -15,6 +15,10 @@ inputs:
     description: 'Commit message for the update'
     required: false
     default: 'Update release.json with latest module packages [skip ci]'
+  target_branch:
+    description: 'Branch to push changes to'
+    required: false
+    default: 'develop'
 
 runs:
   using: "composite"
@@ -98,6 +102,19 @@ runs:
     - name: Commit and Push Changes
       shell: bash
       run: |
+        # Make sure we're on the target branch
+        git fetch origin ${{ inputs.target_branch }}
+        
+        # Check if the branch exists
+        if git rev-parse --verify origin/${{ inputs.target_branch }} >/dev/null 2>&1; then
+          # Branch exists, check it out
+          git checkout ${{ inputs.target_branch }}
+          git pull origin ${{ inputs.target_branch }}
+        else
+          # Branch doesn't exist, create it
+          git checkout -b ${{ inputs.target_branch }}
+        fi
+        
         git config user.name "GitHub Actions Bot"
         git config user.email "actions@github.com"
         
@@ -108,5 +125,6 @@ runs:
           echo "No changes to release.json, skipping commit"
         else
           git commit -m "${{ inputs.commit_message }}"
-          git push
+          # Always push to the target branch
+          git push origin ${{ inputs.target_branch }}
         fi
