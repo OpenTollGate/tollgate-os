@@ -1,0 +1,112 @@
+name: 'Update Release JSON'
+description: 'Updates the release.json file with package information'
+author: 'OpenTollGate'
+
+inputs:
+  artifacts_path:
+    description: 'Path to the downloaded artifacts'
+    required: true
+    default: 'artifacts'
+  release_json_path:
+    description: 'Path to the release.json file'
+    required: true
+    default: 'release.json'
+  commit_message:
+    description: 'Commit message for the update'
+    required: false
+    default: 'Update release.json with latest module packages [skip ci]'
+
+runs:
+  using: "composite"
+  steps:
+    - name: List Downloaded Artifacts
+      shell: bash
+      run: |
+        find ${{ inputs.artifacts_path }} -type f | sort
+
+    - name: Update release.json
+      shell: bash
+      run: |
+        # Create a backup of the original file
+        cp ${{ inputs.release_json_path }} ${{ inputs.release_json_path }}.bak
+        
+        # Process each artifact and update release.json
+        for ARTIFACT_DIR in ${{ inputs.artifacts_path }}/package-*; do
+          if [ -d "$ARTIFACT_DIR" ]; then
+            # Extract model and module from directory name
+            DIR_NAME=$(basename "$ARTIFACT_DIR")
+            MODEL=$(echo "$DIR_NAME" | cut -d'-' -f2)
+            MODULE_FULL=$(echo "$DIR_NAME" | cut -d'-' -f3-)
+            MODULE=$(echo "$MODULE_FULL" | sed 's/tollgate-module-//;s/-go//')
+            
+            # Find the IPK file
+            IPK_FILE=$(find "$ARTIFACT_DIR" -name "*.ipk" | head -1)
+            
+            if [ -n "$IPK_FILE" ]; then
+              # Get file hash and size
+              FILE_HASH=$(sha256sum "$IPK_FILE" | cut -d' ' -f1)
+              FILE_SIZE=$(stat -c%s "$IPK_FILE")
+              
+              # Map model to architecture
+              if [[ "$MODEL" == "gl-ar300m" ]]; then
+                ARCH="mipsel_24kc"
+              elif [[ "$MODEL" == "gl-mt3000" || "$MODEL" == "gl-mt6000" ]]; then
+                ARCH="aarch64_cortex-a53"
+              else
+                ARCH="unknown"
+              fi
+              
+              # Get event ID from workflow outputs (if available)
+              EVENT_ID=$(grep -r "eventId.*$FILE_HASH" ${{ inputs.artifacts_path }} || echo "")
+              if [[ "$EVENT_ID" =~ eventId\":\"([a-f0-9]+) ]]; then
+                EVENT_ID="${BASH_REMATCH[1]}"
+              else
+                EVENT_ID="[NIP94_EVENT_ID]"
+              fi
+              
+              echo "Updating release.json for module $MODULE, model $MODEL, arch $ARCH"
+              echo "File hash: $FILE_HASH"
+              
+              # Use jq to update the release.json file
+              # This is a complex operation that requires careful JSON manipulation
+              TMP_FILE=$(mktemp)
+              jq --arg module "$MODULE" \
+                 --arg arch "$ARCH" \
+                 --arg url "https://blossom.swissdash.site/$FILE_HASH.ipk" \
+                 --arg hash "$FILE_HASH" \
+                 --arg eventId "$EVENT_ID" \
+                 '(.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).url = $url |
+                  (.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).hash = ("sha256:" + $hash) |
+                  (.modules[] | select(.name == $module) | .versions[0].architectures[$arch]).eventId = $eventId' \
+                 ${{ inputs.release_json_path }} > "$TMP_FILE"
+              
+              if [ $? -eq 0 ]; then
+                mv "$TMP_FILE" ${{ inputs.release_json_path }}
+              else
+                echo "Error updating JSON for $MODULE/$ARCH"
+                cat "$TMP_FILE"
+                rm "$TMP_FILE"
+              fi
+            fi
+          fi
+        done
+        
+        # Show the diff
+        echo "Changes to release.json:"
+        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }} || true
+
+    - name: Commit and Push Changes
+      shell: bash
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        
+        git add ${{ inputs.release_json_path }}
+        
+        # Only commit if there are changes
+        if git diff --staged --quiet; then
+          echo "No changes to release.json, skipping commit"
+        else
+          git commit -m "${{ inputs.commit_message }}"
+          git push
+        fi

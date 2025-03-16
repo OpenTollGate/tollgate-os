@@ -1,0 +1,33 @@
+# .github/workflows/update-release-json.yml in tollgate-os
+name: Update Release JSON
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID of the build workflow'
+        required: true
+  repository_dispatch:
+    types: [update-release-json]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts from Build Workflow
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-firmware.yml
+          run_id: ${{ github.event.inputs.run_id || github.event.client_payload.run_id }}
+          repo: OpenTollGate/tollgate-sdk
+          path: artifacts
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Release JSON
+        uses: ./actions/update-release-json
+        with:
+          artifacts_path: artifacts
+          release_json_path: release.json
