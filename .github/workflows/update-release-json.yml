@@ -23,15 +23,25 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: update-release-json  # Always checkout the develop branch
+          ref: update-release-json
 
-      - name: Create Artifacts Directory
+      - name: Create Test Artifacts
         run: |
-          mkdir -p artifacts
-          echo "Created artifacts directory for the update-release-json action"
-          echo "This workflow will update release.json with the latest package information"
-          echo "No artifacts are downloaded here as they are referenced in release.json"
-
+          # Create artifacts directory
+          mkdir -p artifacts/package-gl-mt3000-tollgate-module-relay-go
+          
+          # Create a dummy IPK file
+          echo "This is a test IPK file" > artifacts/package-gl-mt3000-tollgate-module-relay-go/test-package.ipk
+          
+          # Calculate and display the hash
+          HASH=$(sha256sum artifacts/package-gl-mt3000-tollgate-module-relay-go/test-package.ipk | cut -d' ' -f1)
+          echo "Created test IPK with hash: $HASH"
+          
+          # Create a mock event ID file
+          echo "{\"eventId\":\"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"hash\":\"$HASH\"}" > artifacts/event-info.json
+          
+          echo "Test artifacts created successfully:"
+          find artifacts -type f | sort
 
       - name: Debug Directory Structure
         run: |
@@ -42,6 +52,8 @@ jobs:
           ls -la actions || echo "Actions directory not found"
           echo "Update release json action directory:"
           ls -la actions/update-release-json || echo "Update release json action directory not found"
+          echo "Artifacts directory:"
+          find artifacts -type f | sort
         
       - name: Update Release JSON
         uses: ./actions/update-release-json
