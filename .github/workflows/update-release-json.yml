@@ -16,6 +16,10 @@ on:
   repository_dispatch:
     types: [update-release-json]
 
+# Add permissions block here
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -24,6 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: update-release-json
+          token: ${{ secrets.REPOSCOPE }}  # Use PAT for checkout
 
       - name: Analyze release.json Structure
         run: |
@@ -96,5 +101,5 @@ jobs:
           artifacts_path: artifacts
           release_json_path: release.json
           target_branch: develop
-          github_token: ${{ secrets.REPOSCOPE }}
+          github_token: ${{ secrets.REPOSCOPE }}  # Use PAT here
           commit_message: "Update release.json with latest module packages [skip ci]"

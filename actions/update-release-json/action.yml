@@ -123,23 +123,17 @@ runs:
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
         
-        # Debug information
-        echo "Repository: $GITHUB_REPOSITORY"
-        echo "Target branch: ${{ inputs.target_branch }}"
-        
         # Set up authentication with the token
-        git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
+        git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n x-access-token:${{ inputs.github_token }} | base64)"
         
         # Make sure we're on the target branch
         git fetch origin ${{ inputs.target_branch }}
         
         # Check if the branch exists
         if git rev-parse --verify origin/${{ inputs.target_branch }} >/dev/null 2>&1; then
-          # Branch exists, check it out
           git checkout ${{ inputs.target_branch }}
           git pull origin ${{ inputs.target_branch }}
         else
-          # Branch doesn't exist, create it
           git checkout -b ${{ inputs.target_branch }}
         fi
         
@@ -149,13 +143,12 @@ runs:
         # Add and commit
         git add ${{ inputs.release_json_path }}
         
-        # Check if there are changes to commit
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
           git commit -m "${{ inputs.commit_message }}"
           
-          # Push using the configured remote
+          # Push using the configured credentials
           echo "Pushing changes to ${{ inputs.target_branch }}..."
-          git push origin ${{ inputs.target_branch }}
+          git push origin HEAD:${{ inputs.target_branch }}
         fi
