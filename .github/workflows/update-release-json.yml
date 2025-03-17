@@ -62,3 +62,41 @@ jobs:
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
           commit_message: "Update release.json with real NIP-94 events [skip ci]"
+
+      - name: Debug Incoming Payload
+        run: |
+          echo "Full event payload:"
+          echo '${{ toJSON(github.event) }}' | jq .
+          
+          echo "Client payload contents:"
+          echo '${{ toJSON(github.event.client_payload) }}' | jq .
+          
+          echo "NIP-94 events data:"
+          echo '${{ toJSON(github.event.client_payload.nip94_events) }}' | jq .
+          
+          # Write to a file for validation
+          mkdir -p debug
+          echo '${{ toJSON(github.event.client_payload.nip94_events) }}' > debug/received_events.json
+          echo "Stored events in debug/received_events.json"
+
+      - name: Validate Event Structure
+        run: |
+          if [ ! -s "debug/received_events.json" ]; then
+            echo "::error::No events data received!"
+            exit 1
+          fi
+          
+          # Validate JSON structure
+          if ! jq empty debug/received_events.json; then
+            echo "::error::Invalid JSON structure in received events"
+            jq . debug/received_events.json
+            exit 1
+          fi
+          
+          # Check for at least one event
+          EVENT_COUNT=$(jq '.events | length' debug/received_events.json)
+          if [ "$EVENT_COUNT" -eq 0 ]; then
+            echo "::warning::Received empty events array"
+          else
+            echo "Received $EVENT_COUNT valid NIP-94 events"
+          fi
