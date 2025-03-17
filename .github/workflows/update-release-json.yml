@@ -41,9 +41,8 @@ jobs:
           github_token: ${{ secrets.REPOSCOPE }}
           path: sdk-artifacts
           check_artifacts: true
-          # Match the artifact names from SDK workflow
-          name: |
-            ${{ fromJson(github.event.client_payload.artifacts) }}
+          # Use the array directly without fromJson()
+          name: ${{ join(github.event.client_payload.artifacts, ',') }}
 
       - name: Process Real Events
         run: |
