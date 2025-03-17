@@ -61,9 +61,9 @@ jobs:
             mkdir -p "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go"
             
             # Create dummy IPK files with unique content
-            echo "$MODULE package for ar300m" > "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go/${MODULE}-ar300m.ipk"
-            echo "$MODULE package for mt3000" > "artifacts/package-gl-mt3000-tollgate-module-${MODULE}-go/${MODULE}-mt3000.ipk"
-            echo "$MODULE package for mt6000" > "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go/${MODULE}-mt6000.ipk"
+            echo "$MODULE package for ar300m - $(date +%s%N)" > "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go/${MODULE}-ar300m.ipk"
+            echo "$MODULE package for mt3000 - $(date +%s%N)" > "artifacts/package-gl-mt3000-tollgate-module-${MODULE}-go/${MODULE}-mt3000.ipk"
+            echo "$MODULE package for mt6000 - $(date +%s%N)" > "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go/${MODULE}-mt6000.ipk"
             
             # Calculate hashes
             AR300M_HASH=$(sha256sum "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go/${MODULE}-ar300m.ipk" | cut -d' ' -f1)
