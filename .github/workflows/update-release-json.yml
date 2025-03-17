@@ -27,75 +27,39 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: update-release-json
+          ref: develop
           token: ${{ secrets.REPOSCOPE }}
           clean: true
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Analyze release.json Structure
-        run: |
-          echo "Analyzing release.json structure..."
-          
-          # List all modules in release.json
-          echo "Available modules:"
-          jq -r '.modules[].name' release.json
-          
-          # List all architectures for each module
-          echo "Available architectures for each module:"
-          jq -r '.modules[] | "\(.name): \((.versions[0].architectures | keys | join(", ")))"' release.json
+      - name: Download SDK Artifacts
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{ github.event.client_payload.sdk_run_id }}
+          repo: OpenTollGate/tollgate-sdk
+          github_token: ${{ secrets.REPOSCOPE }}
+          path: sdk-artifacts
+          check_artifacts: true
+          # Match the artifact names from SDK workflow
+          name: |
+            ${{ fromJson(github.event.client_payload.artifacts) }}
 
-      - name: Create Test Artifacts for Existing Modules
+      - name: Process Real Events
         run: |
-          # Get all modules from release.json
-          MODULES=$(jq -r '.modules[].name' release.json)
-          echo "Found modules: $MODULES"
-          
-          # Create test artifacts for each module
-          for MODULE in $MODULES; do
-            echo "Creating test artifacts for $MODULE"
-            
-            # Create directory structures for different models
-            mkdir -p "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go"
-            mkdir -p "artifacts/package-gl-mt3000-tollgate-module-${MODULE}-go"
-            mkdir -p "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go"
-            
-            # Create dummy IPK files with unique content
-            echo "$MODULE package for ar300m - $(date +%s%N)" > "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go/${MODULE}-ar300m.ipk"
-            echo "$MODULE package for mt3000 - $(date +%s%N)" > "artifacts/package-gl-mt3000-tollgate-module-${MODULE}-go/${MODULE}-mt3000.ipk"
-            echo "$MODULE package for mt6000 - $(date +%s%N)" > "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go/${MODULE}-mt6000.ipk"
-            
-            # Calculate hashes
-            AR300M_HASH=$(sha256sum "artifacts/package-gl-ar300m-tollgate-module-${MODULE}-go/${MODULE}-ar300m.ipk" | cut -d' ' -f1)
-            MT3000_HASH=$(sha256sum "artifacts/package-gl-mt3000-tollgate-module-${MODULE}-go/${MODULE}-mt3000.ipk" | cut -d' ' -f1)
-            MT6000_HASH=$(sha256sum "artifacts/package-gl-mt6000-tollgate-module-${MODULE}-go/${MODULE}-mt6000.ipk" | cut -d' ' -f1)
-            
-            # Create event ID files
-            echo "{\"eventId\":\"$(echo $AR300M_HASH | cut -c1-64)\",\"hash\":\"$AR300M_HASH\"}" > "artifacts/${MODULE}-ar300m-event.json"
-            echo "{\"eventId\":\"$(echo $MT3000_HASH | cut -c1-64)\",\"hash\":\"$MT3000_HASH\"}" > "artifacts/${MODULE}-mt3000-event.json"
-            echo "{\"eventId\":\"$(echo $MT6000_HASH | cut -c1-64)\",\"hash\":\"$MT6000_HASH\"}" > "artifacts/${MODULE}-mt6000-event.json"
-          done
-          
-          echo "Test artifacts created for all modules:"
-          find artifacts -type f | sort
+          echo "Real artifacts downloaded:"
+          find sdk-artifacts -type f | sort
+          # Verify NIP-94 event files exist
+          if [ $(find sdk-artifacts -name '*-event.json' | wc -l) -eq 0 ]; then
+            echo "::error::No NIP-94 event files found!"
+            exit 1
+          fi
 
-      - name: Debug Directory Structure
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Repository contents:"
-          ls -la
-          echo "Actions directory:"
-          ls -la actions || echo "Actions directory not found"
-          echo "Update release json action directory:"
-          ls -la actions/update-release-json || echo "Update release json action directory not found"
-          echo "Artifacts directory:"
-          find artifacts -type f | sort
-        
       - name: Update Release JSON
         uses: ./actions/update-release-json
         with:
-          artifacts_path: artifacts
+          artifacts_path: sdk-artifacts  # Changed from artifacts
           release_json_path: release.json
           target_branch: develop
-          github_token: ${{ secrets.REPOSCOPE }}  # Use PAT here
-          commit_message: "Update release.json with latest module packages [skip ci]"
+          github_token: ${{ secrets.REPOSCOPE }}
+          commit_message: "Update release.json with real NIP-94 events [skip ci]"
