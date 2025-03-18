@@ -14,7 +14,7 @@ on:
         description: 'Run ID of the build workflow'
         required: true
   repository_dispatch:
-    types: [update-release-json]
+    types: [test-update-release-json]
 
 # Add permissions block here
 permissions:
@@ -47,7 +47,7 @@ jobs:
 
       - name: Create Test Artifacts for Existing Modules
         run: |
-          # Get all modules from release.json
+          # This will still generate dummy artifacts
           MODULES=$(jq -r '.modules[].name' release.json)
           echo "Found modules: $MODULES"
           
