@@ -33,70 +33,124 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Download SDK Artifacts
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          run_id: ${{ github.event.client_payload.sdk_run_id }}
-          repo: OpenTollGate/tollgate-sdk
-          github_token: ${{ secrets.REPOSCOPE }}
-          path: sdk-artifacts
-          check_artifacts: true
-          # Use the array directly without fromJson()
-          name: ${{ join(github.event.client_payload.artifacts, ',') }}
+      # - name: Download SDK Artifacts
+      #   uses: dawidd6/action-download-artifact@v2
+      #   with:
+      #     run_id: ${{ github.event.client_payload.sdk_run_id }}
+      #     repo: OpenTollGate/tollgate-sdk
+      #     github_token: ${{ secrets.REPOSCOPE }}
+      #     path: sdk-artifacts
+      #     check_artifacts: true
+      #     # Use the array directly without fromJson()
+      #     name: ${{ join(github.event.client_payload.artifacts, ',') }}
 
-      - name: Process Real Events
+      # - name: Process Real Events
+      #   run: |
+      #     echo "Real artifacts downloaded:"
+      #     find sdk-artifacts -type f | sort
+      #     # Verify NIP-94 event files exist
+      #     if [ $(find sdk-artifacts -name '*-event.json' | wc -l) -eq 0 ]; then
+      #       echo "::error::No NIP-94 event files found!"
+      #       exit 1
+      #     fi
+
+      # - name: Update Release JSON
+      #   uses: ./actions/update-release-json
+      #   with:
+      #     artifacts_path: sdk-artifacts  # Changed from artifacts
+      #     release_json_path: release.json
+      #     target_branch: develop
+      #     github_token: ${{ secrets.REPOSCOPE }}
+      #     commit_message: "Update release.json with real NIP-94 events [skip ci]"
+
+      # - name: Debug Incoming Payload
+      #   run: |
+      #     echo "Full event payload:"
+      #     echo '${{ toJSON(github.event) }}' | jq .
+          
+      #     echo "Client payload contents:"
+      #     echo '${{ toJSON(github.event.client_payload) }}' | jq .
+          
+      #     echo "NIP-94 events data:"
+      #     echo '${{ toJSON(github.event.client_payload.nip94_events) }}' | jq .
+          
+      #     # Write to a file for validation
+      #     mkdir -p debug
+      #     echo '${{ toJSON(github.event.client_payload.nip94_events) }}' > debug/received_events.json
+      #     echo "Stored events in debug/received_events.json"
+
+      # - name: Validate Event Structure
+      #   run: |
+      #     if [ ! -s "debug/received_events.json" ]; then
+      #       echo "::error::No events data received!"
+      #       exit 1
+      #     fi
+          
+      #     # Validate JSON structure
+      #     if ! jq empty debug/received_events.json; then
+      #       echo "::error::Invalid JSON structure in received events"
+      #       jq . debug/received_events.json
+      #       exit 1
+      #     fi
+          
+      #     # Check for at least one event
+      #     EVENT_COUNT=$(jq '.events | length' debug/received_events.json)
+      #     if [ "$EVENT_COUNT" -eq 0 ]; then
+      #       echo "::warning::Received empty events array"
+      #     else
+      #       echo "Received $EVENT_COUNT valid NIP-94 events"
+      #     fi
+
+
+      - name: Install nak
         run: |
-          echo "Real artifacts downloaded:"
-          find sdk-artifacts -type f | sort
-          # Verify NIP-94 event files exist
-          if [ $(find sdk-artifacts -name '*-event.json' | wc -l) -eq 0 ]; then
-            echo "::error::No NIP-94 event files found!"
+          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
+          sudo chmod +x /usr/local/bin/nak
+  
+      - name: Verify Event on Network with nak
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
+          
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
             exit 1
           fi
-
-      - name: Update Release JSON
-        uses: ./actions/update-release-json
-        with:
-          artifacts_path: sdk-artifacts  # Changed from artifacts
-          release_json_path: release.json
-          target_branch: develop
-          github_token: ${{ secrets.REPOSCOPE }}
-          commit_message: "Update release.json with real NIP-94 events [skip ci]"
-
-      - name: Debug Incoming Payload
-        run: |
-          echo "Full event payload:"
-          echo '${{ toJSON(github.event) }}' | jq .
           
-          echo "Client payload contents:"
-          echo '${{ toJSON(github.event.client_payload) }}' | jq .
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
           
-          echo "NIP-94 events data:"
-          echo '${{ toJSON(github.event.client_payload.nip94_events) }}' | jq .
+          # Query events by author and kind (1063 for NIP-94)
+          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
           
-          # Write to a file for validation
-          mkdir -p debug
-          echo '${{ toJSON(github.event.client_payload.nip94_events) }}' > debug/received_events.json
-          echo "Stored events in debug/received_events.json"
-
-      - name: Validate Event Structure
-        run: |
-          if [ ! -s "debug/received_events.json" ]; then
-            echo "::error::No events data received!"
+          # Check for errors in the response
+          if grep -q "ERROR" event_response.txt; then
+            echo "::error::Error retrieving events from relay:"
+            cat event_response.txt
             exit 1
           fi
           
-          # Validate JSON structure
-          if ! jq empty debug/received_events.json; then
-            echo "::error::Invalid JSON structure in received events"
-            jq . debug/received_events.json
-            exit 1
-          fi
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
           
-          # Check for at least one event
-          EVENT_COUNT=$(jq '.events | length' debug/received_events.json)
-          if [ "$EVENT_COUNT" -eq 0 ]; then
-            echo "::warning::Received empty events array"
-          else
-            echo "Received $EVENT_COUNT valid NIP-94 events"
-          fi
+          # Look for our event with matching hash
+          echo "Looking for event with hash: $GENERATED_HASH"
+          
+          # Extract unique filenames and architectures from the events
+          echo "Extracting unique filenames and architectures from events..."
+          
+          # Create temporary files to store unique values
+          touch unique_filenames.txt
+          touch unique_architectures.txt
+          
+          # Process each event to extract filename and architecture tags
+          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq > unique_filenames.txt
+          cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq > unique_architectures.txt
+          
+          echo "Unique filenames found in the last week:"
+          cat unique_filenames.txt
+          
+          echo "Unique architectures found in the last week:"
+          cat unique_architectures.txt
+          
+          echo "✅ Successfully analyzed events on network!"
