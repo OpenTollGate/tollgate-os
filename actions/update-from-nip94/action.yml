@@ -1,12 +1,12 @@
-name: 'Update Release JSON'
-description: 'Updates the release.json file with package information'
+name: 'Update Release JSON from NIP-94 Events'
+description: 'Updates the release.json file with package information from NIP-94 events'
 author: 'OpenTollGate'
 
 inputs:
   artifacts_path:
-    description: 'Path to the downloaded artifacts'
+    description: 'Path to the event files'
     required: true
-    default: 'artifacts'
+    default: 'event_files'
   release_json_path:
     description: 'Path to the release.json file'
     required: true
@@ -14,7 +14,7 @@ inputs:
   commit_message:
     description: 'Commit message for the update'
     required: false
-    default: 'Update release.json with latest module packages [skip ci]'
+    default: 'Update release.json with NIP-94 events [skip ci]'
   target_branch:
     description: 'Branch to push changes to'
     required: false
@@ -26,60 +26,24 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: List Downloaded Artifacts
+    - name: Verify Events
       shell: bash
       run: |
-        echo "Listing artifacts before checkout:"
-        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found yet"
+        echo "Looking for NIP-94 events in ${{ inputs.artifacts_path }}"
+        find ${{ inputs.artifacts_path }} -type f -name "event_*.json" | sort
         
-        # Save artifacts to a safe location
-        if [ -d "${{ inputs.artifacts_path }}" ]; then
-          echo "Backing up artifacts directory..."
-          mkdir -p /tmp/artifacts-backup
-          cp -r ${{ inputs.artifacts_path }}/* /tmp/artifacts-backup/
+        if [ ! -f "${{ inputs.release_json_path }}" ]; then
+          echo "::error::release.json file not found at ${{ inputs.release_json_path }}"
+          exit 1
         fi
 
-    - name: Setup Git and Checkout Target Branch
-      shell: bash
-      run: |
-        # Configure git
-        git config --global user.name "GitHub Actions Bot"
-        git config --global user.email "actions@github.com"
-        
-        # Set up authentication
-        git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
-        
-        # Fetch and checkout target branch
-        git fetch origin ${{ inputs.target_branch }} || echo "Branch does not exist yet"
-        
-        # Save current changes to release.json if it exists
-        if [ -f "${{ inputs.release_json_path }}" ]; then
-          cp ${{ inputs.release_json_path }} /tmp/release.json.backup || true
-        fi
-        
-        # Checkout target branch without removing untracked files
-        git checkout -B ${{ inputs.target_branch }} origin/${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
-        
-        # Make sure we're at the latest commit
-        git reset --hard origin/${{ inputs.target_branch }} || echo "No existing branch to reset"
-        
-        # Restore artifacts directory
-        mkdir -p ${{ inputs.artifacts_path }}
-        if [ -d "/tmp/artifacts-backup" ]; then
-          echo "Restoring artifacts from backup..."
-          cp -r /tmp/artifacts-backup/* ${{ inputs.artifacts_path }}/
-        fi
-        
-        echo "Listing artifacts after checkout:"
-        find ${{ inputs.artifacts_path }} -type f | sort || echo "No artifacts found"
-
-    - name: Update release.json
+    - name: Update release.json from NIP-94 Events
       shell: bash
       run: |
         # Create a backup of the original file
         cp ${{ inputs.release_json_path }} ${{ inputs.release_json_path }}.bak
         
-        echo "Processing event files from ${{ inputs.artifacts_path }}"
+        echo "Processing NIP-94 events from ${{ inputs.artifacts_path }}"
         EVENT_COUNT=$(find ${{ inputs.artifacts_path }} -name "event_*.json" | wc -l)
         echo "Found $EVENT_COUNT event files to process"
         
@@ -88,29 +52,48 @@ runs:
           exit 0
         fi
         
+        # Debug available modules in release.json
+        echo "Available modules in release.json:"
+        jq -r '.modules[].name' ${{ inputs.release_json_path }}
+        
         # Process each event file
         for EVENT_FILE in ${{ inputs.artifacts_path }}/event_*.json; do
-          echo "Processing event file: $EVENT_FILE"
+          echo "----- Processing event file: $EVENT_FILE -----"
           
-          # Extract module, model, and architecture from event tags
-          MODULE=$(jq -r '.tags[] | select(.[0] == "module")[1] // empty' "$EVENT_FILE")
-          MODEL=$(jq -r '.tags[] | select(.[0] == "model")[1] // empty' "$EVENT_FILE")
-          ARCH=$(jq -r '.tags[] | select(.[0] == "arch")[1] // empty' "$EVENT_FILE")
-          HASH=$(jq -r '.tags[] | select(.[0] == "hash")[1] // empty' "$EVENT_FILE")
-          URL=$(jq -r '.tags[] | select(.[0] == "url")[1] // empty' "$EVENT_FILE")
-          EVENT_ID=$(jq -r '.id // empty' "$EVENT_FILE")
+          # Get values and explicitly trim whitespace and newlines
+          FILENAME=$(jq -r '.tags[] | select(.[0] == "filename")[1] // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
+          ARCH=$(jq -r '.tags[] | select(.[0] == "arch")[1] // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
+          HASH=$(jq -r '.tags[] | select(.[0] == "x")[1] // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
+          URL=$(jq -r '.tags[] | select(.[0] == "url")[1] // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
+          EVENT_ID=$(jq -r '.id // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
           
-          # Skip if any required fields are missing
-          if [ -z "$MODULE" ] || [ -z "$ARCH" ] || [ -z "$HASH" ] || [ -z "$EVENT_ID" ]; then
-            echo "::warning::Skipping event with missing required tags. Module: $MODULE, Arch: $ARCH, Hash: $HASH, EventID: $EVENT_ID"
+          echo "Found: ID=$EVENT_ID, Filename=$FILENAME, Arch=$ARCH"
+          echo "URL=$URL, Hash=$HASH"
+          
+          # Extract module from filename (e.g., relay-gl-ar300m-mipsel_24kc.ipk -> relay)
+          if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+            MODULE="${BASH_REMATCH[1]}"
+            MODULE=$(echo "$MODULE" | tr -d '\n' | xargs)
+            echo "Extracted module name: '$MODULE'"
+          else
+            echo "::warning::Could not extract module name from filename: '$FILENAME'"
             continue
           fi
           
-          echo "Updating release.json for module: $MODULE, architecture: $ARCH"
-          echo "File hash: $HASH, Event ID: $EVENT_ID, URL: $URL"
+          # Skip if any required fields are missing
+          if [ -z "$MODULE" ] || [ -z "$ARCH" ]; then
+            echo "::warning::Skipping event with missing required tags. Module: '$MODULE', Arch: '$ARCH'"
+            continue
+          fi
+          
+          echo "Updating release.json for module: '$MODULE', architecture: '$ARCH'"
+          
+          # Verify module exists in release.json with debug output
+          MODULE_COUNT=$(jq --arg module "$MODULE" '.modules[] | select(.name == $module) | .name' ${{ inputs.release_json_path }} | wc -l)
+          echo "Found $MODULE_COUNT matches for module '$MODULE' in release.json"
           
           # Update release.json using jq if the module already exists
-          if jq -e --arg module "$MODULE" '.modules[] | select(.name == $module)' ${{ inputs.release_json_path }} > /dev/null; then
+          if [ "$MODULE_COUNT" -gt 0 ]; then
             # Module exists, update it
             TMP_FILE=$(mktemp)
             jq --arg module "$MODULE" \
@@ -134,40 +117,33 @@ runs:
               rm "$TMP_FILE"
             fi
           else
-            echo "Module $MODULE not found in release.json. Please add it first."
+            echo "Module '$MODULE' not found in release.json. Here's what we have instead:"
+            jq -r '.modules[].name' ${{ inputs.release_json_path }}
           fi
         done
         
         # Show the diff
         echo "Changes to release.json:"
         diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }} || true
-        
-        # Validate final JSON
-        if ! jq empty ${{ inputs.release_json_path }}; then
-          echo "::error::Invalid JSON after updates"
-          cp ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }}
-          exit 1
-        fi
-        
-        echo "✅ All updates completed successfully"
-
+      
     - name: Commit and Push Changes
       shell: bash
       run: |
-        # Check for merge conflicts
-        if grep -qE '^<<<<<<<|^=======|^>>>>>>>' ${{ inputs.release_json_path }}; then
-          echo "::error::Merge conflicts detected in release.json! Fixing..."
-          # Remove conflict markers and keep our version
-          sed -i '/^<<<<<<</d; /^=======/,/^>>>>>>>/d' ${{ inputs.release_json_path }}
-        fi
+        # Configure git
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+        
+        # Set up authentication
+        git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/$GITHUB_REPOSITORY.git"
         
         # Add and commit changes
         git add ${{ inputs.release_json_path }}
         
+        # Check if there are changes to commit
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
           git commit -m "${{ inputs.commit_message }}"
-          echo "Force pushing changes to ${{ inputs.target_branch }}..."
-          git push --force origin HEAD:${{ inputs.target_branch }}
+          echo "Pushing changes to ${{ inputs.target_branch }} branch..."
+          git push origin HEAD:${{ inputs.target_branch }}
         fi
