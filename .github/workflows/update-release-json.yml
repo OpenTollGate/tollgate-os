@@ -230,7 +230,7 @@ jobs:
           echo "✅ Successfully prepared all events for processing!"
 
       - name: Final Update Release JSON
-        uses: ./actions/update-release-json
+        uses: ./actions/update-from-nip94
         with:
           artifacts_path: event_files
           release_json_path: release.json
