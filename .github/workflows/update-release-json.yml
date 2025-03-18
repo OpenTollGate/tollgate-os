@@ -102,7 +102,7 @@ jobs:
           echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
           
           # Query events by author and kind (1063 for NIP-94)
-          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
+          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
           
           # Check for errors in the response
           if grep -q "ERROR" event_response.txt; then
@@ -117,27 +117,38 @@ jobs:
           # Look for our event with matching hash
           echo "Looking for event with hash: $GENERATED_HASH"
           
-          # Extract unique architectures from the events
-          echo "Extracting unique architectures from events..."
+          # Create a temporary directory for processing
+          mkdir -p temp_events
           
-          # Get unique architectures
+          # Extract unique filenames and architectures
+          UNIQUE_FILENAMES=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq)
           UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
           
-          # Print the entire event for each unique architecture
-          echo "Events by architecture:"
-          for ARCH in $UNIQUE_ARCHS; do
-            echo "========== Architecture: $ARCH =========="
-            # Find and print all events with this architecture
-            cat events_data.txt | jq --arg arch "$ARCH" '.tags as $tags | 
-              if ($tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0) then . else empty end'
+          echo "Finding most recent events for each unique filename and architecture..."
+          
+          # Process events to find the most recent for each filename
+          echo "Most recent events by filename:"
+          for FILENAME in $UNIQUE_FILENAMES; do
+            echo "========== Filename: $FILENAME =========="
+            # Find the most recent event with this filename (highest created_at value)
+            cat events_data.txt | jq --arg filename "$FILENAME" '
+              select(.tags | map(select(.[0] == "filename" and .[1] == $filename)) | length > 0)
+            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
             echo ""
           done
           
-          # Also extract unique filenames for reference
-          echo "Unique filenames found:"
-          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq
+          # Process events to find the most recent for each architecture
+          echo "Most recent events by architecture:"
+          for ARCH in $UNIQUE_ARCHS; do
+            echo "========== Architecture: $ARCH =========="
+            # Find the most recent event with this architecture (highest created_at value)
+            cat events_data.txt | jq --arg arch "$ARCH" '
+              select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
+            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
+            echo ""
+          done
           
-          echo "✅ Successfully analyzed events on network!"
+          echo "✅ Successfully analyzed most recent events on network!"
 
   
         # - name: Download SDK Artifacts
