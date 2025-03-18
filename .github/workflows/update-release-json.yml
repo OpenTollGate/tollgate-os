@@ -279,7 +279,7 @@ jobs:
           release_json_path: release.json
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
-          commit_message: "Update release.json with all NIP-94 events [skip ci]"
+          commit_message: "Update release.json with all NIP-94 events"
 
 
       # - name: Download SDK Artifacts

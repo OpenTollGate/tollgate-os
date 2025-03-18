@@ -90,14 +90,14 @@
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/[HASH].zip",
-              "hash": "sha256:[HASH]",
-              "eventId": "[NIP94_EVENT_ID]"
+              "url": "https://blossom.swissdash.site/608257034222e98ff1a7876b58c6f305aa24a733934fe3f97ac489db0f684aef.bin",
+              "hash": "sha256:608257034222e98ff1a7876b58c6f305aa24a733934fe3f97ac489db0f684aef",
+              "eventId": "f70dfbfab742bc1ab5644f3792c6289eb38349967b7483d6dbaa09c8b8aad802"
             },
             "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/[HASH].zip",
-              "hash": "sha256:[HASH]",
-              "eventId": "[NIP94_EVENT_ID]"
+              "url": "https://blossom.swissdash.site/4183f24b58db8af28a360245cce74ae3d80254f1e8813d201b81d5dd438031c3.bin",
+              "hash": "sha256:4183f24b58db8af28a360245cce74ae3d80254f1e8813d201b81d5dd438031c3",
+              "eventId": "afe3ed88af7ca76694e34e56a4932202ab315515d410a9166c5ad08d5715e5cb"
             },
             "x86_64": {
               "url": "https://blossom.swissdash.site/[HASH].zip",
