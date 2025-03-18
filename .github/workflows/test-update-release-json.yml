@@ -1,5 +1,5 @@
 # .github/workflows/update-release-json.yml in tollgate-os
-name: Update Release JSON
+name: Test Update Release JSON
 
 on:
   push:

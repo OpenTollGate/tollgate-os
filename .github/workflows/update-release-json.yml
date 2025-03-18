@@ -1,5 +1,5 @@
 # .github/workflows/update-release-json.yml in tollgate-os
-name: Update Release JSON
+name: Update Release JSON with Real Events
 
 on:
   push:
@@ -87,7 +87,6 @@ jobs:
           
           echo "✅ Successfully analyzed events on network!"
 
-
       - name: Show Events on Network with nak
         run: |
           # Get the pubkey from secrets
@@ -149,9 +148,107 @@ jobs:
           # done
           
           echo "✅ Successfully analyzed most recent events on network!"
+      - name: Extract Events and Save to Files
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
+            exit 1
+          fi
+          
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
+          
+          # Query events by author and kind (1063 for NIP-94)
+          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
+          
+          # Check for errors in the response
+          if grep -q "ERROR" event_response.txt; then
+            echo "::error::Error retrieving events from relay:"
+            cat event_response.txt
+            exit 1
+          fi
+          
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          
+          # Create a directory for storing event files
+          mkdir -p event_files
+          
+          # Extract unique filenames
+          UNIQUE_FILENAMES=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq)
+          
+          echo "Finding most recent events for each unique filename..."
+          
+          # Process events to find the most recent for each filename and save to files
+          EVENT_COUNT=0
+          for FILENAME in $UNIQUE_FILENAMES; do
+            echo "Processing: $FILENAME"
+            # Find the most recent event with this filename (highest created_at value)
+            cat events_data.txt | jq --arg filename "$FILENAME" '
+              select(.tags | map(select(.[0] == "filename" and .[1] == $filename)) | length > 0)
+            ' | jq -s 'sort_by(.created_at) | reverse | .[0]' > "event_files/event_${EVENT_COUNT}.json"
+            
+            # Check if the file has content
+            if [ -s "event_files/event_${EVENT_COUNT}.json" ]; then
+              echo "Saved event for $FILENAME to event_files/event_${EVENT_COUNT}.json"
+              EVENT_COUNT=$((EVENT_COUNT + 1))
+            else
+              echo "No valid event found for $FILENAME"
+              rm "event_files/event_${EVENT_COUNT}.json"
+            fi
+          done
+          
+          echo "Total events extracted: $EVENT_COUNT"
+          echo "EVENT_COUNT=$EVENT_COUNT" >> $GITHUB_ENV
+          
+          echo "✅ Successfully extracted events from network!"
 
-  
-        # - name: Download SDK Artifacts
+      - name: Update Release JSON for Each Event
+        run: |
+          EVENT_COUNT="${{ env.EVENT_COUNT }}"
+          
+          if [ "$EVENT_COUNT" -eq 0 ]; then
+            echo "::warning::No events found to process"
+            exit 0
+          fi
+          
+          for i in $(seq 0 $((EVENT_COUNT - 1))); do
+            EVENT_FILE="event_files/event_${i}.json"
+            
+            echo "Processing event file: $EVENT_FILE"
+            
+            # Create a temporary directory for this event
+            mkdir -p "sdk-artifacts-${i}"
+            
+            # Copy the event to the temporary directory
+            cp "$EVENT_FILE" "sdk-artifacts-${i}/event.json"
+            
+            echo "Running update-release-json for event $i"
+            
+            # Run the update-release-json action for this event
+            ./actions/update-release-json/entrypoint.sh \
+              "sdk-artifacts-${i}" \
+              "release.json" \
+              "develop" \
+              "${{ secrets.REPOSCOPE }}" \
+              "Update release.json with event $i [skip ci]"
+          done
+          
+          echo "✅ Successfully processed all events!"
+
+      - name: Final Update Release JSON
+        uses: ./actions/update-release-json
+        with:
+          artifacts_path: event_files
+          release_json_path: release.json
+          target_branch: develop
+          github_token: ${{ secrets.REPOSCOPE }}
+          commit_message: "Update release.json with all NIP-94 events [skip ci]"
+
+
+      # - name: Download SDK Artifacts
       #   uses: dawidd6/action-download-artifact@v2
       #   with:
       #     run_id: ${{ github.event.client_payload.sdk_run_id }}
