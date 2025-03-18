@@ -148,6 +148,7 @@ jobs:
           # done
           
           echo "✅ Successfully analyzed most recent events on network!"
+          
       - name: Extract Events and Save to Files
         run: |
           # Get the pubkey from secrets
@@ -224,19 +225,9 @@ jobs:
             
             # Copy the event to the temporary directory
             cp "$EVENT_FILE" "sdk-artifacts-${i}/event.json"
-            
-            echo "Running update-release-json for event $i"
-            
-            # Run the update-release-json action for this event
-            ./actions/update-release-json/entrypoint.sh \
-              "sdk-artifacts-${i}" \
-              "release.json" \
-              "develop" \
-              "${{ secrets.REPOSCOPE }}" \
-              "Update release.json with event $i [skip ci]"
           done
           
-          echo "✅ Successfully processed all events!"
+          echo "✅ Successfully prepared all events for processing!"
 
       - name: Final Update Release JSON
         uses: ./actions/update-release-json
@@ -246,7 +237,6 @@ jobs:
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
           commit_message: "Update release.json with all NIP-94 events [skip ci]"
-
 
       # - name: Download SDK Artifacts
       #   uses: dawidd6/action-download-artifact@v2
