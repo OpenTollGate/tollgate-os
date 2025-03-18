@@ -33,7 +33,114 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # - name: Download SDK Artifacts
+
+      - name: Install nak
+        run: |
+          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
+          sudo chmod +x /usr/local/bin/nak
+    
+      - name: Verify Event on Network with nak
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
+          
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
+            exit 1
+          fi
+          
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
+          
+          # Query events by author and kind (1063 for NIP-94)
+          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
+          
+          # Check for errors in the response
+          if grep -q "ERROR" event_response.txt; then
+            echo "::error::Error retrieving events from relay:"
+            cat event_response.txt
+            exit 1
+          fi
+          
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          
+          # Look for our event with matching hash
+          echo "Looking for event with hash: $GENERATED_HASH"
+          
+          # Extract unique filenames and architectures from the events
+          echo "Extracting unique filenames and architectures from events..."
+          
+          # Create temporary files to store unique values
+          touch unique_filenames.txt
+          touch unique_architectures.txt
+          
+          # Process each event to extract filename and architecture tags
+          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq > unique_filenames.txt
+          cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq > unique_architectures.txt
+          
+          echo "Unique filenames found in the last week:"
+          cat unique_filenames.txt
+          
+          echo "Unique architectures found in the last week:"
+          cat unique_architectures.txt
+          
+          echo "✅ Successfully analyzed events on network!"
+
+
+      - name: Show Events on Network with nak
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
+          
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
+            exit 1
+          fi
+          
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
+          
+          # Query events by author and kind (1063 for NIP-94)
+          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
+          
+          # Check for errors in the response
+          if grep -q "ERROR" event_response.txt; then
+            echo "::error::Error retrieving events from relay:"
+            cat event_response.txt
+            exit 1
+          fi
+          
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          
+          # Look for our event with matching hash
+          echo "Looking for event with hash: $GENERATED_HASH"
+          
+          # Extract unique architectures from the events
+          echo "Extracting unique architectures from events..."
+          
+          # Get unique architectures
+          UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
+          
+          # Print the entire event for each unique architecture
+          echo "Events by architecture:"
+          for ARCH in $UNIQUE_ARCHS; do
+            echo "========== Architecture: $ARCH =========="
+            # Find and print all events with this architecture
+            cat events_data.txt | jq --arg arch "$ARCH" '.tags as $tags | 
+              if ($tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0) then . else empty end'
+            echo ""
+          done
+          
+          # Also extract unique filenames for reference
+          echo "Unique filenames found:"
+          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq
+          
+          echo "✅ Successfully analyzed events on network!"
+
+  
+        # - name: Download SDK Artifacts
       #   uses: dawidd6/action-download-artifact@v2
       #   with:
       #     run_id: ${{ github.event.client_payload.sdk_run_id }}
@@ -101,56 +208,3 @@ jobs:
       #       echo "Received $EVENT_COUNT valid NIP-94 events"
       #     fi
 
-
-      - name: Install nak
-        run: |
-          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
-          sudo chmod +x /usr/local/bin/nak
-  
-      - name: Verify Event on Network with nak
-        run: |
-          # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
-          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
-          
-          if [ -z "$PUBKEY" ]; then
-            echo "::error::NIP_94_PUBKEY secret is not set"
-            exit 1
-          fi
-          
-          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          
-          # Query events by author and kind (1063 for NIP-94)
-          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
-          
-          # Check for errors in the response
-          if grep -q "ERROR" event_response.txt; then
-            echo "::error::Error retrieving events from relay:"
-            cat event_response.txt
-            exit 1
-          fi
-          
-          # Extract only the event data (removing connection messages)
-          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
-          
-          # Look for our event with matching hash
-          echo "Looking for event with hash: $GENERATED_HASH"
-          
-          # Extract unique filenames and architectures from the events
-          echo "Extracting unique filenames and architectures from events..."
-          
-          # Create temporary files to store unique values
-          touch unique_filenames.txt
-          touch unique_architectures.txt
-          
-          # Process each event to extract filename and architecture tags
-          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq > unique_filenames.txt
-          cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq > unique_architectures.txt
-          
-          echo "Unique filenames found in the last week:"
-          cat unique_filenames.txt
-          
-          echo "Unique architectures found in the last week:"
-          cat unique_architectures.txt
-          
-          echo "✅ Successfully analyzed events on network!"
