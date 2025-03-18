@@ -33,6 +33,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Verify Action Exists
+        run: |
+          echo "Checking for action.yml file..."
+          if [ -f "actions/update-from-nip94/action.yml" ]; then
+            echo "✅ Action file found!"
+            cat actions/update-from-nip94/action.yml | head -10
+          else
+            echo "❌ Action file NOT found!"
+            echo "Current directory structure:"
+            find . -name "actions" -type d | xargs ls -la 2>/dev/null || echo "No actions directory"
+            
+            echo "Commit information:"
+            git log -1 --stat
+          fi
 
       - name: Install nak
         run: |
@@ -206,7 +220,27 @@ jobs:
           
           echo "✅ Successfully extracted events from network!"
 
-      - name: Update Release JSON for Each Event
+      - name: Debug Event Structure
+        run: |
+          echo "Examining first event file to understand structure:"
+          cat event_files/event_0.json | jq .
+          
+          echo "Available tags in the event:"
+          cat event_files/event_0.json | jq '.tags'
+          
+          echo "Checking for filename in tags:"
+          cat event_files/event_0.json | jq '.tags[] | select(.[0] == "filename")'
+          
+          # Extract module from filename
+          FILENAME=$(cat event_files/event_0.json | jq -r '.tags[] | select(.[0] == "filename")[1] // empty')
+          echo "Filename found: $FILENAME"
+          
+          # Try to extract module from filename (e.g., relay-gl-mt3000-aarch64_cortex-a53.ipk -> relay)
+          if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+            echo "Module extracted from filename: ${BASH_REMATCH[1]}"
+          fi
+
+      - name: Update Release JSON for Each Event (Fixed)
         run: |
           EVENT_COUNT="${{ env.EVENT_COUNT }}"
           
