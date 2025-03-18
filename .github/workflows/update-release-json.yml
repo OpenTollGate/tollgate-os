@@ -122,7 +122,6 @@ jobs:
           
           # Extract unique filenames and architectures
           UNIQUE_FILENAMES=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq)
-          UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
           
           echo "Finding most recent events for each unique filename and architecture..."
           
@@ -136,17 +135,18 @@ jobs:
             ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
             echo ""
           done
-          
-          # Process events to find the most recent for each architecture
-          echo "Most recent events by architecture:"
-          for ARCH in $UNIQUE_ARCHS; do
-            echo "========== Architecture: $ARCH =========="
-            # Find the most recent event with this architecture (highest created_at value)
-            cat events_data.txt | jq --arg arch "$ARCH" '
-              select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
-            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
-            echo ""
-          done
+
+          #UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
+          # # Process events to find the most recent for each architecture
+          # echo "Most recent events by architecture:"
+          # for ARCH in $UNIQUE_ARCHS; do
+          #   echo "========== Architecture: $ARCH =========="
+          #   # Find the most recent event with this architecture (highest created_at value)
+          #   cat events_data.txt | jq --arg arch "$ARCH" '
+          #     select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
+          #   ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
+          #   echo ""
+          # done
           
           echo "✅ Successfully analyzed most recent events on network!"
 
