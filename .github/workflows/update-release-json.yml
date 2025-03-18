@@ -229,6 +229,15 @@ jobs:
           
           echo "✅ Successfully prepared all events for processing!"
 
+      - name: Debug Workspace
+        run: |
+          echo "Working directory: $(pwd)"
+          echo "Repository root: $GITHUB_WORKSPACE"
+          echo "Directory structure:"
+          find $GITHUB_WORKSPACE -maxdepth 2 -type d
+          echo "Looking for actions directory:"
+          find $GITHUB_WORKSPACE -name "actions" -type d
+
       - name: Final Update Release JSON
         uses: ./actions/update-from-nip94
         with:
@@ -237,6 +246,7 @@ jobs:
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
           commit_message: "Update release.json with all NIP-94 events [skip ci]"
+
 
       # - name: Download SDK Artifacts
       #   uses: dawidd6/action-download-artifact@v2
