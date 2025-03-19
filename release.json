@@ -149,9 +149,9 @@
               "eventId": "ebf0c6d34999fae434b1f9da02ee9702c52f8cfe5575cc2a6dfcd1c0d5fe047a"
             },
             "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/1c5ccb3f811917936b897cbe29f9647f75a15ba9dd422a87008ad9a81e143ec5.bin",
-              "hash": "sha256:1c5ccb3f811917936b897cbe29f9647f75a15ba9dd422a87008ad9a81e143ec5",
-              "eventId": "54f65808242a0c9f774e46b4bd5098f87cba8ae1f0defc6a52a570fa20b024eb"
+              "url": "https://blossom.swissdash.site/f080099a764a2d3b4777fe4bce57a2aec57b47e200cbeda7a2d4551b363e7299.bin",
+              "hash": "sha256:f080099a764a2d3b4777fe4bce57a2aec57b47e200cbeda7a2d4551b363e7299",
+              "eventId": "592fa859ff123d1064697c6187cdba28ccd09645bbc89d03c2630a87a4d9f814"
             },
             "x86_64": {
               "url": "https://blossom.swissdash.site/[HASH].zip",
