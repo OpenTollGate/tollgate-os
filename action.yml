@@ -75,12 +75,21 @@ runs:
       shell: bash
       run: |
         case "${{ inputs.model }}" in
-          "gl-ar300m")
+          "gl-ar300m16")  # NOR version
             echo "PLATFORM=ath79" >> $GITHUB_ENV
             echo "TYPE=generic" >> $GITHUB_ENV
             echo "TARGET_DEVICE=ath79-generic" >> $GITHUB_ENV
             echo "PROFILE=glinet_gl-ar300m16" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mips_24kc_nor" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          "gl-ar300m-nor")  # NAND version
+            echo "PLATFORM=ath79" >> $GITHUB_ENV
+            echo "TYPE=generic" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=ath79-generic" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-ar300m-nor" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mips_24kc_nand" >> $GITHUB_ENV
             echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
@@ -147,16 +156,12 @@ runs:
     - name: Download TollGate Packages from release.json
       shell: bash
       run: |
-        # Create packages directory if it doesn't exist
-        PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
-        mkdir -p "${PACKAGES_DIR}"
-        
-        # Convert BLOSSOM_ARCH (if needed)
-        # Sometimes there's a difference between how architectures are named
-        if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
-          TARGET_ARCH="mips_24kc"
-        else
-          TARGET_ARCH="${BLOSSOM_ARCH}"
+        # For NOR
+        if [[ "${BLOSSOM_ARCH}" == *"nor"* ]]; then
+          TARGET_ARCH="mips_24kc_nor"
+        # For NAND
+        elif [[ "${BLOSSOM_ARCH}" == *"nand"* ]]; then
+          TARGET_ARCH="mips_24kc_nand"
         fi
         
         echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
@@ -200,6 +205,15 @@ runs:
         # List the downloaded packages
         echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
         ls -la "${PACKAGES_DIR}"
+        # For NOR
+        if [[ "${BLOSSOM_ARCH}" == *"nor"* ]]; then
+          echo "NOR packages:"
+          ls -la "${PACKAGES_DIR}/mips_24kc_nor"
+        # For NAND
+        elif [[ "${BLOSSOM_ARCH}" == *"nand"* ]]; then
+          echo "NAND packages:"
+          ls -la "${PACKAGES_DIR}/mips_24kc_nand"
+        fi
 
     - name: Generate Package Index
       shell: bash
