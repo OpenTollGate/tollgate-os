@@ -148,7 +148,7 @@ runs:
         # Convert BLOSSOM_ARCH (if needed)
         # Sometimes there's a difference between how architectures are named
         if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
-          TARGET_ARCH="mipsel_24kc"
+          TARGET_ARCH="mips_24kc"
         else
           TARGET_ARCH="${BLOSSOM_ARCH}"
         fi
