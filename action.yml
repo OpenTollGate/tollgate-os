@@ -359,7 +359,7 @@ runs:
       with:
         host: "https://blossom.swissdash.site"
         filePath: ${{ steps.find-firmware.outputs.firmware_path }}
-        nostrPrivateKey: ${{ secrets.NSECBECH }}
+        nostrPrivateKey: ${{ inputs.NSECBECH }}
 
     - name: Publish Firmware NIP-94 Metadata
       id: publish_firmware
