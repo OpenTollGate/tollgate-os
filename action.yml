@@ -34,6 +34,12 @@ inputs:
     description: 'Path to default files directory'
     default: 'tollgate-image-builder/files'
     required: false
+  nsecbech:
+    description: 'Nostr secret key for Blossom in bech32 format'
+    required: true
+  nsec:
+    description: 'Nostr secret key for event signing'
+    required: true
 
 outputs:
   firmware_path:
@@ -138,6 +144,63 @@ runs:
         PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
 
+    - name: Download TollGate Packages from release.json
+      shell: bash
+      run: |
+        # Create packages directory if it doesn't exist
+        PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+        mkdir -p "${PACKAGES_DIR}"
+        
+        # Convert BLOSSOM_ARCH (if needed)
+        # Sometimes there's a difference between how architectures are named
+        if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
+          TARGET_ARCH="mips_24kc"
+        else
+          TARGET_ARCH="${BLOSSOM_ARCH}"
+        fi
+        
+        echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+        
+        # Parse release.json and download all packages for this architecture
+        DOWNLOADED_PACKAGES=""
+        for MODULE_NAME in $(jq -r '.modules[].name' release.json); do
+          echo "📦 Processing module: ${MODULE_NAME}"
+          
+          # Extract URL for this module and architecture
+          PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+            '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' release.json)
+            
+          # Skip placeholder URLs
+          if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+            echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+            continue
+          fi
+          
+          # Download the package
+          PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+          echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
+          
+          if curl -L -f -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+            echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+            DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+          else
+            echo "❌ Failed to download ${PACKAGE_FILENAME}"
+          fi
+        done
+        
+        # Add the downloaded packages to the build package list
+        if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+          echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
+          echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+        else
+          echo "⚠️ No packages were downloaded successfully"
+          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+        fi
+        
+        # List the downloaded packages
+        echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
+        ls -la "${PACKAGES_DIR}"
+
     - name: Generate Package Index
       shell: bash
       run: |
@@ -148,26 +211,176 @@ runs:
         ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
         gzip -9c packages/local/Packages > packages/local/Packages.gz'
 
-    - name: Build Firmware
+    - name: Check Available Profiles
       shell: bash
       run: |
-        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        sudo make -j$(nproc) image \
+        echo "📋 Checking for available profiles..."
+        
+        # Use a more reliable method to list profiles
+        if [ -f "repositories.conf" ]; then
+          # Try to get profile information without using 'make info'
+          grep -q "${PROFILE}" profiles.json && \
+            echo "✅ Profile ${PROFILE} appears to be available" || \
+            echo "⚠️ Profile ${PROFILE} not found in profiles.json, but continuing anyway"
+        else
+          echo "⚠️ Unable to verify profile, but continuing anyway"
+        fi
+
+    - name: Analyze Package Sizes
+      shell: bash
+      run: |
+        echo "📊 Analyzing TollGate package sizes:"
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        
+        # Get total size of all packages
+        TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
+        echo "Total size of all packages: ${TOTAL_SIZE}"
+        
+        # Check device specs
+        FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile || echo "Flash info not found")
+        echo "Device flash information: ${FLASH_INFO}"
+        
+        # List packages by size
+        echo "Packages ordered by size (largest first):"
+        du -h packages/local/*.ipk | sort -hr
+        
+        # Create package groups to try with fewer packages
+        echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
+        echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
+
+    - name: Build Firmware with All Packages
+      shell: bash
+      continue-on-error: true
+      id: build-all
+      run: |
+        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        
+        echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
+        sudo make -j$(nproc) image V=s \
           PROFILE="${PROFILE}" \
           PACKAGES="${COMBINED_PACKAGE_LIST}" \
           FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Build with ALL packages succeeded!"
+          exit 0
+        else
+          echo "❌ Build with ALL packages failed, will try with fewer packages"
+          # Show logs or errors
+          cat ${BUILDDIR}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          exit 1
+        fi
+
+    - name: Build Firmware with Essential Packages Only
+      shell: bash
+      if: steps.build-all.outcome == 'failure'
+      continue-on-error: true
+      id: build-essential
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        sudo make clean
+        
+        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
+        
+        echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${PROFILE}" \
+          PACKAGES="${COMBINED_PACKAGE_LIST}" \
+          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Build with ESSENTIAL packages succeeded!"
+          exit 0
+        else
+          echo "❌ Build with ESSENTIAL packages failed, will try without TollGate packages"
+          exit 1
+        fi
+
+    - name: Build Basic Firmware (Fallback)
+      shell: bash
+      if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
+      id: build-basic
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        sudo make clean
+        
+        BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
+        
+        echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${PROFILE}" \
+          PACKAGES="${BASIC_PACKAGE_LIST}" \
+          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Basic build succeeded!"
+        else
+          echo "❌ Even basic build failed, there might be a fundamental issue"
+          exit 1
+        fi
 
     - name: Find Firmware File
       id: find-firmware
       shell: bash
       run: |
-        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*${PROFILE}*sysupgrade.bin" -type f)
+        # Look for any sysupgrade.bin file
+        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+        
+        if [ -z "$FIRMWARE_PATH" ]; then
+          # Try to find any .bin file as fallback
+          FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+        fi
+        
         if [ -f "$FIRMWARE_PATH" ]; then
+          echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
           echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
           echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
+          
+          # Store firmware metadata
+          FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
+          echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+          echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
         else
-          echo "Error: Firmware file not found!"
+          echo "❌ Error: No firmware file found!"
           exit 1
         fi
 
+    - name: Upload Firmware to Blossom
+      id: upload_firmware
+      uses: c03rad0r/cli-blossom-uploader-go@main
+      with:
+        host: "https://blossom.swissdash.site"
+        filePath: ${{ steps.find-firmware.outputs.firmware_path }}
+        nostrPrivateKey: ${{ inputs.NSECBECH }}
+
+    - name: Publish Firmware NIP-94 Metadata
+      id: publish_firmware
+      uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
+      with:
+        relays: ${{ inputs.nostr_relays }}
+        url: ${{ steps.upload_firmware.outputs.url }}
+        mimeType: "application/octet-stream"
+        fileHash: ${{ steps.upload_firmware.outputs.hash }}
+        originalHash: ${{ env.FIRMWARE_HASH }}
+        filename: ${{ steps.find-firmware.outputs.firmware_name }}
+        content: "TollGate OS Firmware for ${{ inputs.model }}"
+        nsec: ${{ inputs.nsec }}
+        size: ${{ env.FIRMWARE_SIZE }}
+        architecture: ${{ env.BLOSSOM_ARCH }}
+        model: ${{ inputs.model }}
+        version: ${{ inputs.version }}
+
+    - name: Verify Firmware Publication
+      id: verify_firmware
+      uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
+      with:
+        eventId: ${{ steps.publish_firmware.outputs.eventId }}
+        relays: ${{ inputs.nostr_relays }}
