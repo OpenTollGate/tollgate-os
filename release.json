@@ -13,7 +13,7 @@
               "hash": "sha256:83fb278ddc956779ac91a4680a3830ba0db8045765ad8d35c2c357297709f585",
               "eventId": "90bfbaaa50e17a69dc967821818c32d4c68c3f6a2cc399954b411da2bab526bd"
             },
-            "mipsel_24kc": {
+            "mips_24kc": {
               "url": "https://blossom.swissdash.site/333d91cfaa2f1e9bc1390dd83913d4155308778a37fe1e4b4afad506a1bf354d.bin",
               "hash": "sha256:333d91cfaa2f1e9bc1390dd83913d4155308778a37fe1e4b4afad506a1bf354d",
               "eventId": "b2fdc53762fc515e163ac9bea466c1ffef3f2d5a02f8550246791119bb88ea0f"
