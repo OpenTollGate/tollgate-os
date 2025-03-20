@@ -221,35 +221,136 @@ runs:
           echo "⚠️ Unable to verify profile, but continuing anyway"
         fi
 
-    - name: Build Firmware
+    - name: Analyze Package Sizes
       shell: bash
+      run: |
+        echo "📊 Analyzing TollGate package sizes:"
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        
+        # Get total size of all packages
+        TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
+        echo "Total size of all packages: ${TOTAL_SIZE}"
+        
+        # Check device specs
+        FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile || echo "Flash info not found")
+        echo "Device flash information: ${FLASH_INFO}"
+        
+        # List packages by size
+        echo "Packages ordered by size (largest first):"
+        du -h packages/local/*.ipk | sort -hr
+        
+        # Create package groups to try with fewer packages
+        echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
+        echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
+
+    - name: Build Firmware with All Packages
+      shell: bash
+      continue-on-error: true
+      id: build-all
       run: |
         COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
         
-        # Print package details
-        echo "📦 Building with packages: ${COMBINED_PACKAGE_LIST}"
-        
-        # Try building with verbose output
+        echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
         sudo make -j$(nproc) image V=s \
           PROFILE="${PROFILE}" \
           PACKAGES="${COMBINED_PACKAGE_LIST}" \
           FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Build with ALL packages succeeded!"
+          exit 0
+        else
+          echo "❌ Build with ALL packages failed, will try with fewer packages"
+          # Show logs or errors
+          cat ${BUILDDIR}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          exit 1
+        fi
+
+    - name: Build Firmware with Essential Packages Only
+      shell: bash
+      if: steps.build-all.outcome == 'failure'
+      continue-on-error: true
+      id: build-essential
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        sudo make clean
         
-        # Check if build produced any files
-        echo "🔍 Checking for any generated firmware files:"
-        find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -type f -name "*.bin" | sort
+        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
+        
+        echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${PROFILE}" \
+          PACKAGES="${COMBINED_PACKAGE_LIST}" \
+          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Build with ESSENTIAL packages succeeded!"
+          exit 0
+        else
+          echo "❌ Build with ESSENTIAL packages failed, will try without TollGate packages"
+          exit 1
+        fi
+
+    - name: Build Basic Firmware (Fallback)
+      shell: bash
+      if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
+      id: build-basic
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        sudo make clean
+        
+        BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
+        
+        echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${PROFILE}" \
+          PACKAGES="${BASIC_PACKAGE_LIST}" \
+          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+          
+        # Check if build succeeded
+        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Basic build succeeded!"
+        else
+          echo "❌ Even basic build failed, there might be a fundamental issue"
+          exit 1
+        fi
 
     - name: Find Firmware File
       id: find-firmware
       shell: bash
       run: |
-        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*${PROFILE}*sysupgrade.bin" -type f)
+        # Look for any sysupgrade.bin file
+        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+        
+        if [ -z "$FIRMWARE_PATH" ]; then
+          # Try to find any .bin file as fallback
+          FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+        fi
+        
         if [ -f "$FIRMWARE_PATH" ]; then
+          echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
           echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
           echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
+          
+          # Display build summary
+          echo "📝 Build Summary:"
+          echo "- Result: ${BUILD_RESULT:-UNKNOWN}"
+          echo "- Firmware: $(basename $FIRMWARE_PATH)"
+          ls -lh "$FIRMWARE_PATH"
+          
+          # Check firmware size against flash size
+          FIRMWARE_SIZE=$(du -h "$FIRMWARE_PATH" | cut -f1)
+          echo "- Firmware size: $FIRMWARE_SIZE"
         else
-          echo "Error: Firmware file not found!"
+          echo "❌ Error: No firmware file found!"
+          echo "Listing contents of target directory:"
+          ls -la ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/
           exit 1
         fi
 
