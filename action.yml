@@ -205,15 +205,41 @@ runs:
         ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
         gzip -9c packages/local/Packages > packages/local/Packages.gz'
 
+    - name: Check Available Profiles
+      shell: bash
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        echo "📋 Available profiles for this target:"
+        make info | grep -A 100 "Available Profiles:" | grep -B 100 "Available Packages:" | grep -v "Available Profiles:" | grep -v "Available Packages:"
+        
+        # Check if our profile exists
+        if make info | grep -q "${PROFILE}"; then
+          echo "✅ Profile ${PROFILE} is available"
+        else
+          echo "❌ Profile ${PROFILE} is not available! Please check the name."
+          echo "Attempting to find correct profile for GL-AR300M:"
+          make info | grep -i "ar300m" || echo "No matching profile found"
+          exit 1
+        fi
+
     - name: Build Firmware
       shell: bash
       run: |
         COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        sudo make -j$(nproc) image \
+        
+        # Print package details
+        echo "📦 Building with packages: ${COMBINED_PACKAGE_LIST}"
+        
+        # Try building with verbose output
+        sudo make -j$(nproc) image V=s \
           PROFILE="${PROFILE}" \
           PACKAGES="${COMBINED_PACKAGE_LIST}" \
           FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        
+        # Check if build produced any files
+        echo "🔍 Checking for any generated firmware files:"
+        find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -type f -name "*.bin" | sort
 
     - name: Find Firmware File
       id: find-firmware
