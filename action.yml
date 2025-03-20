@@ -34,6 +34,12 @@ inputs:
     description: 'Path to default files directory'
     default: 'tollgate-image-builder/files'
     required: false
+  nsecbech:
+    description: 'Nostr secret key for Blossom in bech32 format'
+    required: true
+  nsec:
+    description: 'Nostr secret key for event signing'
+    required: true
 
 outputs:
   firmware_path:
@@ -366,7 +372,7 @@ runs:
         originalHash: ${{ env.FIRMWARE_HASH }}
         filename: ${{ steps.find-firmware.outputs.firmware_name }}
         content: "TollGate OS Firmware for ${{ inputs.model }}"
-        nsec: ${{ secrets.NSEC }}
+        nsec: ${{ inputs.nsec }}
         size: ${{ env.FIRMWARE_SIZE }}
         architecture: ${{ env.BLOSSOM_ARCH }}
         model: ${{ inputs.model }}

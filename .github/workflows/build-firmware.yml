@@ -36,6 +36,8 @@ jobs:
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           files_path: "./files"
+          nsecbech: ${{ secrets.NSECBECH }}
+          nsec: ${{ secrets.NSEC }}
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
