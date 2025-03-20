@@ -138,6 +138,63 @@ runs:
         PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
 
+    - name: Download TollGate Packages from release.json
+      shell: bash
+      run: |
+        # Create packages directory if it doesn't exist
+        PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+        mkdir -p "${PACKAGES_DIR}"
+        
+        # Convert BLOSSOM_ARCH (if needed)
+        # Sometimes there's a difference between how architectures are named
+        if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
+          TARGET_ARCH="mipsel_24kc"
+        else
+          TARGET_ARCH="${BLOSSOM_ARCH}"
+        fi
+        
+        echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+        
+        # Parse release.json and download all packages for this architecture
+        DOWNLOADED_PACKAGES=""
+        for MODULE_NAME in $(jq -r '.modules[].name' release.json); do
+          echo "📦 Processing module: ${MODULE_NAME}"
+          
+          # Extract URL for this module and architecture
+          PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+            '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' release.json)
+            
+          # Skip placeholder URLs
+          if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+            echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+            continue
+          fi
+          
+          # Download the package
+          PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+          echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
+          
+          if curl -L -f -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+            echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+            DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+          else
+            echo "❌ Failed to download ${PACKAGE_FILENAME}"
+          fi
+        done
+        
+        # Add the downloaded packages to the build package list
+        if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+          echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
+          echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+        else
+          echo "⚠️ No packages were downloaded successfully"
+          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+        fi
+        
+        # List the downloaded packages
+        echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
+        ls -la "${PACKAGES_DIR}"
+
     - name: Generate Package Index
       shell: bash
       run: |
@@ -151,7 +208,7 @@ runs:
     - name: Build Firmware
       shell: bash
       run: |
-        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
+        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
         sudo make -j$(nproc) image \
           PROFILE="${PROFILE}" \
