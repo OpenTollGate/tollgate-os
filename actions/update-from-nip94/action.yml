@@ -67,8 +67,18 @@ runs:
           URL=$(jq -r '.tags[] | select(.[0] == "url")[1] // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
           EVENT_ID=$(jq -r '.id // empty' "$EVENT_FILE" | tr -d '\n' | xargs)
           
+          # Debug output to verify tag contents
+          echo "URL tag contains: $(jq -r '.tags[] | select(.[0] == "url")' "$EVENT_FILE")"
+          echo "Hash tag contains: $(jq -r '.tags[] | select(.[0] == "x")' "$EVENT_FILE")"
+          
           echo "Found: ID=$EVENT_ID, Filename=$FILENAME, Arch=$ARCH"
           echo "URL=$URL, Hash=$HASH"
+          
+          # Skip if URL or hash is missing
+          if [ -z "$URL" ] || [ -z "$HASH" ]; then
+            echo "::warning::Event missing URL or hash, cannot process: $EVENT_FILE"
+            continue
+          fi
           
           # Extract module from filename (e.g., relay-gl-ar300m-mipsel_24kc.ipk -> relay)
           if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
@@ -146,4 +156,24 @@ runs:
           git commit -m "${{ inputs.commit_message }}"
           echo "Pushing changes to ${{ inputs.target_branch }} branch..."
           git push origin HEAD:${{ inputs.target_branch }}
+        fi
+
+    - name: Debug NIP-94 Event Contents
+      if: steps.publish_package.outputs.eventId != ''
+      run: |
+        echo "Event ID: ${{ steps.publish_package.outputs.eventId }}"
+        # Use nak to fetch the event and examine it
+        nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq .
+        
+        # Check specific tags to ensure URL and hash are present
+        URL=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "url")[1] // "MISSING"')
+        HASH=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "x")[1] // "MISSING"')
+        
+        echo "URL in published event: $URL"
+        echo "Hash in published event: $HASH"
+        
+        if [ "$URL" == "MISSING" ] || [ "$HASH" == "MISSING" ]; then
+          echo "::warning::URL or hash missing in the published event!"
+        else
+          echo "✅ Event contains both URL and hash"
         fi
