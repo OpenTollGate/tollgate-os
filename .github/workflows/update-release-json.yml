@@ -166,7 +166,7 @@ jobs:
       - name: Extract Events and Save to Files
         run: |
           # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          PUBKEY="${{ secrets.NIP_94_PUBKEY_NEW }}"
           
           if [ -z "$PUBKEY" ]; then
             echo "::error::NIP_94_PUBKEY secret is not set"
