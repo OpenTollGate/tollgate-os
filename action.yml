@@ -143,6 +143,15 @@ runs:
         fi
         PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
+        
+        # Add U-Boot config for supported devices
+        case "${{ inputs.model }}" in
+          "gl-mt3000"|"gl-mt6000")
+            echo "Creating U-Boot environment config"
+            mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc
+            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc/fw_env.config
+            ;;
+        esac
 
     - name: Download TollGate Packages from release.json
       shell: bash
@@ -152,7 +161,6 @@ runs:
         mkdir -p "${PACKAGES_DIR}"
         
         # Convert BLOSSOM_ARCH (if needed)
-        # Sometimes there's a difference between how architectures are named
         if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
           TARGET_ARCH="mips_24kc"
         else
@@ -160,6 +168,9 @@ runs:
         fi
         
         echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+        
+        # Create an empty Packages file to prevent build failures if no packages are downloaded
+        touch "${PACKAGES_DIR}/Packages"
         
         # Parse release.json and download all packages for this architecture
         DOWNLOADED_PACKAGES=""
@@ -176,16 +187,25 @@ runs:
             continue
           fi
           
-          # Download the package
+          # Download the package with retry logic
           PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
           echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
           
-          if curl -L -f -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-            echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-            DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
-          else
-            echo "❌ Failed to download ${PACKAGE_FILENAME}"
-          fi
+          # Try up to 3 times with increasing timeouts
+          for ATTEMPT in {1..3}; do
+            echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
+            if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+              echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+              DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+              break
+            else
+              echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
+              if [ $ATTEMPT -eq 3 ]; then
+                echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
+              fi
+              sleep 5
+            fi
+          done
         done
         
         # Add the downloaded packages to the build package list
@@ -199,7 +219,7 @@ runs:
         
         # List the downloaded packages
         echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
-        ls -la "${PACKAGES_DIR}"
+        ls -la "${PACKAGES_DIR}" || true
 
     - name: Generate Package Index
       shell: bash
@@ -217,15 +237,18 @@ runs:
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
         echo "📋 Checking for available profiles..."
         
-        # Use a more reliable method to list profiles
-        if [ -f "repositories.conf" ]; then
-          # Try to get profile information without using 'make info'
+        # More reliable method to check profiles
+        if [ -f "profiles.json" ]; then
           grep -q "${PROFILE}" profiles.json && \
             echo "✅ Profile ${PROFILE} appears to be available" || \
-            echo "⚠️ Profile ${PROFILE} not found in profiles.json, but continuing anyway"
-        else
-          echo "⚠️ Unable to verify profile, but continuing anyway"
+            echo "⚠️ Profile ${PROFILE} not found, checking with make info"
         fi
+        
+        # Fallback to make info to list profiles
+        make info || echo "⚠️ Could not run 'make info', but continuing anyway"
+        
+        # Always continue - we'll let the build fail if the profile is truly invalid
+        echo "🔄 Proceeding with profile: ${PROFILE}"
 
     - name: Analyze Package Sizes
       shell: bash
@@ -233,17 +256,26 @@ runs:
         echo "📊 Analyzing TollGate package sizes:"
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
         
-        # Get total size of all packages
-        TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
-        echo "Total size of all packages: ${TOTAL_SIZE}"
+        # Check if packages directory has .ipk files 
+        if ls packages/local/*.ipk 1> /dev/null 2>&1; then
+          # Get total size of all packages
+          TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
+          echo "Total size of all packages: ${TOTAL_SIZE}"
+          
+          # List packages by size
+          echo "Packages ordered by size (largest first):"
+          du -h packages/local/*.ipk | sort -hr
+        else
+          echo "⚠️ No .ipk packages found in packages/local/"
+        fi
         
         # Check device specs
-        FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile || echo "Flash info not found")
-        echo "Device flash information: ${FLASH_INFO}"
-        
-        # List packages by size
-        echo "Packages ordered by size (largest first):"
-        du -h packages/local/*.ipk | sort -hr
+        if grep -q "Flash" "${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
+          FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile)
+          echo "Device flash information: ${FLASH_INFO}"
+        else
+          echo "⚠️ Flash information not found in Makefile"
+        fi
         
         # Create package groups to try with fewer packages
         echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
