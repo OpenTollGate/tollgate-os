@@ -14,9 +14,9 @@ jobs:
       matrix:
         model: [
 #          'gl-mt300n-v2',
-          'gl-ar300m',
-          'gl-mt3000',
-          'gl-mt6000',
+#          'gl-ar300m',
+          'gl-mt3000'#,
+#          'gl-mt6000',
 #          'gl-e750',
 #          'archer_mr200'
         ]
