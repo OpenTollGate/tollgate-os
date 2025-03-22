@@ -14,7 +14,7 @@ inputs:
   commit_message:
     description: 'Commit message for the update'
     required: false
-    default: 'Update release.json with latest module packages [skip ci]'
+    default: 'Update release.json with latest module packages'
   target_branch:
     description: 'Branch to push changes to'
     required: false
