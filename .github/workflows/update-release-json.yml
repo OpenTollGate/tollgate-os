@@ -7,14 +7,14 @@ on:
       - '*'
     paths:
       - '.github/workflows/update-release-json.yml'
-      - 'actions/update-release-json/**'
+      - 'actions/update-from-nip94/**'
   workflow_dispatch:
     inputs:
       run_id:
         description: 'Run ID of the build workflow'
         required: true
-  repository_dispatch:
-    types: [update-release-json]
+  # repository_dispatch:
+  #   types: [update-release-json]
 
 # Add permissions block here
 permissions:
@@ -240,6 +240,7 @@ jobs:
             echo "Module extracted from filename: ${BASH_REMATCH[1]}"
           fi
 
+      # NOTE: update in update-from-nip94/action.yml only
       # - name: Update Release JSON for Each Event (Fixed)
       #   run: |
       #     EVENT_COUNT="${{ env.EVENT_COUNT }}"
