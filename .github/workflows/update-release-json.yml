@@ -149,17 +149,17 @@ jobs:
             echo ""
           done
 
-          #UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
-          # # Process events to find the most recent for each architecture
-          # echo "Most recent events by architecture:"
-          # for ARCH in $UNIQUE_ARCHS; do
-          #   echo "========== Architecture: $ARCH =========="
-          #   # Find the most recent event with this architecture (highest created_at value)
-          #   cat events_data.txt | jq --arg arch "$ARCH" '
-          #     select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
-          #   ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
-          #   echo ""
-          # done
+          UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
+          # Process events to find the most recent for each architecture
+          echo "Most recent events by architecture:"
+          for ARCH in $UNIQUE_ARCHS; do
+            echo "========== Architecture: $ARCH =========="
+            # Find the most recent event with this architecture (highest created_at value)
+            cat events_data.txt | jq --arg arch "$ARCH" '
+              select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
+            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
+            echo ""
+          done
           
           echo "✅ Successfully analyzed most recent events on network!"
           
@@ -240,28 +240,28 @@ jobs:
             echo "Module extracted from filename: ${BASH_REMATCH[1]}"
           fi
 
-      - name: Update Release JSON for Each Event (Fixed)
-        run: |
-          EVENT_COUNT="${{ env.EVENT_COUNT }}"
+      # - name: Update Release JSON for Each Event (Fixed)
+      #   run: |
+      #     EVENT_COUNT="${{ env.EVENT_COUNT }}"
           
-          if [ "$EVENT_COUNT" -eq 0 ]; then
-            echo "::warning::No events found to process"
-            exit 0
-          fi
+      #     if [ "$EVENT_COUNT" -eq 0 ]; then
+      #       echo "::warning::No events found to process"
+      #       exit 0
+      #     fi
           
-          for i in $(seq 0 $((EVENT_COUNT - 1))); do
-            EVENT_FILE="event_files/event_${i}.json"
+      #     for i in $(seq 0 $((EVENT_COUNT - 1))); do
+      #       EVENT_FILE="event_files/event_${i}.json"
             
-            echo "Processing event file: $EVENT_FILE"
+      #       echo "Processing event file: $EVENT_FILE"
             
-            # Create a temporary directory for this event
-            mkdir -p "sdk-artifacts-${i}"
+      #       # Create a temporary directory for this event
+      #       mkdir -p "sdk-artifacts-${i}"
             
-            # Copy the event to the temporary directory
-            cp "$EVENT_FILE" "sdk-artifacts-${i}/event.json"
-          done
+      #       # Copy the event to the temporary directory
+      #       cp "$EVENT_FILE" "sdk-artifacts-${i}/event.json"
+      #     done
           
-          echo "✅ Successfully prepared all events for processing!"
+      #     echo "✅ Successfully prepared all events for processing!"
 
       - name: Debug Workspace
         run: |
