@@ -2,19 +2,11 @@
 name: Test Update Release JSON
 
 on:
-  push:
-    branches-ignore:
-      - 'develop'
-    paths:
-      - '.github/workflows/update-release-json.yml'
-      - 'actions/update-release-json/**'
   workflow_dispatch:
     inputs:
       run_id:
         description: 'Run ID of the build workflow'
         required: true
-  repository_dispatch:
-    types: [test-update-release-json]
 
 # Add permissions block here
 permissions:
