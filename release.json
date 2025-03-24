@@ -2,38 +2,6 @@
   "version": "0.0.1",
   "modules": [
     {
-      "name": "relay",
-      "description": "TollGate Relay Module - Nostr relay functionality",
-      "versions": [
-        {
-          "version": "0.0.1",
-          "architectures": {
-            "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/01d085bc6e71ac7edf2443d975e80fcded382f9433bbf171be617c2280e817e8.bin",
-              "hash": "sha256:01d085bc6e71ac7edf2443d975e80fcded382f9433bbf171be617c2280e817e8",
-              "eventId": "6f749b45c2cb7441922cf0e026885e3b316c02ff3c35f74abd1268e062495441"
-            },
-            "mips_24kc": {
-              "url": "https://blossom.swissdash.site/f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88.bin",
-              "hash": "sha256:f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88",
-              "eventId": "3ce96f7a75bdd2c52e791b4ff32612d54687f29425cdcc56c7c300f379501cdf"
-            },
-            "x86_64": {
-              "url": "https://blossom.swissdash.site/[HASH].zip",
-              "hash": "sha256:[HASH]",
-              "eventId": "[NIP94_EVENT_ID]"
-            },
-            "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/35817624d6062d6ea986d06d29035b35e06f931a080c3a7d363fbc8f55420495.ipk",
-              "hash": "sha256:35817624d6062d6ea986d06d29035b35e06f931a080c3a7d363fbc8f55420495",
-              "eventId": "[NIP94_EVENT_ID]"
-            }
-          },
-          "dependencies": []
-        }
-      ]
-    },
-    {
       "name": "basic",
       "description": "TollGate Basic Module - TIP-01 functionality",
       "versions": [
