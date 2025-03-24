@@ -1,0 +1,197 @@
+{
+  "version": "0.0.1",
+  "modules": [
+    {
+      "name": "crowsnest",
+      "description": "TollGate Crowsnest Module - Network monitoring and visualization",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/a50674f1cb7f481c8b389845c231f157bb38a8e321d60f73e141569361ac04e8.ipk",
+              "hash": "sha256:a50674f1cb7f481c8b389845c231f157bb38a8e321d60f73e141569361ac04e8",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/333d91cfaa2f1e9bc1390dd83913d4155308778a37fe1e4b4afad506a1bf354d.bin",
+              "hash": "sha256:333d91cfaa2f1e9bc1390dd83913d4155308778a37fe1e4b4afad506a1bf354d",
+              "eventId": "b2fdc53762fc515e163ac9bea466c1ffef3f2d5a02f8550246791119bb88ea0f"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/71ddd48e308757276932ba05a83ff4d38c3999e0859cd7c8154305d0767afcfd.ipk",
+              "hash": "sha256:71ddd48e308757276932ba05a83ff4d38c3999e0859cd7c8154305d0767afcfd",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "janitor",
+      "description": "TollGate Janitor Module - System maintenance and cleanup",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/afb92f482e427369acbed216866a5ed253a0b068fb85622e25431f07c4b9f3db.ipk",
+              "hash": "sha256:afb92f482e427369acbed216866a5ed253a0b068fb85622e25431f07c4b9f3db",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/96f81b41cb1ecc2e410bf38046789390ce7e1c5a7305f8093a7ab4b533a2d952.bin",
+              "hash": "sha256:96f81b41cb1ecc2e410bf38046789390ce7e1c5a7305f8093a7ab4b533a2d952",
+              "eventId": "253e2c6034fb4e128c7fdc7a0f86c8ce386cf4031ee51af7f9dd001834631168"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/b19f3c63291cf3021e16c7a4487b584b89707f174ddd3609e3ddbfc9de895475.ipk",
+              "hash": "sha256:b19f3c63291cf3021e16c7a4487b584b89707f174ddd3609e3ddbfc9de895475",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "merchant",
+      "description": "TollGate Merchant Module - Payment processing and management",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/968a5a48b5ca2473afdabd9026125534fee6fde9cb10335ed4b04bfdcaef5c61.ipk",
+              "hash": "sha256:968a5a48b5ca2473afdabd9026125534fee6fde9cb10335ed4b04bfdcaef5c61",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/d4f734025cc19c9a2149b13df36118311bf67b098acbe0a254c423ef8743b6d2.bin",
+              "hash": "sha256:d4f734025cc19c9a2149b13df36118311bf67b098acbe0a254c423ef8743b6d2",
+              "eventId": "d206567ac70814e4d34a2a79dd7112120ad2353b8ea8c3812b079e383a42aed1"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/c22ce0fe0ea37dea17d42b48a1ac3998bca2fc785a8ca2442ee9c4d0f15a7ef0.ipk",
+              "hash": "sha256:c22ce0fe0ea37dea17d42b48a1ac3998bca2fc785a8ca2442ee9c4d0f15a7ef0",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "relay",
+      "description": "TollGate Relay Module - Nostr relay functionality",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "",
+              "hash": "sha256:",
+              "eventId": "81418422fa15413cfca773f4d69d697af510d877ea1ba8a9fd80399c1fe1ec98"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88.bin",
+              "hash": "sha256:f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88",
+              "eventId": "3ce96f7a75bdd2c52e791b4ff32612d54687f29425cdcc56c7c300f379501cdf"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/35817624d6062d6ea986d06d29035b35e06f931a080c3a7d363fbc8f55420495.ipk",
+              "hash": "sha256:35817624d6062d6ea986d06d29035b35e06f931a080c3a7d363fbc8f55420495",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "valve",
+      "description": "TollGate Valve Module - Traffic control and routing",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/7022f4a70cb7ab79a490bab3098f860c94ddf46e556cce2df94e6614520713b6.ipk",
+              "hash": "sha256:7022f4a70cb7ab79a490bab3098f860c94ddf46e556cce2df94e6614520713b6",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/1ffd1f56a84e9248a1b1c8fbc65b48a6d10ce75602713657497b048de25183a2.bin",
+              "hash": "sha256:1ffd1f56a84e9248a1b1c8fbc65b48a6d10ce75602713657497b048de25183a2",
+              "eventId": "35f65ecd96cf9fd6da4be541ed490bf319f75ba7856bea34336c85a1c25acc8e"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/98932b188bc93ed66fda2956e611b614031661c4e238e916b97ab784c23d387b.ipk",
+              "hash": "sha256:98932b188bc93ed66fda2956e611b614031661c4e238e916b97ab784c23d387b",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "name": "whoami",
+      "description": "TollGate WhoAmI Module - Identity and authentication services",
+      "versions": [
+        {
+          "version": "0.0.1",
+          "architectures": {
+            "aarch64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/ded23f9ff3b61c8400e56ff67eb0f47f4433836e8c29793a9f3d4a25097fcd41.ipk",
+              "hash": "sha256:ded23f9ff3b61c8400e56ff67eb0f47f4433836e8c29793a9f3d4a25097fcd41",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/fcefdfe1f04a5c41d644060755e0e02321a4a4e6e943c0e6390bef9c38bac948.bin",
+              "hash": "sha256:fcefdfe1f04a5c41d644060755e0e02321a4a4e6e943c0e6390bef9c38bac948",
+              "eventId": "b58da7469889a5f02a78337dace4e55d6ef3a999e4b918b89d56cfc2e274b727"
+            },
+            "x86_64": {
+              "url": "https://blossom.swissdash.site/[HASH].zip",
+              "hash": "sha256:[HASH]",
+              "eventId": "[NIP94_EVENT_ID]"
+            },
+            "mipsel_24kc": {
+              "url": "https://blossom.swissdash.site/be835860cdc23bda999f274d6d1b7812f5ce22900f114e00acd834ff500a87a2.ipk",
+              "hash": "sha256:be835860cdc23bda999f274d6d1b7812f5ce22900f114e00acd834ff500a87a2",
+              "eventId": "[NIP94_EVENT_ID]"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    }
+  ]
+}
