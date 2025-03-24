@@ -13,8 +13,8 @@ on:
       run_id:
         description: 'Run ID of the build workflow'
         required: true
-  # repository_dispatch:
-  #   types: [update-release-json]
+  repository_dispatch:
+    types: [update-release-json]
 
 # Add permissions block here
 permissions:

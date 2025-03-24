@@ -160,6 +160,7 @@ runs:
 
     - name: Debug NIP-94 Event Contents
       if: steps.publish_package.outputs.eventId != ''
+      shell: bash
       run: |
         echo "Event ID: ${{ steps.publish_package.outputs.eventId }}"
         # Use nak to fetch the event and examine it
