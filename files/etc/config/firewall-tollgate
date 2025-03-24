@@ -1,0 +1,6 @@
+config rule
+	option name 'Allow-TollGate-In'
+	option src 'lan'
+	option proto 'tcp'
+	option dest_port '2121'
+	option target 'ACCEPT'
