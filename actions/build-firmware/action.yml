@@ -29,7 +29,7 @@ inputs:
       kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
       libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
       ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
-      uclient-fetch urandom-seed urngd openssh-sftp-server opennds
+      uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
   files_path:
     description: 'Path to default files directory'
     default: 'tollgate-image-builder/files'
