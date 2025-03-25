@@ -1,0 +1,35 @@
+config nodogsplash
+  # Set to 0 to disable nodogsplash
+  option enabled 1
+
+  # Set to 0 to disable hook that makes nodogsplash restart when the firewall restarts.
+  # This hook is needed as a restart of Firewall overwrites nodogsplash iptables entries.
+  option fwhook_enabled '1'
+
+  # Use this option to set the device nodogsplash will bind to.
+  # The value may be an interface section in /etc/config/network or a device name such as br-lan.
+  option gatewayinterface 'br-lan'
+
+  option gatewayname 'TollGate Nodogsplash'
+  option maxclients '250'
+
+  # Client timeouts in minutes
+  option preauthidletimeout '30'
+  option authidletimeout '120'
+
+  # Session Timeout is the interval after which clients are forced out (a value of 0 means never)
+  option sessiontimeout '1200'
+
+  # The interval in seconds at which nodogsplash checks client timeout status
+  option checkinterval '600'
+  list authenticated_users 'allow all'
+
+  # Allow ports for SSH/Telnet/DNS/DHCP/HTTP/HTTPS
+  list users_to_router 'allow tcp port 22'
+  list users_to_router 'allow tcp port 23'
+  list users_to_router 'allow tcp port 53'
+  list users_to_router 'allow udp port 53'
+  list users_to_router 'allow udp port 67'
+  list users_to_router 'allow tcp port 80'
+  list users_to_router 'allow tcp port 2121'
+  list users_to_router 'allow tcp port 8080'
