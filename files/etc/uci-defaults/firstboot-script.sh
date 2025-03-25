@@ -1,7 +1,6 @@
 #!/bin/sh
-# This script configures a new wireless interface on first boot
+# This script configures wireless interfaces/devices on first boot
 
-# Add a new wifi-iface section with the specified options
 uci set wireless.@wifi-iface["default_radio0"].name='tollgate_2g_open'
 uci set wireless.@wifi-iface["default_radio0"].ssid='TollGate - Setup'
 uci set wireless.@wifi-iface["default_radio0"].encryption='none'
@@ -18,4 +17,4 @@ uci set wireless.@wifi-device["radio1"].disabled='0'
 uci commit wireless
 
 # Additional commands can be added here
-echo "Wireless interfaces for 'TollGate - Setup' configured and applied on first boot."
+echo "Wireless radios enabled, interfaces for 'TollGate - Setup' configured and applied on first boot."
