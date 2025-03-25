@@ -2,23 +2,17 @@
 # This script configures a new wireless interface on first boot
 
 # Add a new wifi-iface section with the specified options
-uci add wireless wifi-iface
-uci set wireless.@wifi-iface[-1].device='radio0'
-uci set wireless.@wifi-iface[-1].network='lan'
-uci set wireless.@wifi-iface[-1].mode='ap'
-uci set wireless.@wifi-iface[-1].name='tollgate_2g_open'
-uci set wireless.@wifi-iface[-1].ssid='TollGate - Setup'
-uci set wireless.@wifi-iface[-1].encryption='none'
+uci set wireless.@wifi-iface["default_radio0"].name='tollgate_2g_open'
+uci set wireless.@wifi-iface["default_radio0"].ssid='TollGate - Setup'
+uci set wireless.@wifi-iface["default_radio0"].encryption='none'
 
-uci commit wireless
+uci set wireless.@wifi-iface["default_radio1"].name='tollgate_5g_open'
+uci set wireless.@wifi-iface["default_radio1"].ssid='TollGate - Setup'
+uci set wireless.@wifi-iface["default_radio1"].encryption='none'
 
-uci add wireless wifi-iface
-uci set wireless.@wifi-iface[-1].device='radio1'
-uci set wireless.@wifi-iface[-1].network='lan'
-uci set wireless.@wifi-iface[-1].mode='ap'
-uci set wireless.@wifi-iface[-1].name='tollgate_5g_open'
-uci set wireless.@wifi-iface[-1].ssid='TollGate - Setup'
-uci set wireless.@wifi-iface[-1].encryption='none'
+# Enable wireless interfaces
+uci set wireless.@wifi-device["radio0"].disabled='0'
+uci set wireless.@wifi-device["radio1"].disabled='0'
 
 # Commit the changes to the wireless configuration
 uci commit wireless
