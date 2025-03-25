@@ -43,13 +43,3 @@ fi
 if [ ! -f /etc/first_login_done ] && [ -t 0 ] && [ -t 1 ]; then
     /usr/local/bin/first-login-setup
 fi
-
-
-
-# service travelmate start
-# service relay start
-# service whoami start
-# service crowsnest start
-# service valve start
-# service merchant start
-
