@@ -5,14 +5,6 @@ config defaults
 	option output 'ACCEPT'
 	option forward 'REJECT'
 
-#config rule
-#	option name 'Allow Direct Access to 192.168.21.21'
-#	option src 'lan'
-#	option dest_ip '192.168.21.21'
-#	option dest_port '2121'
-#	option proto 'tcp'
-#	option target 'ACCEPT'
-
 config zone
 	option name 'lan'
 	option input 'ACCEPT'
