@@ -18,3 +18,6 @@ uci commit wireless
 
 # Additional commands can be added here
 echo "Wireless radios enabled, interfaces for 'TollGate - Setup' configured and applied on first boot."
+
+uci set network.lan.dns='1.1.1.1' # CloudFlare DNS (Change to more privacy focussed dns??)
+uci commit network
