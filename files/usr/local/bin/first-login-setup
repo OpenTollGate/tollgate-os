@@ -8,6 +8,5 @@
 
 # Create debug log
 echo "First login setup script started" > /tmp/first_login_debug.log
-service opennds stop
 touch /etc/first_login_done
 echo "First login setup completed" >> /tmp/first_login_debug.log
