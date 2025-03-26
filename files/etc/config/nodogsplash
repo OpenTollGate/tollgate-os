@@ -31,5 +31,5 @@ config nodogsplash
   list users_to_router 'allow udp port 53'
   list users_to_router 'allow udp port 67'
   list users_to_router 'allow tcp port 80'
-  list users_to_router 'allow tcp port 2121'
-  list users_to_router 'allow tcp port 8080'
+  list users_to_router 'allow tcp port 2121' # TollGate Protocol
+  list users_to_router 'allow tcp port 8080' # LuCi
