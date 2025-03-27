@@ -1,37 +1,5 @@
 {
   "version": "0.0.1",
   "modules": [
-    {
-      "name": "basic",
-      "description": "TollGate Basic Module - TIP-01 functionality",
-      "versions": [
-        {
-          "version": "0.0.1",
-          "architectures": {
-            "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/27244d0276ab559450515ec5fc97024edef27e3dcf3ddf792e0250d076315b51.bin",
-              "hash": "sha256:27244d0276ab559450515ec5fc97024edef27e3dcf3ddf792e0250d076315b51",
-              "eventId": "84b98288b3c5626ee942b1f4449dc232ad3dad317daff73f1c850969210ebd84"
-            },
-            "mips_24kc": {
-              "url": "https://blossom.swissdash.site/f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88.bin",
-              "hash": "sha256:f9081ebb7deecab396032125f853d234c3ee62a7537ce8f1503491b201716b88",
-              "eventId": "3ce96f7a75bdd2c52e791b4ff32612d54687f29425cdcc56c7c300f379501cdf"
-            },
-            "x86_64": {
-              "url": "https://blossom.swissdash.site/[HASH].zip",
-              "hash": "sha256:[HASH]",
-              "eventId": "[NIP94_EVENT_ID]"
-            },
-            "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/bc15f065667e7efde084fc9344f12b4ca51422e1fab226ca0b74f0a55a17f007.bin",
-              "hash": "sha256:bc15f065667e7efde084fc9344f12b4ca51422e1fab226ca0b74f0a55a17f007",
-              "eventId": "45d293d572314f9e03daa542d84d7f0faff1642a5b392578b941294b32f85461"
-            }
-          },
-          "dependencies": []
-        }
-      ]
-    }
   ]
 }
