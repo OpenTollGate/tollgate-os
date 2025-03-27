@@ -74,6 +74,9 @@ runs:
       id: vars
       shell: bash
       run: |
+        # Create build directory first
+        mkdir -p /tmp/openwrt-build
+        
         case "${{ inputs.model }}" in
           "gl-ar300m")
             echo "PLATFORM=ath79" >> $GITHUB_ENV
@@ -84,17 +87,40 @@ runs:
             echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
-          "gl-mt3000"|"gl-mt6000")
+          "gl-ar300m-nor")
+            echo "PLATFORM=ath79" >> $GITHUB_ENV
+            echo "TYPE=nand" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=ath79-nand" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-ar300m-nor" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          "gl-mt3000")
             echo "PLATFORM=mediatek" >> $GITHUB_ENV
             echo "TYPE=filogic" >> $GITHUB_ENV
             echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_${{ inputs.model }}" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-mt3000" >> $GITHUB_ENV
             echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
             echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
+          "gl-mt6000")
+            echo "PLATFORM=mediatek" >> $GITHUB_ENV
+            echo "TYPE=filogic" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-mt6000" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "Unsupported model: ${{ inputs.model }}" >> $GITHUB_ENV
+            exit 1
+            ;;
         esac
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
+
 
     - name: Setup Build Directory
       shell: bash
@@ -105,6 +131,10 @@ runs:
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
           echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+        elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
         else
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
@@ -129,6 +159,26 @@ runs:
           echo "Error: URL $DOWNLOAD_URL does not exist"
           exit 1
         fi
+
+    - name: Check Available Profiles
+      shell: bash
+      run: |
+        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        echo "📋 Checking for available profiles..."
+        
+        # More reliable method to check profiles
+        if [ -f "profiles.json" ]; then
+          grep -q "${PROFILE}" profiles.json && \
+            echo "✅ Profile ${PROFILE} appears to be available" || \
+            echo "⚠️ Profile ${PROFILE} not found, checking with make info"
+        fi
+        
+        # Try to list all available profiles if grep fails
+        echo "Available profiles:"
+        make info || echo "⚠️ Could not run 'make info', but continuing anyway"
+        
+        # Always continue - we'll let the build fail if the profile is truly invalid
+        echo "🔄 Proceeding with profile: ${PROFILE}"
 
     - name: Setup Custom Files and Packages
       shell: bash
@@ -231,25 +281,6 @@ runs:
         ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
         gzip -9c packages/local/Packages > packages/local/Packages.gz'
 
-    - name: Check Available Profiles
-      shell: bash
-      run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        echo "📋 Checking for available profiles..."
-        
-        # More reliable method to check profiles
-        if [ -f "profiles.json" ]; then
-          grep -q "${PROFILE}" profiles.json && \
-            echo "✅ Profile ${PROFILE} appears to be available" || \
-            echo "⚠️ Profile ${PROFILE} not found, checking with make info"
-        fi
-        
-        # Fallback to make info to list profiles
-        make info || echo "⚠️ Could not run 'make info', but continuing anyway"
-        
-        # Always continue - we'll let the build fail if the profile is truly invalid
-        echo "🔄 Proceeding with profile: ${PROFILE}"
-
     - name: Analyze Package Sizes
       shell: bash
       run: |
@@ -290,11 +321,23 @@ runs:
         cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
         
         echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
-        sudo make -j$(nproc) image V=s \
-          PROFILE="${PROFILE}" \
-          PACKAGES="${COMBINED_PACKAGE_LIST}" \
-          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-          
+        
+        if [ -n "${DEVICE_EXTRA}" ]; then
+          echo "Adding device compatibility: ${DEVICE_EXTRA}"
+          # Use eval to properly handle the parameters
+          eval sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            ${DEVICE_EXTRA} \
+            PACKAGES="${COMBINED_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        else
+          # Original command
+          sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            PACKAGES="${COMBINED_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        fi
+        
         # Check if build succeeded
         if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
@@ -319,11 +362,22 @@ runs:
         COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
         
         echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
-        sudo make -j$(nproc) image V=s \
-          PROFILE="${PROFILE}" \
-          PACKAGES="${COMBINED_PACKAGE_LIST}" \
-          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-          
+        
+        # Check if DEVICE_EXTRA is set and add it to the build command if it is
+        if [ -n "${DEVICE_EXTRA}" ]; then
+          echo "Adding device compatibility: ${DEVICE_EXTRA}"
+          sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            ${DEVICE_EXTRA} \
+            PACKAGES="${COMBINED_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        else
+          sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            PACKAGES="${COMBINED_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        fi
+        
         # Check if build succeeded
         if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
@@ -345,11 +399,22 @@ runs:
         BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
         
         echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
-        sudo make -j$(nproc) image V=s \
-          PROFILE="${PROFILE}" \
-          PACKAGES="${BASIC_PACKAGE_LIST}" \
-          FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-          
+        
+        # Check if DEVICE_EXTRA is set and add it to the build command if it is
+        if [ -n "${DEVICE_EXTRA}" ]; then
+          echo "Adding device compatibility: ${DEVICE_EXTRA}"
+          sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            ${DEVICE_EXTRA} \
+            PACKAGES="${BASIC_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        else
+          sudo make -j$(nproc) image V=s \
+            PROFILE="${PROFILE}" \
+            PACKAGES="${BASIC_PACKAGE_LIST}" \
+            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+        fi
+        
         # Check if build succeeded
         if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
