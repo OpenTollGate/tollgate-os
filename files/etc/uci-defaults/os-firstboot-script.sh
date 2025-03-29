@@ -1,23 +1,12 @@
 #!/bin/sh
 # This script configures wireless interfaces/devices on first boot
+current_dns=$(uci -q get network.lan.dns)
+if [ "$current_dns" = "127.0.0.1" ] || [ "$current_dns" = "::1" ] || [ -z "$current_dns" ]; then
+    # Only change DNS if it's set to localhost or not set
+    uci -q delete network.lan.dns
+    uci add_list network.lan.dns='1.1.1.1'  # CloudFlare primary DNS
+    uci add_list network.lan.dns='1.0.0.1'  # CloudFlare secondary DNS
+fi
+uci set network.lan.domain='lan'
 
-uci set wireless.default_radio0.name='tollgate_2g_open'
-uci set wireless.default_radio0.ssid='TollGate - Setup'
-uci set wireless.default_radio0.encryption='none'
-
-uci set wireless.default_radio1.name='tollgate_5g_open'
-uci set wireless.default_radio1.ssid='TollGate - Setup'
-uci set wireless.default_radio1.encryption='none'
-
-# Enable wireless interfaces
-uci set wireless.radio0.disabled='0'
-uci set wireless.radio1.disabled='0'
-
-# Commit the changes to the wireless configuration
-uci commit wireless
-
-# Additional commands can be added here
-echo "Wireless radios enabled, interfaces for 'TollGate - Setup' configured and applied on first boot."
-
-uci set network.lan.dns='1.1.1.1' # CloudFlare DNS (Change to more privacy focussed dns??)
 uci commit network
