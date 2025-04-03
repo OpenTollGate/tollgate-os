@@ -24,9 +24,9 @@
               "eventId": "[NIP94_EVENT_ID]"
             },
             "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/7b07245a6ce1e41d9da38cfcde825d1ccd2e3af67f359884d01e320cccf2cf40.bin",
-              "hash": "sha256:7b07245a6ce1e41d9da38cfcde825d1ccd2e3af67f359884d01e320cccf2cf40",
-              "eventId": "bc31c2b768a332533ee063596cf2abd278234db28993c634a062957b2309e4ae"
+              "url": "https://blossom.swissdash.site/df29b80ddd0ceb28cd5807c69bbe43b37189f4ff3784269e18bced3aa56ac55b.bin",
+              "hash": "sha256:df29b80ddd0ceb28cd5807c69bbe43b37189f4ff3784269e18bced3aa56ac55b",
+              "eventId": "76ec1599d9933285790a7d235271fd9bd0279295788b4e1fb8e71bd259bbcc34"
             }
           },
           "dependencies": []
