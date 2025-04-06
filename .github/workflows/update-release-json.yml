@@ -89,6 +89,14 @@ jobs:
             CREATED_AT=$(echo "$event" | jq -r '.created_at')
             ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "arch") | .[1] // "unknown"')
             FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
+            URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
+            HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
+            
+            # Skip events with missing URL or hash
+            if [[ -z "$URL" || -z "$HASH" ]]; then
+              echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
+              continue
+            fi
             
             # Extract module name from filename
             MODULE=""
@@ -119,6 +127,7 @@ jobs:
           # Find the newest event for each module/architecture
           # List files in reverse order (newest first)
           declare -A processed_keys
+          counter=0
           
           for file in $(ls -r sorted_events/*.json); do
             # Extract key from filename
@@ -128,9 +137,14 @@ jobs:
             if [[ -z "${processed_keys[$key]}" ]]; then
               # This is the first (newest) occurrence of this key
               processed_keys[$key]=1
-              cp "$file" "newest_events/$(echo "$filename" | sed 's/^[0-9]\+_//')"
+              # Use simple, sequential filenames that the action will recognize
+              cp "$file" "newest_events/event_${counter}.json"
               created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
-              echo "✅ Using newest event for $key (created_at: $created_at)"
+              echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
+              # Display the hash of the event for verification
+              HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
+              echo "   Hash: $HASH"
+              counter=$((counter+1))
             else
               echo "⏭️ Skipping older event for $key: $file"
             fi
@@ -139,6 +153,43 @@ jobs:
           echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
           echo "Contents of newest_events directory:"
           ls -la newest_events/
+          
+          # Display the content of each event file for debugging
+          echo "Event file contents:"
+          for file in newest_events/*.json; do
+            echo "=== $file ==="
+            cat "$file" | jq '.'
+            echo ""
+          done
+
+      # Debug the action parameters
+      - name: Debug Action Parameters
+        run: |
+          echo "Action will use artifacts_path: newest_events"
+          echo "File list in newest_events:"
+          find newest_events -type f | sort
+          echo "Contents of the first file (if any):"
+          if [ -f "$(find newest_events -type f | head -n1)" ]; then
+            cat "$(find newest_events -type f | head -n1)"
+          else
+            echo "No files found"
+          fi
+
+      - name: Examine Action Implementation
+        run: |
+          echo "Checking how the action finds JSON files:"
+          grep -r "find.*json" actions/update-from-nip94/ || echo "No find command for JSON files found"
+          grep -r "ls.*json" actions/update-from-nip94/ || echo "No ls command for JSON files found"
+          
+          echo "Checking how the action processes event files:"
+          if [ -f "actions/update-from-nip94/action.yml" ]; then
+            cat actions/update-from-nip94/action.yml
+          fi
+          
+          # Copy events to the exact format the action might expect
+          mkdir -p event_files
+          cp newest_events/*.json event_files/
+          echo "Copied files to event_files directory as fallback"
 
       - name: Final Update Release JSON
         uses: ./actions/update-from-nip94
