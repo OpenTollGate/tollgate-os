@@ -108,87 +108,55 @@ runs:
           echo "Event data: MODULE=$MODULE, ARCH=$ARCH, EVENT_ID=$EVENT_ID"
           echo "URL=$URL, HASH=$HASH"
           
-          # Now we'll manually update the JSON without complex JQ
-          # First extract the JSON as a text file
-          TMP_JSON=$(mktemp)
-          cp ${{ inputs.release_json_path }} "$TMP_JSON"
-          
-          # Create a file with the new architecture entry
-          ARCH_ENTRY=$(cat <<EOL
-          {
-            "url": "$URL",
-            "hash": "sha256:$HASH",
-            "eventId": "$EVENT_ID"
-          }
-EOL
-          )
-          
-          # Save the architecture entry to a file
-          ARCH_FILE=$(mktemp)
-          echo "$ARCH_ENTRY" > "$ARCH_FILE"
-          
-          # Use a very simple JQ command to update the architectures
-          # Extract existing JSON structure
-          jq -r --arg module "$MODULE" --arg arch "$ARCH" '
-            .modules[] | 
-            select(.name == $module) | 
-            .versions[] | 
-            .architectures | 
-            keys[] 
-          ' "$TMP_JSON" > /dev/null 2>&1
-          
-          if [ $? -eq 0 ]; then
-            echo "Found matching structure in release.json for $MODULE/$ARCH"
-            
-            # Create a new JSON file with the update
-            NEW_JSON=$(mktemp)
-            
-            # Use Python for the update since it has more reliable JSON handling
-            python3 -c "
-import json, sys
+          # Use Python for the entire update process
+          python3 -c "
+import json
+import os
 
 # Load the release.json
-with open('$TMP_JSON', 'r') as f:
+release_path = '${{ inputs.release_json_path }}'
+with open(release_path, 'r') as f:
     data = json.load(f)
 
-# Load the arch entry
-with open('$ARCH_FILE', 'r') as f:
-    arch_entry = json.load(f)
+# Create the new architecture entry
+arch_entry = {
+    'url': '$URL',
+    'hash': 'sha256:$HASH',
+    'eventId': '$EVENT_ID'
+}
 
-# Update the JSON
+# Update the JSON structure
 updated = False
 for module in data['modules']:
     if module['name'] == '$MODULE':
         for version in module['versions']:
+            # Create architecture entry if not exists
             if '$ARCH' not in version['architectures']:
                 version['architectures']['$ARCH'] = {}
-            version['architectures']['$ARCH'] = arch_entry
+            # Update with new values
+            version['architectures']['$ARCH'].update(arch_entry)
             updated = True
 
 if updated:
-    print('✅ Updated $MODULE/$ARCH in JSON structure')
+    # Write back the updated JSON
+    with open(release_path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('✅ Successfully updated $MODULE/$ARCH in release.json')
 else:
-    print('❌ Failed to find module in JSON structure')
+    print('❌ Failed to find module $MODULE in release.json')
 
-# Write back the updated JSON
-with open('$NEW_JSON', 'w') as f:
-    json.dump(data, f, indent=2)
-            " || echo "Failed to run Python update"
-            
-            # If the new JSON is valid, use it
-            if [ -s "$NEW_JSON" ] && python3 -c "import json; json.load(open('$NEW_JSON'))" 2>/dev/null; then
-              mv "$NEW_JSON" ${{ inputs.release_json_path }}
-              echo "✅ Successfully updated release.json for $MODULE/$ARCH"
-            else
-              echo "❌ Failed to create valid JSON for $MODULE/$ARCH"
-              cat "$NEW_JSON"
-            fi
-          else
-            echo "⚠️ Could not find matching structure for $MODULE/$ARCH in release.json"
-          fi
+# Validate the final JSON
+try:
+    with open(release_path, 'r') as f:
+        json.load(f)
+    print('JSON validation successful')
+except json.JSONDecodeError as e:
+    print(f'JSON validation failed: {e}')
+    exit(1)
+          "
           
           # Clean up temp files
-          rm -f "$ARCH_FILE" "$NEW_JSON" "$TMP_JSON"
+          rm -f "$ARCH_FILE" "$TMP_JSON"
         done
         
         # Show changes
