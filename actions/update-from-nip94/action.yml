@@ -39,6 +39,11 @@ runs:
         EVENT_FILES=$(find ${{ inputs.artifacts_path }} -name "*.json" | wc -l)
         echo "Found $EVENT_FILES event files to process"
         
+        if [ "$EVENT_FILES" -eq 0 ]; then
+          echo "Warning: No event files found!"
+          exit 0
+        fi
+        
         # Read modules from release.json to target only existing ones
         MODULES=$(jq -r '.modules[].name' ${{ inputs.release_json_path }})
         echo "Available modules in release.json:"
@@ -82,7 +87,7 @@ runs:
         declare -A PROCESSED_KEYS
         
         # Reverse sort the files (newest first)
-        for SORTED_FILE in $(ls -r sorted_events/*.json); do
+        for SORTED_FILE in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
           # Extract the key from the filename (after timestamp_)
           FILENAME=$(basename "$SORTED_FILE")
           KEY=$(echo "$FILENAME" | sed -E 's/^[0-9]+_(.+)\.json$/\1/')
@@ -143,36 +148,64 @@ runs:
             MATCHES=$(jq --arg module "$MODULE" '.modules[] | select(.name == $module) | .versions[].architectures | keys[]' ${{ inputs.release_json_path }} | grep -c "\"$ARCH\"" || echo "0")
             echo "Found $MATCHES matches for module '$MODULE' in release.json"
             
-            # Update the release.json file (ensure hash has sha256: prefix)
-            TEMP_FILE=$(mktemp)
+            # Create a completely different approach for the JQ update
+            # Create a simple JSON object with the update data
+            UPDATE_JSON=$(cat <<EOF
+            {
+              "url": "$URL",
+              "hash": "sha256:$HASH",
+              "eventId": "$EVENT_ID"
+            }
+EOF
+            )
             
-            # FIXED JQ COMMAND: Corrected syntax for proper nested updates
-            jq --arg module "$MODULE" --arg arch "$ARCH" --arg url "$URL" --arg hash "sha256:$HASH" --arg eventId "$EVENT_ID" '
-              .modules = [
-                .modules[] | 
-                if .name == $module then
-                  .versions = [
-                    .versions[] | 
-                    .architectures[$arch] = {
-                      "url": $url,
-                      "hash": $hash,
-                      "eventId": $eventId
-                    } | .
-                  ] | .
+            # Write the update JSON to a temporary file
+            UPDATE_FILE=$(mktemp)
+            echo "$UPDATE_JSON" > "$UPDATE_FILE"
+            
+            # Use jq's --slurpfile to combine files without complex syntax
+            TEMP_FILE=$(mktemp)
+            jq --arg module "$MODULE" --arg arch "$ARCH" --slurpfile update "$UPDATE_FILE" '
+              walk(
+                if type == "object" and (.name == $module) then
+                  .versions[].architectures[$arch] = $update[0]
                 else
                   .
                 end
-              ] | .
+              )
             ' ${{ inputs.release_json_path }} > "$TEMP_FILE"
             
-            # Check if tempfile has content and is valid JSON
-            if [[ -s "$TEMP_FILE" ]] && jq empty "$TEMP_FILE" 2>/dev/null; then
+            # Check if the output is valid JSON
+            if jq empty "$TEMP_FILE" 2>/dev/null; then
               mv "$TEMP_FILE" ${{ inputs.release_json_path }}
               echo "✅ Successfully updated $MODULE/$ARCH in release.json"
             else
-              echo "❌ Error: Invalid JSON output while updating $MODULE/$ARCH"
-              rm "$TEMP_FILE"
+              echo "❌ Error: Invalid JSON produced. Trying alternative approach..."
+              
+              # Try an even simpler approach with two separate jq calls
+              # First extract the current JSON
+              JSON=$(jq -c '.' ${{ inputs.release_json_path }}.bak)
+              
+              # Create a modified JSON string with the update directly embedded
+              JSON_UPDATED=$(echo "$JSON" | jq --arg module "$MODULE" --arg arch "$ARCH" --arg url "$URL" --arg hash "sha256:$HASH" --arg eventId "$EVENT_ID" '
+                .modules |= map(
+                  if .name == $module then
+                    .versions |= map(
+                      .architectures[$arch] = {"url": $url, "hash": $hash, "eventId": $eventId} | .
+                    )
+                  else
+                    .
+                  end
+                )
+              ')
+              
+              # Write the updated JSON to the file
+              echo "$JSON_UPDATED" > ${{ inputs.release_json_path }}
+              echo "✅ Updated using alternative approach"
             fi
+            
+            # Clean up temp files
+            rm -f "$UPDATE_FILE" "$TEMP_FILE"
           else
             echo "⚠️ Module '$MODULE' not found in release.json, skipping"
           fi
