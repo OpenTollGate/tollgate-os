@@ -57,7 +57,6 @@ jobs:
         run: |
           # Get the pubkey from secrets
           PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
-          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
           
           if [ -z "$PUBKEY" ]; then
             echo "::error::NIP_94_PUBKEY secret is not set"
@@ -65,222 +64,90 @@ jobs:
           fi
           
           echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          
-          # Query events by author and kind (1063 for NIP-94)
-          nak req -a "$PUBKEY" -k 1063 --limit 10 wss://relay.damus.io > event_response.txt
-          
-          # Check for errors in the response
-          if grep -q "ERROR" event_response.txt; then
-            echo "::error::Error retrieving events from relay:"
-            cat event_response.txt
-            exit 1
-          fi
-          
-          # Extract only the event data (removing connection messages)
-          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
-          
-          # Look for our event with matching hash
-          echo "Looking for event with hash: $GENERATED_HASH"
-          
-          # Extract unique filenames and architectures from the events
-          echo "Extracting unique filenames and architectures from events..."
-          
-          # Create temporary files to store unique values
-          touch unique_filenames.txt
-          touch unique_architectures.txt
-          
-          # Process each event to extract filename and architecture tags
-          cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq > unique_filenames.txt
-          cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq > unique_architectures.txt
-          
-          echo "Unique filenames found in the last week:"
-          cat unique_filenames.txt
-          
-          echo "Unique architectures found in the last week:"
-          cat unique_architectures.txt
-          
-          echo "✅ Successfully analyzed events on network!"
-
-      - name: Show Events on Network with nak
-        run: |
-          # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
-          GENERATED_HASH="${{ steps.upload_test.outputs.hash }}"
-          
-          if [ -z "$PUBKEY" ]; then
-            echo "::error::NIP_94_PUBKEY secret is not set"
-            exit 1
-          fi
-          
-          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          
-          # Query events by author and kind (1063 for NIP-94)
           nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
           
-          # Check for errors in the response
-          if grep -q "ERROR" event_response.txt; then
-            echo "::error::Error retrieving events from relay:"
-            cat event_response.txt
-            exit 1
-          fi
-          
           # Extract only the event data (removing connection messages)
           cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
           
-          # Look for our event with matching hash
-          echo "Looking for event with hash: $GENERATED_HASH"
-          
-          # Create a temporary directory for processing
-          mkdir -p temp_events
-          
-          # Extract unique filenames and architectures
-          UNIQUE_FILENAMES=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq)
-          
-          echo "Finding most recent events for each unique filename and architecture..."
-          
-          # Process events to find the most recent for each filename
-          echo "Most recent events by filename:"
-          for FILENAME in $UNIQUE_FILENAMES; do
-            echo "========== Filename: $FILENAME =========="
-            # Find the most recent event with this filename (highest created_at value)
-            cat events_data.txt | jq --arg filename "$FILENAME" '
-              select(.tags | map(select(.[0] == "filename" and .[1] == $filename)) | length > 0)
-            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
-            echo ""
-          done
-
-          UNIQUE_ARCHS=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "arch") | .[1]' | sort | uniq)
-          # Process events to find the most recent for each architecture
-          echo "Most recent events by architecture:"
-          for ARCH in $UNIQUE_ARCHS; do
-            echo "========== Architecture: $ARCH =========="
-            # Find the most recent event with this architecture (highest created_at value)
-            cat events_data.txt | jq --arg arch "$ARCH" '
-              select(.tags | map(select(.[0] == "arch" and .[1] == $arch)) | length > 0)
-            ' | jq -s 'sort_by(.created_at) | reverse | .[0]'
-            echo ""
-          done
-          
-          echo "✅ Successfully analyzed most recent events on network!"
-          
-      - name: Extract Events and Save to Files
-        run: |
-          # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
-          
-          if [ -z "$PUBKEY" ]; then
-            echo "::error::NIP_94_PUBKEY secret is not set"
-            exit 1
-          fi
-          
-          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          
-          # Query events by author and kind (1063 for NIP-94)
-          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
-          
-          # Check for errors in the response
-          if grep -q "ERROR" event_response.txt; then
-            echo "::error::Error retrieving events from relay:"
-            cat event_response.txt
-            exit 1
-          fi
-          
-          # Extract only the event data (removing connection messages)
-          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
-          
-          # Create a directory for storing event files
+          # Create directory for events
           mkdir -p event_files
           
-          # Extract unique filenames
-          UNIQUE_FILENAMES=$(cat events_data.txt | jq -r '.tags[] | select(.[0] == "filename") | .[1]' | sort | uniq)
+          # Process and save events
+          cat events_data.txt | jq . > event_files/all_events.json
+          cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
           
-          echo "Finding most recent events for each unique filename..."
+      - name: Extract and Sort Events by Timestamp
+        run: |
+          mkdir -p sorted_events
           
-          # Process events to find the most recent for each filename and save to files
-          EVENT_COUNT=0
-          for FILENAME in $UNIQUE_FILENAMES; do
-            echo "Processing: $FILENAME"
-            # Find the most recent event with this filename (highest created_at value)
-            cat events_data.txt | jq --arg filename "$FILENAME" '
-              select(.tags | map(select(.[0] == "filename" and .[1] == $filename)) | length > 0)
-            ' | jq -s 'sort_by(.created_at) | reverse | .[0]' > "event_files/event_${EVENT_COUNT}.json"
+          echo "Extracting and sorting NIP-94 events by timestamp..."
+          
+          # Process each event in events_data.txt
+          cat events_data.txt | jq -c '.' | while read -r event; do
+            # Extract key information
+            EVENT_ID=$(echo "$event" | jq -r '.id')
+            CREATED_AT=$(echo "$event" | jq -r '.created_at')
+            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "arch") | .[1] // "unknown"')
+            FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
             
-            # Check if the file has content
-            if [ -s "event_files/event_${EVENT_COUNT}.json" ]; then
-              echo "Saved event for $FILENAME to event_files/event_${EVENT_COUNT}.json"
-              EVENT_COUNT=$((EVENT_COUNT + 1))
+            # Extract module name from filename
+            MODULE=""
+            if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            fi
+            
+            if [[ -n "$MODULE" && -n "$ARCH" ]]; then
+              # Create a unique key for this module/architecture
+              KEY="${MODULE}-${ARCH}"
+              
+              # Create sorted filename (timestamp_key_eventid.json)
+              # Zero-pad timestamp to ensure proper sorting
+              SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
+              
+              echo "$event" > "$SORTED_FILE"
+              echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
             else
-              echo "No valid event found for $FILENAME"
-              rm "event_files/event_${EVENT_COUNT}.json"
+              echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
             fi
           done
           
-          echo "Total events extracted: $EVENT_COUNT"
-          echo "EVENT_COUNT=$EVENT_COUNT" >> $GITHUB_ENV
+          echo "Creating newest_events directory for only the latest events..."
+          mkdir -p newest_events
           
-          echo "✅ Successfully extracted events from network!"
-
-      - name: Debug Event Structure
-        run: |
-          echo "Examining first event file to understand structure:"
-          cat event_files/event_0.json | jq .
+          # Find the newest event for each module/architecture
+          # List files in reverse order (newest first)
+          declare -A processed_keys
           
-          echo "Available tags in the event:"
-          cat event_files/event_0.json | jq '.tags'
-          
-          echo "Checking for filename in tags:"
-          cat event_files/event_0.json | jq '.tags[] | select(.[0] == "filename")'
-          
-          # Extract module from filename
-          FILENAME=$(cat event_files/event_0.json | jq -r '.tags[] | select(.[0] == "filename")[1] // empty')
-          echo "Filename found: $FILENAME"
-          
-          # Try to extract module from filename (e.g., relay-gl-mt3000-aarch64_cortex-a53.ipk -> relay)
-          if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-            echo "Module extracted from filename: ${BASH_REMATCH[1]}"
-          fi
-
-      # NOTE: update in update-from-nip94/action.yml only
-      # - name: Update Release JSON for Each Event (Fixed)
-      #   run: |
-      #     EVENT_COUNT="${{ env.EVENT_COUNT }}"
-          
-      #     if [ "$EVENT_COUNT" -eq 0 ]; then
-      #       echo "::warning::No events found to process"
-      #       exit 0
-      #     fi
-          
-      #     for i in $(seq 0 $((EVENT_COUNT - 1))); do
-      #       EVENT_FILE="event_files/event_${i}.json"
+          for file in $(ls -r sorted_events/*.json); do
+            # Extract key from filename
+            filename=$(basename "$file")
+            key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
             
-      #       echo "Processing event file: $EVENT_FILE"
-            
-      #       # Create a temporary directory for this event
-      #       mkdir -p "sdk-artifacts-${i}"
-            
-      #       # Copy the event to the temporary directory
-      #       cp "$EVENT_FILE" "sdk-artifacts-${i}/event.json"
-      #     done
+            if [[ -z "${processed_keys[$key]}" ]]; then
+              # This is the first (newest) occurrence of this key
+              processed_keys[$key]=1
+              cp "$file" "newest_events/$(echo "$filename" | sed 's/^[0-9]\+_//')"
+              created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
+              echo "✅ Using newest event for $key (created_at: $created_at)"
+            else
+              echo "⏭️ Skipping older event for $key: $file"
+            fi
+          done
           
-      #     echo "✅ Successfully prepared all events for processing!"
-
-      - name: Debug Workspace
-        run: |
-          echo "Working directory: $(pwd)"
-          echo "Repository root: $GITHUB_WORKSPACE"
-          echo "Directory structure:"
-          find $GITHUB_WORKSPACE -maxdepth 2 -type d
-          echo "Looking for actions directory:"
-          find $GITHUB_WORKSPACE -name "actions" -type d
+          echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
+          echo "Contents of newest_events directory:"
+          ls -la newest_events/
 
       - name: Final Update Release JSON
         uses: ./actions/update-from-nip94
         with:
-          artifacts_path: event_files
+          artifacts_path: newest_events  # Use our preprocessed directory with only the newest events
           release_json_path: release.json
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
-          commit_message: "Update release.json with all NIP-94 events"
+          commit_message: "Update release.json with latest NIP-94 events"
 
 
       # - name: Download SDK Artifacts
