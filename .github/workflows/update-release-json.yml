@@ -44,23 +44,30 @@ jobs:
           cp develop-branch/release.json current-branch/
           echo "Copied release.json from develop to current branch"
 
-      - name: Install nak and process events in current branch
-        working-directory: current-branch
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Instead of using the action, run the Python script directly
+      - name: Run the update script
         run: |
-          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
-          sudo chmod +x /usr/local/bin/nak
+          # Make the script executable
+          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
           
-          # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          # Run the script directly
+          python3 current-branch/actions/update-from-nip94/update_release_json.py \
+            --events-dir "current-branch/newest_events" \
+            --release-json "current-branch/release.json" \
+            --verbose
           
-          if [ -z "$PUBKEY" ]; then
-            echo "::error::NIP_94_PUBKEY secret is not set"
-            exit 1
-          fi
-          
-          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          # Rest of your event fetching and processing code
-          # [Existing code from your workflow]
+          # Show changes
+          echo "Changes to release.json:"
+          diff -u develop-branch/release.json current-branch/release.json || echo "No changes detected"
+
+      - name: Copy updated release.json back to develop and push
+        run: |
+          cp current-branch/release.json develop-branch/
           
           # Create newest_events directory with processed events
           mkdir -p newest_events
@@ -76,23 +83,25 @@ jobs:
           commit_message: "Update release.json with latest NIP-94 events"
           verbose: 'true'
 
-      - name: Copy updated release.json back to develop and push
+      - name: Commit and Push Changes
+        if: inputs.target_branch != ''
+        shell: bash
         run: |
-          cp current-branch/release.json develop-branch/
-          
-          cd develop-branch
-          
+          # Configure git
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          if git diff --exit-code release.json; then
+          # Check if there are changes
+          if git diff --exit-code ${{ inputs.release_json_path }}; then
             echo "No changes to commit."
             exit 0
           fi
           
-          git add release.json
-          git commit -m "Update release.json with latest NIP-94 events"
-          git push origin develop
+          # Add, commit and push changes
+          git add ${{ inputs.release_json_path }}
+          git commit -m "${{ inputs.commit_message }}"
+          echo "Pushing changes to ${{ inputs.target_branch }} branch..."
+          git push https://${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:${{ inputs.target_branch }}
 
       # Debug the action parameters
       - name: Debug Action Parameters
