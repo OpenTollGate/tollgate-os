@@ -25,36 +25,32 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout current branch (with action code)
+        uses: actions/checkout@v4
+        with:
+          path: current-branch
+          fetch-depth: 1
+
+      - name: Checkout develop branch (for release.json)
         uses: actions/checkout@v4
         with:
           ref: develop
+          path: develop-branch
           token: ${{ secrets.REPOSCOPE }}
-          clean: true
-          persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Verify Action Exists
+      - name: Copy release.json to working directory
         run: |
-          echo "Checking for action.yml file..."
-          if [ -f "actions/update-from-nip94/action.yml" ]; then
-            echo "✅ Action file found!"
-            cat actions/update-from-nip94/action.yml | head -10
-          else
-            echo "❌ Action file NOT found!"
-            echo "Current directory structure:"
-            find . -name "actions" -type d | xargs ls -la 2>/dev/null || echo "No actions directory"
-            
-            echo "Commit information:"
-            git log -1 --stat
-          fi
+          cp develop-branch/release.json current-branch/
+          echo "Copied release.json from develop to current branch"
 
       - name: Install nak
         run: |
           sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
           sudo chmod +x /usr/local/bin/nak
-    
-      - name: Verify Event on Network with nak
+
+      - name: Fetch and Process NIP-94 Events
+        working-directory: current-branch
         run: |
           # Get the pubkey from secrets
           PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
@@ -77,8 +73,7 @@ jobs:
           cat events_data.txt | jq . > event_files/all_events.json
           cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
           
-      - name: Extract and Sort Events by Timestamp
-        run: |
+          # Extract and sort events by timestamp
           mkdir -p sorted_events
           
           echo "Extracting and sorting NIP-94 events by timestamp..."
@@ -130,7 +125,7 @@ jobs:
           declare -A processed_keys
           counter=0
           
-          for file in $(ls -r sorted_events/*.json); do
+          for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
             # Extract key from filename
             filename=$(basename "$file")
             key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
@@ -153,120 +148,42 @@ jobs:
           
           echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
           echo "Contents of newest_events directory:"
-          ls -la newest_events/
-          
-          # Display the content of each event file for debugging
-          echo "Event file contents:"
-          for file in newest_events/*.json; do
-            echo "=== $file ==="
-            cat "$file" | jq '.'
-            echo ""
-          done
+          ls -la newest_events/ || echo "No events found"
 
-      # Debug the action parameters
-      - name: Debug Action Parameters
-        run: |
-          echo "Action will use artifacts_path: newest_events"
-          echo "File list in newest_events:"
-          find newest_events -type f | sort
-          echo "Contents of the first file (if any):"
-          if [ -f "$(find newest_events -type f | head -n1)" ]; then
-            cat "$(find newest_events -type f | head -n1)"
-          else
-            echo "No files found"
-          fi
-
-      - name: Examine Action Implementation
-        run: |
-          echo "Checking how the action finds JSON files:"
-          grep -r "find.*json" actions/update-from-nip94/ || echo "No find command for JSON files found"
-          grep -r "ls.*json" actions/update-from-nip94/ || echo "No ls command for JSON files found"
-          
-          echo "Checking how the action processes event files:"
-          if [ -f "actions/update-from-nip94/action.yml" ]; then
-            cat actions/update-from-nip94/action.yml
-          fi
-          
-          # Copy events to the exact format the action might expect
-          mkdir -p event_files
-          cp newest_events/*.json event_files/
-          echo "Copied files to event_files directory as fallback"
-
-      - name: Final Update Release JSON
-        uses: ./actions/update-from-nip94
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          artifacts_path: newest_events  # Use our preprocessed directory with only the newest events
-          release_json_path: release.json
-          target_branch: develop
-          github_token: ${{ secrets.REPOSCOPE }}
-          commit_message: "Update release.json with latest NIP-94 events"
+          python-version: '3.10'
 
-
-      # - name: Download SDK Artifacts
-      #   uses: dawidd6/action-download-artifact@v2
-      #   with:
-      #     run_id: ${{ github.event.client_payload.sdk_run_id }}
-      #     repo: OpenTollGate/tollgate-sdk
-      #     github_token: ${{ secrets.REPOSCOPE }}
-      #     path: sdk-artifacts
-      #     check_artifacts: true
-      #     # Use the array directly without fromJson()
-      #     name: ${{ join(github.event.client_payload.artifacts, ',') }}
-
-      # - name: Process Real Events
-      #   run: |
-      #     echo "Real artifacts downloaded:"
-      #     find sdk-artifacts -type f | sort
-      #     # Verify NIP-94 event files exist
-      #     if [ $(find sdk-artifacts -name '*-event.json' | wc -l) -eq 0 ]; then
-      #       echo "::error::No NIP-94 event files found!"
-      #       exit 1
-      #     fi
-
-      # - name: Update Release JSON
-      #   uses: ./actions/update-release-json
-      #   with:
-      #     artifacts_path: sdk-artifacts  # Changed from artifacts
-      #     release_json_path: release.json
-      #     target_branch: develop
-      #     github_token: ${{ secrets.REPOSCOPE }}
-      #     commit_message: "Update release.json with real NIP-94 events [skip ci]"
-
-      # - name: Debug Incoming Payload
-      #   run: |
-      #     echo "Full event payload:"
-      #     echo '${{ toJSON(github.event) }}' | jq .
+      # Run the Python script directly instead of using the action
+      - name: Run the update script directly
+        run: |
+          # Make the script executable
+          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
           
-      #     echo "Client payload contents:"
-      #     echo '${{ toJSON(github.event.client_payload) }}' | jq .
+          # Run the Python script directly
+          python3 current-branch/actions/update-from-nip94/update_release_json.py \
+            --events-dir "current-branch/newest_events" \
+            --release-json "current-branch/release.json" \
+            --verbose
           
-      #     echo "NIP-94 events data:"
-      #     echo '${{ toJSON(github.event.client_payload.nip94_events) }}' | jq .
-          
-      #     # Write to a file for validation
-      #     mkdir -p debug
-      #     echo '${{ toJSON(github.event.client_payload.nip94_events) }}' > debug/received_events.json
-      #     echo "Stored events in debug/received_events.json"
+          echo "Changes to release.json:"
+          diff -u current-branch/release.json.bak current-branch/release.json || echo "No changes detected"
 
-      # - name: Validate Event Structure
-      #   run: |
-      #     if [ ! -s "debug/received_events.json" ]; then
-      #       echo "::error::No events data received!"
-      #       exit 1
-      #     fi
+      - name: Copy updated release.json back to develop and push
+        run: |
+          cp current-branch/release.json develop-branch/
           
-      #     # Validate JSON structure
-      #     if ! jq empty debug/received_events.json; then
-      #       echo "::error::Invalid JSON structure in received events"
-      #       jq . debug/received_events.json
-      #       exit 1
-      #     fi
+          cd develop-branch
           
-      #     # Check for at least one event
-      #     EVENT_COUNT=$(jq '.events | length' debug/received_events.json)
-      #     if [ "$EVENT_COUNT" -eq 0 ]; then
-      #       echo "::warning::Received empty events array"
-      #     else
-      #       echo "Received $EVENT_COUNT valid NIP-94 events"
-      #     fi
-
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
+          if git diff --exit-code release.json; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          
+          git add release.json
+          git commit -m "Update release.json with latest NIP-94 events"
+          git push origin develop
