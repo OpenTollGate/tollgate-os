@@ -44,64 +44,144 @@ jobs:
           cp develop-branch/release.json current-branch/
           echo "Copied release.json from develop to current branch"
 
+      - name: Install nak
+        run: |
+          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
+          sudo chmod +x /usr/local/bin/nak
+
+      - name: Fetch and Process NIP-94 Events
+        working-directory: current-branch
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
+            exit 1
+          fi
+          
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
+          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
+          
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          
+          # Create directory for events
+          mkdir -p event_files
+          
+          # Process and save events
+          cat events_data.txt | jq . > event_files/all_events.json
+          cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
+          
+          # Extract and sort events by timestamp
+          mkdir -p sorted_events
+          
+          echo "Extracting and sorting NIP-94 events by timestamp..."
+          
+          # Process each event in events_data.txt
+          cat events_data.txt | jq -c '.' | while read -r event; do
+            # Extract key information
+            EVENT_ID=$(echo "$event" | jq -r '.id')
+            CREATED_AT=$(echo "$event" | jq -r '.created_at')
+            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "arch") | .[1] // "unknown"')
+            FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
+            URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
+            HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
+            
+            # Skip events with missing URL or hash
+            if [[ -z "$URL" || -z "$HASH" ]]; then
+              echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
+              continue
+            fi
+            
+            # Extract module name from filename
+            MODULE=""
+            if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            fi
+            
+            if [[ -n "$MODULE" && -n "$ARCH" ]]; then
+              # Create a unique key for this module/architecture
+              KEY="${MODULE}-${ARCH}"
+              
+              # Create sorted filename (timestamp_key_eventid.json)
+              # Zero-pad timestamp to ensure proper sorting
+              SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
+              
+              echo "$event" > "$SORTED_FILE"
+              echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
+            else
+              echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
+            fi
+          done
+          
+          echo "Creating newest_events directory for only the latest events..."
+          mkdir -p newest_events
+          
+          # Find the newest event for each module/architecture
+          # List files in reverse order (newest first)
+          declare -A processed_keys
+          counter=0
+          
+          for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
+            # Extract key from filename
+            filename=$(basename "$file")
+            key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
+            
+            if [[ -z "${processed_keys[$key]}" ]]; then
+              # This is the first (newest) occurrence of this key
+              processed_keys[$key]=1
+              # Use simple, sequential filenames that the action will recognize
+              cp "$file" "newest_events/event_${counter}.json"
+              created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
+              echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
+              # Display the hash of the event for verification
+              HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
+              echo "   Hash: $HASH"
+              counter=$((counter+1))
+            else
+              echo "⏭️ Skipping older event for $key: $file"
+            fi
+          done
+          
+          echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
+          echo "Contents of newest_events directory:"
+          ls -la newest_events/ || echo "No events found"
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
-      # Instead of using the action, run the Python script directly
-      - name: Run the update script
-        run: |
-          # Make the script executable
-          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
-          
-          # Run the script directly
-          python3 current-branch/actions/update-from-nip94/update_release_json.py \
-            --events-dir "current-branch/newest_events" \
-            --release-json "current-branch/release.json" \
-            --verbose
-          
-          # Show changes
-          echo "Changes to release.json:"
-          diff -u develop-branch/release.json current-branch/release.json || echo "No changes detected"
-
-      - name: Copy updated release.json back to develop and push
-        run: |
-          cp current-branch/release.json develop-branch/
-          
-          # Create newest_events directory with processed events
-          mkdir -p newest_events
-          # [Process events as per your existing workflow]
 
       - name: Update release.json using the action
         uses: ./current-branch/actions/update-from-nip94
         with:
           artifacts_path: current-branch/newest_events
           release_json_path: current-branch/release.json
-          target_branch: ''
+          target_branch: ''  # Don't push changes
           github_token: ${{ secrets.REPOSCOPE }}
           commit_message: "Update release.json with latest NIP-94 events"
           verbose: 'true'
 
-      - name: Commit and Push Changes
-        if: inputs.target_branch != ''
-        shell: bash
+      - name: Copy updated release.json back to develop and push
         run: |
-          # Configure git
+          cp current-branch/release.json develop-branch/
+          
+          cd develop-branch
+          
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Check if there are changes
-          if git diff --exit-code ${{ inputs.release_json_path }}; then
+          if git diff --exit-code release.json; then
             echo "No changes to commit."
             exit 0
           fi
           
-          # Add, commit and push changes
-          git add ${{ inputs.release_json_path }}
-          git commit -m "${{ inputs.commit_message }}"
-          echo "Pushing changes to ${{ inputs.target_branch }} branch..."
-          git push https://${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:${{ inputs.target_branch }}
+          git add release.json
+          git commit -m "Update release.json with latest NIP-94 events"
+          git push origin develop
 
       # Debug the action parameters
       - name: Debug Action Parameters
