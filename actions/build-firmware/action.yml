@@ -224,12 +224,12 @@ runs:
         
         # Parse release.json and download all packages for this architecture
         DOWNLOADED_PACKAGES=""
-        for MODULE_NAME in $(jq -r '.modules[].name' release.json); do
+        for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
           echo "📦 Processing module: ${MODULE_NAME}"
           
           # Extract URL for this module and architecture
           PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
-            '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' release.json)
+            '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
             
           # Skip placeholder URLs
           if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
