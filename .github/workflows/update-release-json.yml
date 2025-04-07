@@ -177,7 +177,7 @@ jobs:
           fi
           
           echo "Current release.json state:"
-          cat ${{ inputs.release_json_path }} | jq .
+          cat release.json | jq .
           
           echo "Action will be called with these parameters:"
           echo "artifacts_path: newest_events"
@@ -187,18 +187,13 @@ jobs:
           echo "commit_message: 'Update release.json with latest NIP-94 events'"
           
           echo "Verifying release.json schema:"
-          jq '.modules[].versions[].architectures | keys' ${{ inputs.release_json_path }}
+          jq '.modules[].versions[].architectures | keys' release.json
 
-      - name: Examine Action Implementation
+      - name: Ensure Python Script is Executable
         run: |
-          echo "Checking how the action finds JSON files:"
-          grep -r "find.*json" actions/update-from-nip94/ || echo "No find command for JSON files found"
-          grep -r "ls.*json" actions/update-from-nip94/ || echo "No ls command for JSON files found"
-          
-          # Copy events to the exact format the action might expect
-          mkdir -p event_files
-          cp newest_events/*.json event_files/
-          echo "Copied files to event_files directory as fallback"
+          chmod +x actions/update-from-nip94/update_release_json.py
+          echo "Python script permissions updated"
+          ls -la actions/update-from-nip94/
 
       - name: Final Update Release JSON
         uses: ./actions/update-from-nip94
@@ -208,6 +203,7 @@ jobs:
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
           commit_message: "Update release.json with latest NIP-94 events"
+          verbose: 'true'
 
 
       # - name: Download SDK Artifacts
