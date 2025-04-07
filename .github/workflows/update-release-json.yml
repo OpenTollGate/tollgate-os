@@ -41,7 +41,8 @@ jobs:
 
       - name: Copy release.json to working directory
         run: |
-          cp develop-branch/release.json current-branch/
+          mkdir -p current-branch/files/etc/tollgate/
+          cp develop-branch/files/etc/tollgate/release.json current-branch/files/etc/tollgate/
           echo "Copied release.json from develop to current branch"
 
       - name: Install nak
@@ -164,26 +165,28 @@ jobs:
           # Run the Python script directly
           python3 current-branch/actions/update-from-nip94/update_release_json.py \
             --events-dir "current-branch/newest_events" \
-            --release-json "current-branch/release.json" \
+            --release-json "current-branch/files/etc/tollgate/release.json" \
             --verbose
           
           echo "Changes to release.json:"
-          diff -u current-branch/release.json.bak current-branch/release.json || echo "No changes detected"
+          diff -u current-branch/files/etc/tollgate/release.json.bak current-branch/files/etc/tollgate/release.json || echo "No changes detected"
 
       - name: Copy updated release.json back to develop and push
         run: |
-          cp current-branch/release.json develop-branch/
+          mkdir -p develop-branch/files/etc/tollgate/
+          cp current-branch/files/etc/tollgate/release.json develop-branch/files/etc/tollgate/
           
           cd develop-branch
           
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          if git diff --exit-code release.json; then
+          if git diff --exit-code files/etc/tollgate/release.json; then
             echo "No changes to commit."
             exit 0
           fi
           
-          git add release.json
+          git add files/etc/tollgate/release.json
           git commit -m "Update release.json with latest NIP-94 events"
           git push origin develop
+
