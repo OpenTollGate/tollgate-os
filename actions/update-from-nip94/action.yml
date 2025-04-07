@@ -39,6 +39,11 @@ runs:
         EVENT_FILES=$(find ${{ inputs.artifacts_path }} -name "*.json" | wc -l)
         echo "Found $EVENT_FILES event files to process"
         
+        if [ "$EVENT_FILES" -eq 0 ]; then
+          echo "Warning: No event files found!"
+          exit 0
+        fi
+        
         # Read modules from release.json to target only existing ones
         MODULES=$(jq -r '.modules[].name' ${{ inputs.release_json_path }})
         echo "Available modules in release.json:"
@@ -143,16 +148,12 @@ runs:
             MATCHES=$(jq --arg module "$MODULE" '.modules[] | select(.name == $module) | .versions[].architectures | keys[]' ${{ inputs.release_json_path }} | grep -c "\"$ARCH\"" || echo "0")
             echo "Found $MATCHES matches for module '$MODULE' in release.json"
             
-            # Update the release.json file (ensure hash has sha256: prefix)
+            # Create a temporary file for the update
             TEMP_FILE=$(mktemp)
-            jq --arg module "$MODULE" --arg arch "$ARCH" --arg url "$URL" --arg hash "sha256:$HASH" --arg eventId "$EVENT_ID" '
-              .modules[] |= if .name == $module then 
-                .versions[] |= .architectures[$arch] = {
-                  "url": $url,
-                  "hash": $hash,
-                  "eventId": $eventId
-                }
-              else . end
+            
+            # Update JSON using a simpler approach
+            jq -c --arg module "$MODULE" --arg arch "$ARCH" --arg url "$URL" --arg hash "sha256:$HASH" --arg eventId "$EVENT_ID" '
+              (.modules[] | select(.name == $module) | .versions[].architectures[$arch]) = {"url": $url, "hash": $hash, "eventId": $eventId}
             ' ${{ inputs.release_json_path }} > "$TEMP_FILE"
             
             # Check if tempfile has content (validation)
@@ -170,7 +171,7 @@ runs:
         
         # Show changes
         echo "Changes to release.json:"
-        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }}
+        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }} || echo "No changes detected"
     
     - name: Commit and Push Changes
       shell: bash
@@ -190,24 +191,3 @@ runs:
         git commit -m "${{ inputs.commit_message }}"
         echo "Pushing changes to ${{ inputs.target_branch }} branch..."
         git push https://${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:${{ inputs.target_branch }}
-
-    - name: Debug NIP-94 Event Contents
-      if: steps.publish_package.outputs.eventId != ''
-      shell: bash
-      run: |
-        echo "Event ID: ${{ steps.publish_package.outputs.eventId }}"
-        # Use nak to fetch the event and examine it
-        nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq .
-        
-        # Check specific tags to ensure URL and hash are present
-        URL=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "url")[1] // "MISSING"')
-        HASH=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "x")[1] // "MISSING"')
-        
-        echo "URL in published event: $URL"
-        echo "Hash in published event: $HASH"
-        
-        if [ "$URL" == "MISSING" ] || [ "$HASH" == "MISSING" ]; then
-          echo "::warning::URL or hash missing in the published event!"
-        else
-          echo "✅ Event contains both URL and hash"
-        fi
