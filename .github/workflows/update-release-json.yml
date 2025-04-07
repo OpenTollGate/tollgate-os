@@ -175,17 +175,25 @@ jobs:
           else
             echo "No files found"
           fi
+          
+          echo "Current release.json state:"
+          cat ${{ inputs.release_json_path }} | jq .
+          
+          echo "Action will be called with these parameters:"
+          echo "artifacts_path: newest_events"
+          echo "release_json_path: release.json"
+          echo "target_branch: develop"
+          echo "github_token: [REDACTED]"
+          echo "commit_message: 'Update release.json with latest NIP-94 events'"
+          
+          echo "Verifying release.json schema:"
+          jq '.modules[].versions[].architectures | keys' ${{ inputs.release_json_path }}
 
       - name: Examine Action Implementation
         run: |
           echo "Checking how the action finds JSON files:"
           grep -r "find.*json" actions/update-from-nip94/ || echo "No find command for JSON files found"
           grep -r "ls.*json" actions/update-from-nip94/ || echo "No ls command for JSON files found"
-          
-          echo "Checking how the action processes event files:"
-          if [ -f "actions/update-from-nip94/action.yml" ]; then
-            cat actions/update-from-nip94/action.yml
-          fi
           
           # Copy events to the exact format the action might expect
           mkdir -p event_files
@@ -195,7 +203,7 @@ jobs:
       - name: Final Update Release JSON
         uses: ./actions/update-from-nip94
         with:
-          artifacts_path: newest_events  # Use our preprocessed directory with only the newest events
+          artifacts_path: newest_events
           release_json_path: release.json
           target_branch: develop
           github_token: ${{ secrets.REPOSCOPE }}
