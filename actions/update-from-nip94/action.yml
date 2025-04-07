@@ -19,11 +19,20 @@ inputs:
   commit_message:
     description: 'Commit message for the update'
     required: false
-    default: 'Update release.json with all NIP-94 events'
+    default: 'Update release.json with NIP-94 events'
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
   steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
     - name: Process NIP-94 Events
       shell: bash
       run: |
@@ -33,144 +42,20 @@ runs:
         # Create a backup of the original file
         cp ${{ inputs.release_json_path }} ${{ inputs.release_json_path }}.bak
         
-        echo "Processing NIP-94 events from ${{ inputs.artifacts_path }}"
+        # Run the Python script
+        VERBOSE_FLAG=""
+        if [[ "${{ inputs.verbose }}" == "true" ]]; then
+          VERBOSE_FLAG="--verbose"
+        fi
         
-        # Count event files
-        EVENT_FILES=$(find ${{ inputs.artifacts_path }} -name "*.json" | wc -l)
-        echo "Found $EVENT_FILES event files to process"
-        
-        # Read modules from release.json to target only existing ones
-        MODULES=$(jq -r '.modules[].name' ${{ inputs.release_json_path }})
-        echo "Available modules in release.json:"
-        echo "$MODULES"
-        
-        # Create a temporary directory for sorted events
-        mkdir -p sorted_events
-        
-        # First, extract key information and sort by creation_at timestamp
-        for EVENT_FILE in ${{ inputs.artifacts_path }}/*.json; do
-          CREATED_AT=$(jq -r '.created_at' "$EVENT_FILE")
-          ARCH=$(jq -r '.tags[] | select(.[0] == "arch") | .[1]' "$EVENT_FILE")
-          MODULE=""
-          
-          # Extract module from filename tag
-          FILENAME=$(jq -r '.tags[] | select(.[0] == "filename") | .[1]' "$EVENT_FILE")
-          
-          # Try to extract module from filename (basic-gl-mt3000-aarch64_cortex-a53.ipk -> basic)
-          if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          elif [[ "$FILENAME" =~ tollgate-module-(.+) ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          fi
-          
-          # Only process if we have both module and architecture
-          if [[ -n "$MODULE" && -n "$ARCH" && -n "$CREATED_AT" ]]; then
-            # Create key that combines module and architecture
-            KEY="${MODULE}-${ARCH}"
-            # Format with padding to ensure proper sorting (timestamp_key.json)
-            SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}.json"
-            cp "$EVENT_FILE" "$SORTED_FILE"
-            echo "Copied $EVENT_FILE to $SORTED_FILE (Created: $CREATED_AT, Module: $MODULE, Arch: $ARCH)"
-          else
-            echo "⚠️ Skipping $EVENT_FILE: Missing module ($MODULE) or architecture ($ARCH) or timestamp ($CREATED_AT)"
-          fi
-        done
-        
-        # Process only the newest event for each module/architecture combination
-        declare -A PROCESSED_KEYS
-        
-        # Reverse sort the files (newest first)
-        for SORTED_FILE in $(ls -r sorted_events/*.json); do
-          # Extract the key from the filename (after timestamp_)
-          FILENAME=$(basename "$SORTED_FILE")
-          KEY=$(echo "$FILENAME" | sed -E 's/^[0-9]+_(.+)\.json$/\1/')
-          
-          # Skip if we've already processed this module/arch combination
-          if [[ -n "${PROCESSED_KEYS[$KEY]}" ]]; then
-            echo "⏭️ Skipping $SORTED_FILE: Already processed a newer event for $KEY"
-            continue
-          fi
-          
-          # Mark this key as processed
-          PROCESSED_KEYS[$KEY]=1
-          
-          # Process the event
-          EVENT_FILE="$SORTED_FILE"
-          
-          echo "----- Processing newest event for $KEY: $EVENT_FILE -----"
-          
-          # Extract URL and hash from tags
-          URL_TAG=$(jq -r '.tags[] | select(.[0] == "url")' "$EVENT_FILE")
-          echo "URL tag contains: $URL_TAG"
-          
-          HASH_TAG=$(jq -r '.tags[] | select(.[0] == "x")' "$EVENT_FILE")
-          echo "Hash tag contains: $HASH_TAG"
-          
-          EVENT_ID=$(jq -r '.id' "$EVENT_FILE")
-          FILENAME=$(jq -r '.tags[] | select(.[0] == "filename") | .[1]' "$EVENT_FILE")
-          ARCH=$(jq -r '.tags[] | select(.[0] == "arch") | .[1]' "$EVENT_FILE")
-          URL=$(jq -r '.tags[] | select(.[0] == "url") | .[1]' "$EVENT_FILE")
-          HASH=$(jq -r '.tags[] | select(.[0] == "x") | .[1]' "$EVENT_FILE")
-          
-          echo "Found: ID=$EVENT_ID, Filename=$FILENAME, Arch=$ARCH"
-          echo "URL=$URL, Hash=$HASH"
-          
-          # Extract module name from filename
-          MODULE=""
-          if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          elif [[ "$FILENAME" =~ tollgate-module-(.+) ]]; then
-            MODULE="${BASH_REMATCH[1]}"
-          fi
-          
-          echo "Extracted module name: '$MODULE'"
-          
-          # Check if we have all required information
-          if [[ -z "$URL" || -z "$HASH" ]]; then
-            echo "Warning: Event missing URL or hash, cannot process: $EVENT_FILE"
-            continue
-          fi
-          
-          # Validate the module exists in release.json
-          if echo "$MODULES" | grep -q "^$MODULE$"; then
-            echo "Updating release.json for module: '$MODULE', architecture: '$ARCH'"
-            
-            # Count matches to see how many updates we need to make
-            MATCHES=$(jq --arg module "$MODULE" '.modules[] | select(.name == $module) | .versions[].architectures | keys[]' ${{ inputs.release_json_path }} | grep -c "\"$ARCH\"" || echo "0")
-            echo "Found $MATCHES matches for module '$MODULE' in release.json"
-            
-            # Update the release.json file (ensure hash has sha256: prefix)
-            TEMP_FILE=$(mktemp)
-            jq --arg module "$MODULE" --arg arch "$ARCH" --arg url "$URL" --arg hash "sha256:$HASH" --arg eventId "$EVENT_ID" '
-              .modules[] |= if .name == $module then 
-                .versions[] |= .architectures[$arch] = {
-                  "url": $url,
-                  "hash": $hash,
-                  "eventId": $eventId
-                }
-              else . end
-            ' ${{ inputs.release_json_path }} > "$TEMP_FILE"
-            
-            # Check if tempfile has content (validation)
-            if [[ -s "$TEMP_FILE" ]]; then
-              mv "$TEMP_FILE" ${{ inputs.release_json_path }}
-              echo "✅ Successfully updated $MODULE/$ARCH in release.json"
-            else
-              echo "❌ Error: Empty output while updating $MODULE/$ARCH"
-              rm "$TEMP_FILE"
-            fi
-          else
-            echo "⚠️ Module '$MODULE' not found in release.json, skipping"
-          fi
-        done
+        python3 ${{ github.action_path }}/update_release_json.py \
+          --events-dir "${{ inputs.artifacts_path }}" \
+          --release-json "${{ inputs.release_json_path }}" \
+          $VERBOSE_FLAG
         
         # Show changes
         echo "Changes to release.json:"
-        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }}
+        diff -u ${{ inputs.release_json_path }}.bak ${{ inputs.release_json_path }} || echo "No changes detected"
     
     - name: Commit and Push Changes
       shell: bash
@@ -190,24 +75,3 @@ runs:
         git commit -m "${{ inputs.commit_message }}"
         echo "Pushing changes to ${{ inputs.target_branch }} branch..."
         git push https://${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:${{ inputs.target_branch }}
-
-    - name: Debug NIP-94 Event Contents
-      if: steps.publish_package.outputs.eventId != ''
-      shell: bash
-      run: |
-        echo "Event ID: ${{ steps.publish_package.outputs.eventId }}"
-        # Use nak to fetch the event and examine it
-        nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq .
-        
-        # Check specific tags to ensure URL and hash are present
-        URL=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "url")[1] // "MISSING"')
-        HASH=$(nak event -i ${{ steps.publish_package.outputs.eventId }} -r wss://relay.damus.io | jq -r '.tags[] | select(.[0] == "x")[1] // "MISSING"')
-        
-        echo "URL in published event: $URL"
-        echo "Hash in published event: $HASH"
-        
-        if [ "$URL" == "MISSING" ] || [ "$HASH" == "MISSING" ]; then
-          echo "::warning::URL or hash missing in the published event!"
-        else
-          echo "✅ Event contains both URL and hash"
-        fi
