@@ -11,7 +11,7 @@
             "aarch64_cortex-a53": {
               "url": "https://blossom.swissdash.site/4203eafe83d17f38e97f2a49f2e216442fb24d1ae7bdec03b09eeef8d1b6afc3.ipk",
               "hash": "sha256:4203eafe83d17f38e97f2a49f2e216442fb24d1ae7bdec03b09eeef8d1b6afc3",
-              "eventId": "96fb36850de465a8753704719db1acacb7924fa41e18783418f9dfe43a2fe6c0"
+              "eventId": "dd636377cfcf53ca332e85c66d39a7f660ad7963679e2d8a92d8f9927483af8b"
             },
             "mips_24kc": {
               "url": "https://blossom.swissdash.site/abd6c4076a9bb4705539f75ca3e67dbc9ce49d22c1f75ab01fb5baab8e42646b.ipk",
