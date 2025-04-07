@@ -187,4 +187,3 @@ jobs:
           git add release.json
           git commit -m "Update release.json with latest NIP-94 events"
           git push origin develop
-
