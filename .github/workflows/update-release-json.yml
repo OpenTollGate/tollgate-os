@@ -155,15 +155,20 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Update release.json using the action
-        uses: ./current-branch/actions/update-from-nip94
-        with:
-          artifacts_path: current-branch/newest_events
-          release_json_path: current-branch/release.json
-          target_branch: ''  # Don't push changes
-          github_token: ${{ secrets.REPOSCOPE }}
-          commit_message: "Update release.json with latest NIP-94 events"
-          verbose: 'true'
+      # Run the Python script directly instead of using the action
+      - name: Run the update script directly
+        run: |
+          # Make the script executable
+          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
+          
+          # Run the Python script directly
+          python3 current-branch/actions/update-from-nip94/update_release_json.py \
+            --events-dir "current-branch/newest_events" \
+            --release-json "current-branch/release.json" \
+            --verbose
+          
+          echo "Changes to release.json:"
+          diff -u current-branch/release.json.bak current-branch/release.json || echo "No changes detected"
 
       - name: Copy updated release.json back to develop and push
         run: |
@@ -171,8 +176,8 @@ jobs:
           
           cd develop-branch
           
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           
           if git diff --exit-code release.json; then
             echo "No changes to commit."
