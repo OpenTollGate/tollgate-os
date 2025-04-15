@@ -9,9 +9,9 @@
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/a39e679f1f942b321803c5208038770586599c737c00c484fdb390641f0b14e0.ipk",
-              "hash": "sha256:a39e679f1f942b321803c5208038770586599c737c00c484fdb390641f0b14e0",
-              "eventId": "db66270fcf81726cd0add235a6ad2bf872545efae20a2c458d325ee105958b63"
+              "url": "https://blossom.swissdash.site/90929aa3ce545324f4760218ba95c5b32e3e6affbb3f46128c781e9f92a181e7.ipk",
+              "hash": "sha256:90929aa3ce545324f4760218ba95c5b32e3e6affbb3f46128c781e9f92a181e7",
+              "eventId": "fdcb0ef00916272b1948b776e21c8de0d65f44fc892c386c768e47d15766507e"
             },
             "mips_24kc": {
               "url": "https://blossom.swissdash.site/abd6c4076a9bb4705539f75ca3e67dbc9ce49d22c1f75ab01fb5baab8e42646b.ipk",
