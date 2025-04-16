@@ -12,7 +12,7 @@ inputs:
     required: true
   version:
     description: 'OpenWRT version'
-    default: '23.05.3'
+    default: '23.05.5'
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -93,8 +93,8 @@ runs:
             echo "TARGET_DEVICE=ramips-mt7621" >> $GITHUB_ENV
             echo "PROFILE=dlink_covr-x1860-a1" >> $GITHUB_ENV
             echo "BLOSSOM_ARCH=mipsel_24kc" >> $GITHUB_ENV
-            echo "EXTRA_PACKAGES=kmod-crypto-hw-eip93 kmod-mt7915-firmware luci luci-ssl uboot-envtools iwinfo wpad-wolfssl kmod-usb3 kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-mt7915-firmware luci luci-ssl iwinfo kmod-usb3 kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-wpad-basic-wolfssl -wpad-mini" >> $GITHUB_ENV
             ;;
           "gl-ar300m-nor")
             echo "PLATFORM=ath79" >> $GITHUB_ENV
