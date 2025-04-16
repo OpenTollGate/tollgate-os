@@ -87,6 +87,15 @@ runs:
             echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
+          "covr-x1860-a1")
+            echo "PLATFORM=ramips" >> $GITHUB_ENV
+            echo "TYPE=mt7621" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=ramips-mt7621" >> $GITHUB_ENV
+            echo "PROFILE=dlink_covr-x1860-a1" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mipsel_24kc" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-crypto-hw-eip93 kmod-mt7915-firmware luci luci-ssl uboot-envtools iwinfo wpad-wolfssl kmod-usb3 kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
           "gl-ar300m-nor")
             echo "PLATFORM=ath79" >> $GITHUB_ENV
             echo "TYPE=nand" >> $GITHUB_ENV
