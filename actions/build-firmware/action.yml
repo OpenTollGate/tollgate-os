@@ -96,6 +96,15 @@ runs:
             echo "EXTRA_PACKAGES=kmod-mt7915-firmware luci luci-ssl iwinfo kmod-usb3 kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-wpad-basic-wolfssl -wpad-mini" >> $GITHUB_ENV
             ;;
+          "nr7101")
+            echo "PLATFORM=ramips" >> $GITHUB_ENV
+            echo "TYPE=mt7621" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=ramips-mt7621" >> $GITHUB_ENV
+            echo "PROFILE=zyxel_nr7101" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mipsel_24kc" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-mt7603 kmod-usb3 kmod-usb-net-qmi-wwan kmod-usb-serial-option uqmi luci luci-ssl iwinfo" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-wpad-basic-wolfssl -wpad-mini" >> $GITHUB_ENV
+            ;;
           "gl-ar300m-nor")
             echo "PLATFORM=ath79" >> $GITHUB_ENV
             echo "TYPE=nand" >> $GITHUB_ENV

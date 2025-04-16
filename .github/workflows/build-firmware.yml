@@ -14,6 +14,7 @@ jobs:
       matrix:
         model: [
           'covr-x1860-a1',
+          'nr7101',
           #'gl-mt300n-v2',
           #'gl-ar300m16',
           'gl-ar300m',
