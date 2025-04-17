@@ -81,148 +81,141 @@ runs:
         VERSION="${{ inputs.version }}"
         MODEL="${{ inputs.model }}"
         
-        # Check for custom router identifier format (vendor_model)
-        if [[ "$MODEL" == *"_"* ]]; then
-          # This looks like a direct profile reference - check if we have a profile file for it
-          echo "Searching for profile for $MODEL in OpenWRT profiles..."
+        # TollGate standard packages to add to all routers
+        TOLLGATE_ADDED_PACKAGES="luci luci-ssl iwinfo wpad-wolfssl"
+        
+        # TollGate standard packages to remove from all routers
+        TOLLGATE_REMOVED_PACKAGES="-wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls"
+        
+        # Function to extract device profile information from JSON
+        extract_profile_info() {
+          local profile_file="$1"
+          local profile_name="$2"
           
-          # Variables to store profile information
-          FOUND_PROFILE=""
-          PROFILE_PATH=""
+          # Set platform variables from profile path
+          PLATFORM_TYPE=$(echo "$profile_file" | grep -o "${VERSION}/[^/]*/[^/]*" | sed "s|${VERSION}/||")
+          PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
+          TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
           
-          # Look through all profile files for this version
-          for PROFILE_FILE in ${GITHUB_WORKSPACE}/external_profiles/${VERSION}/*/*/profiles.json; do
-            if [ -f "$PROFILE_FILE" ]; then
-              # Try to find this model in the profile
-              if grep -q "\"$MODEL\":" "$PROFILE_FILE"; then
-                FOUND_PROFILE="yes"
-                PROFILE_PATH="$PROFILE_FILE"
-                
-                # Extract platform and type from the path
-                PLATFORM_TYPE=$(echo "$PROFILE_FILE" | grep -o "${VERSION}/[^/]*/[^/]*" | sed "s|${VERSION}/||")
-                PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
-                TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
-                
-                echo "✅ Found profile for $MODEL in $PLATFORM/$TYPE"
-                
-                # Set platform variables
-                echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
-                echo "TYPE=$TYPE" >> $GITHUB_ENV
-                echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
-                echo "PROFILE=$MODEL" >> $GITHUB_ENV
-                
-                # Set architecture
-                ARCH=$(grep -A5 "\"arch_packages\":" "$PROFILE_FILE" | grep -o "\"[^\"]*\"" | head -1 | tr -d '"')
-                if [ -z "$ARCH" ]; then
-                  # Default architectures by platform if not found
-                  case "$PLATFORM" in
-                    "ramips") ARCH="mipsel_24kc" ;;
-                    "ath79") ARCH="mips_24kc" ;;
-                    "mediatek") ARCH="aarch64_cortex-a53" ;;
-                    "ipq40xx") ARCH="arm_cortex-a7_neon-vfpv4" ;;
-                    "ipq806x") ARCH="arm_cortex-a15_neon-vfpv4" ;;
-                    "x86") ARCH="x86_64" ;;
-                    "bcm27xx") ARCH="aarch64_cortex-a72" ;;
-                    *) ARCH="mips_24kc" ;;  # Default fallback
-                  esac
-                  echo "⚠️ Architecture not found, using default for platform: $ARCH"
-                fi
-                echo "BLOSSOM_ARCH=$ARCH" >> $GITHUB_ENV
-                
-                # Get device packages from profile
-                DEVICE_PACKAGES=$(grep -A20 "\"$MODEL\":" "$PROFILE_FILE" | grep -o '"device_packages": \[[^]]*\]' | sed 's/"device_packages": \[//g' | sed 's/\]//g' | tr -d '"' | tr ',' ' ')
-                
-                # Split into extra packages and removed packages
-                EXTRA_PKGS=""
-                REMOVED_PKGS=""
-                for pkg in $DEVICE_PACKAGES; do
-                  if [[ "$pkg" == "-"* ]]; then
-                    REMOVED_PKGS+="$pkg "
-                  else
-                    EXTRA_PKGS+="$pkg "
-                  fi
-                done
-                
-                # Add standard TollGate packages
-                EXTRA_PKGS+="luci luci-ssl iwinfo"
-                REMOVED_PKGS+="-wpad-basic-wolfssl -wpad-mini"
-                
-                echo "EXTRA_PACKAGES=$EXTRA_PKGS" >> $GITHUB_ENV
-                echo "REMOVED_PACKAGES=$REMOVED_PKGS" >> $GITHUB_ENV
-                
-                break  # Stop searching after finding profile
-              fi
+          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+          echo "TYPE=$TYPE" >> $GITHUB_ENV
+          echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
+          echo "PROFILE=$profile_name" >> $GITHUB_ENV
+          
+          # Set architecture
+          ARCH=$(grep -A5 "\"arch_packages\":" "$profile_file" | grep -o "\"[^\"]*\"" | head -1 | tr -d '"')
+          if [ -z "$ARCH" ]; then
+            # Default architectures by platform if not found
+            case "$PLATFORM" in
+              "ramips") ARCH="mipsel_24kc" ;;
+              "ath79") ARCH="mips_24kc" ;;
+              "mediatek") ARCH="aarch64_cortex-a53" ;;
+              "ipq40xx") ARCH="arm_cortex-a7_neon-vfpv4" ;;
+              "ipq806x") ARCH="arm_cortex-a15_neon-vfpv4" ;;
+              "x86") ARCH="x86_64" ;;
+              "bcm27xx") ARCH="aarch64_cortex-a72" ;;
+              *) ARCH="mips_24kc" ;;  # Default fallback
+            esac
+            echo "⚠️ Architecture not found, using default for platform: $ARCH"
+          fi
+          echo "BLOSSOM_ARCH=$ARCH" >> $GITHUB_ENV
+          
+          # Get device packages from profile
+          DEVICE_PACKAGES=$(grep -A20 "\"$profile_name\":" "$profile_file" | grep -o '"device_packages": \[[^]]*\]' | sed 's/"device_packages": \[//g' | sed 's/\]//g' | tr -d '"' | tr ',' ' ')
+          
+          # Split into extra packages and removed packages
+          EXTRA_PKGS=""
+          REMOVED_PKGS=""
+          for pkg in $DEVICE_PACKAGES; do
+            if [[ "$pkg" == "-"* ]]; then
+              REMOVED_PKGS+="$pkg "
+            else
+              EXTRA_PKGS+="$pkg "
             fi
           done
           
-          # If no profile found, exit with error
-          if [ -z "$FOUND_PROFILE" ]; then
-            echo "❌ Error: No profile found for $MODEL"
-            echo "📋 Available profiles can be downloaded with ./download_profiles.sh"
-            exit 1
-          fi
-        else
-          # Use manually configured models
-          case "$MODEL" in
-            "gl-ar300m")
-              echo "PLATFORM=ath79" >> $GITHUB_ENV
-              echo "TYPE=generic" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=ath79-generic" >> $GITHUB_ENV
-              echo "PROFILE=glinet_gl-ar300m16" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-              ;;
-            "covr-x1860-a1")
-              echo "PLATFORM=ramips" >> $GITHUB_ENV
-              echo "TYPE=mt7621" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=ramips-mt7621" >> $GITHUB_ENV
-              echo "PROFILE=dlink_covr-x1860-a1" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=mipsel_24kc" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-mt7915-firmware luci luci-ssl iwinfo kmod-usb3 kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-wpad-basic-wolfssl -wpad-mini" >> $GITHUB_ENV
-              ;;
-            "nr7101")
-              echo "PLATFORM=ramips" >> $GITHUB_ENV
-              echo "TYPE=mt7621" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=ramips-mt7621" >> $GITHUB_ENV
-              echo "PROFILE=zyxel_nr7101" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=mipsel_24kc" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-mt7603 kmod-usb3 kmod-usb-net-qmi-wwan kmod-usb-serial-option uqmi luci luci-ssl iwinfo" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-wpad-basic-wolfssl -wpad-mini" >> $GITHUB_ENV
-              ;;
-            "gl-ar300m-nor")
-              echo "PLATFORM=ath79" >> $GITHUB_ENV
-              echo "TYPE=nand" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=ath79-nand" >> $GITHUB_ENV
-              echo "PROFILE=glinet_gl-ar300m-nor" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-              ;;
-            "gl-mt3000")
-              echo "PLATFORM=mediatek" >> $GITHUB_ENV
-              echo "TYPE=filogic" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-              echo "PROFILE=glinet_gl-mt3000" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-              ;;
-            "gl-mt6000")
-              echo "PLATFORM=mediatek" >> $GITHUB_ENV
-              echo "TYPE=filogic" >> $GITHUB_ENV
-              echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-              echo "PROFILE=glinet_gl-mt6000" >> $GITHUB_ENV
-              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+          # Add TollGate standard packages
+          EXTRA_PKGS+=" $TOLLGATE_ADDED_PACKAGES"
+          REMOVED_PKGS+=" $TOLLGATE_REMOVED_PACKAGES"
+          
+          echo "EXTRA_PACKAGES=$EXTRA_PKGS" >> $GITHUB_ENV
+          echo "REMOVED_PACKAGES=$REMOVED_PKGS" >> $GITHUB_ENV
+          
+          # Add router-specific customizations
+          case "$profile_name" in
+            "glinet_gl-mt3000"|"glinet_gl-mt6000")
+              echo "⚠️ Adding GL.iNet MT series USB support and kmod-usb-storage"
+              echo "EXTRA_PACKAGES=$EXTRA_PKGS kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
+              echo "DEVICE_EXTRA=UENV=1" >> $GITHUB_ENV
               ;;
             *)
-              echo "❌ Unsupported model: $MODEL" >> $GITHUB_ENV
-              exit 1
+              # Check if we should add USB storage support (if not already included)
+              if ! [[ "$EXTRA_PKGS" == *"kmod-usb-storage"* ]]; then
+                if [[ "$EXTRA_PKGS" == *"kmod-usb3"* ]] || [[ "$EXTRA_PKGS" == *"kmod-usb2"* ]]; then
+                  echo "🔌 Adding USB storage support"
+                  echo "EXTRA_PACKAGES=$EXTRA_PKGS kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
+                fi
+              fi
               ;;
           esac
+        }
+        
+        # Map of shorthand model names to OpenWRT profile names
+        MODEL_MAP=(
+          "gl-ar300m:glinet_gl-ar300m16"
+          "covr-x1860-a1:dlink_covr-x1860-a1"
+          "nr7101:zyxel_nr7101"
+          "gl-ar300m-nor:glinet_gl-ar300m-nor"
+          "gl-mt3000:glinet_gl-mt3000"
+          "gl-mt6000:glinet_gl-mt6000"
+        )
+        
+        # Check if model is a shorthand name and map it
+        PROFILE_NAME=""
+        for map_entry in "${MODEL_MAP[@]}"; do
+          key="${map_entry%%:*}"
+          value="${map_entry#*:}"
+          if [ "$MODEL" == "$key" ]; then
+            PROFILE_NAME="$value"
+            echo "ℹ️ Mapped model '$MODEL' to profile '$PROFILE_NAME'"
+            break
+          fi
+        done
+        
+        # If no mapping found, use the model name directly (it might be a profile name already)
+        if [ -z "$PROFILE_NAME" ]; then
+          PROFILE_NAME="$MODEL"
+        fi
+        
+        # Find the profile in the JSON files
+        FOUND_PROFILE=""
+        PROFILE_PATH=""
+        
+        for PROFILE_FILE in ${GITHUB_WORKSPACE}/external_profiles/${VERSION}/*/*/profiles.json; do
+          if [ -f "$PROFILE_FILE" ]; then
+            if grep -q "\"$PROFILE_NAME\":" "$PROFILE_FILE"; then
+              FOUND_PROFILE="yes"
+              PROFILE_PATH="$PROFILE_FILE"
+              echo "✅ Found profile for $PROFILE_NAME in $PROFILE_FILE"
+              
+              # Extract profile information
+              extract_profile_info "$PROFILE_FILE" "$PROFILE_NAME"
+              break
+            fi
+          fi
+        done
+        
+        # If no profile found, exit with error
+        if [ -z "$FOUND_PROFILE" ]; then
+          echo "❌ Error: No profile found for $PROFILE_NAME"
+          echo "📋 Available profiles can be downloaded with ./download_profiles.sh"
+          
+          # Check if profiles are missing
+          if ! find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -name "profiles.json" | grep -q .; then
+            echo "🛑 No profiles found for version ${VERSION}. Please run download_profiles.sh first."
+          fi
+          
+          exit 1
         fi
         
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
