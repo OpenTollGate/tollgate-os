@@ -10,27 +10,44 @@ on:
 
 jobs:
   build:
+    runs-on: ubuntu-22.04
+    name: Build firmware for ${{ matrix.model }}
     strategy:
       matrix:
-        model: [
-          'covr-x1860-a1',
-          'nr7101',
-          #'gl-mt300n-v2',
-          #'gl-ar300m16',
-          'gl-ar300m',
-          'gl-ar300m-nor',
-          'gl-mt3000',
-          'gl-mt6000',
-#          'gl-e750',
-#          'archer_mr200'
-        ]
+        model: [gl-mt3000, gl-mt6000]
       fail-fast: false
-
-    runs-on: ubuntu-latest
-    name: Build ${{ matrix.model }}
 
     steps:
       - uses: actions/checkout@v4
+      
+      # Add debug information about the OS environment before building
+      - name: Debug environment
+        run: |
+          echo "===== BUILD ENVIRONMENT DEBUG ====="
+          echo "OS: $(uname -a)"
+          echo "Available memory: $(free -h)"
+          echo "Available disk space: $(df -h)"
+          echo "Python version: $(python3 --version)"
+          echo "Working directory: $(pwd)"
+          
+          # Debug the repository structure
+          echo "===== REPOSITORY STRUCTURE ====="
+          ls -la
+          echo "===== FILES DIRECTORY STRUCTURE ====="
+          ls -la files/etc || echo "No files/etc directory"
+          
+          # Check for OpenWRT profiles directory
+          if [[ "${{ matrix.model }}" == "gl-mt3000" || "${{ matrix.model }}" == "gl-mt6000" ]]; then
+            echo "===== CHECKING PROFILES DIRECTORY ====="
+            ls -la external_profiles/23.05.5/mediatek/filogic/ || echo "Profiles directory not found in repository"
+            
+            # Verify device profile exists in profiles.json
+            PROFILE_NAME="glinet_${{ matrix.model }}"
+            if [ -f "external_profiles/23.05.5/mediatek/filogic/profiles.json" ]; then
+              echo "===== VERIFYING $PROFILE_NAME PROFILE ====="
+              grep -A 20 "$PROFILE_NAME" external_profiles/23.05.5/mediatek/filogic/profiles.json || echo "$PROFILE_NAME not found in profiles.json"
+            fi
+          fi
       
       - name: Build OpenWRT Image
         id: build-openwrt-image
@@ -43,9 +60,54 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
       
+      # Add a step to collect and display build logs if available
+      - name: Collect build logs
+        if: always()
+        run: |
+          echo "===== BUILD LOGS COLLECTION ====="
+          # Create a directory for the logs
+          mkdir -p build_logs
+          
+          # Try to find and copy any logs from the build process
+          find /tmp/openwrt-build -name "*.txt" -o -name "*.log" -type f | while read file; do
+            echo "Found log file: $file"
+            cp "$file" build_logs/ || echo "Failed to copy $file"
+          done
+          
+          # If there are no log files, create a placeholder
+          if [ ! "$(ls -A build_logs)" ]; then
+            echo "No log files found in /tmp/openwrt-build"
+            echo "Build process did not generate expected log files" > build_logs/no_logs_found.txt
+          fi
+          
+          # Look for any specific error patterns in the logs
+          echo "===== SEARCHING FOR COMMON BUILD ERRORS ====="
+          grep -r "Error\|Failed\|Conflict" build_logs/ || echo "No common error patterns found"
+          
+          # Look specifically for wpad-related issues
+          echo "===== CHECKING FOR WPAD PACKAGE CONFLICTS ====="
+          grep -r "wpad" build_logs/ || echo "No wpad-related issues found in logs"
+          
+          # Try to find specific package installation logs
+          echo "===== PACKAGE INSTALLATION LOGS ====="
+          find /tmp/openwrt-build -path "*/logs/package/*.txt" -type f | while read file; do
+            echo "==== $file ===="
+            cat "$file"
+            echo ""
+          done || echo "No package installation logs found"
+      
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.model }}.img
           path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+          retention-days: 5
+      
+      # Also upload the build logs as artifacts for troubleshooting
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.model }}
+          path: build_logs/
           retention-days: 5

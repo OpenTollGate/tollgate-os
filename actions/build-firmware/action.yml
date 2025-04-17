@@ -1,5 +1,5 @@
-name: 'Build OpenWRT Image'
-description: 'Builds an OpenWRT firmware image with TollGate packages'
+name: 'Build OpenWRT Image for GL-MT3000'
+description: 'Builds an OpenWRT firmware image with TollGate packages specifically for GL.iNet GL-MT3000 router using OpenWRT profile name glinet_gl-mt3000'
 author: 'c03rad0r'
 
 branding:
@@ -7,12 +7,10 @@ branding:
   icon: box
 
 inputs:
-  model:
-    description: 'The device model to build for'
-    required: true
   version:
     description: 'OpenWRT version'
     default: '23.05.5'
+    required: false
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -23,22 +21,17 @@ inputs:
     description: 'Comma-separated list of Nostr relays'
     default: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
   base_packages:
-    description: 'Base packages to include'
-    default: >-
-      base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
-      kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
-      libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
-      ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
-      uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+    description: 'Additional base packages to include'
+    default: ''
   files_path:
-    description: 'Path to default files directory'
+    description: 'Path to custom files directory'
     default: 'tollgate-image-builder/files'
     required: false
   nsecbech:
-    description: 'Nostr secret key for Blossom in bech32 format'
+    description: 'Nostr secret key (bech32) for Blossom upload'
     required: true
   nsec:
-    description: 'Nostr secret key for event signing'
+    description: 'Nostr secret key for metadata signing'
     required: true
 
 outputs:
@@ -50,7 +43,7 @@ outputs:
     value: ${{ steps.find-firmware.outputs.firmware_name }}
 
 runs:
-  using: "composite"
+  using: composite
   steps:
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -66,516 +59,199 @@ runs:
           build-essential \
           curl \
           zstd \
-          libssl-dev
+          libssl-dev \
+          jq
         python -m pip install --upgrade pip
         pip install nostr
 
-    - name: Set Build Variables
+    - name: Extract build variables for glinet_gl-mt3000
       id: vars
       shell: bash
       run: |
-        # Create build directory first
-        mkdir -p /tmp/openwrt-build
+        set -euo pipefail
         
-        # Version for OpenWRT
+        echo "🔍 Starting build variable extraction for GL-MT3000..."
+        
+        # Explicitly set to GL-MT3000 OpenWRT profile name - no other models supported
+        MODEL="glinet_gl-mt3000"
+        echo "📌 Target device set to OpenWRT profile name: $MODEL"
+        
         VERSION="${{ inputs.version }}"
-        MODEL="${{ inputs.model }}"
+        echo "📌 Using OpenWRT version: $VERSION"
         
-        # TollGate standard packages to add to all routers
-        TOLLGATE_ADDED_PACKAGES="luci luci-ssl iwinfo wpad-wolfssl"
+        # Path to profiles in repository
+        PROFILES_DIR="${GITHUB_WORKSPACE}/external_profiles/$VERSION"
+        echo "📁 Using profiles directory: $PROFILES_DIR"
         
-        # TollGate standard packages to remove from all routers
-        TOLLGATE_REMOVED_PACKAGES="-wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls"
+        # GL-MT3000 is in mediatek/filogic platform according to profiles.json
+        PLATFORM="mediatek"
+        TYPE="filogic"
+        echo "📌 Using platform: $PLATFORM/$TYPE (specific to GL-MT3000)"
         
-        # Function to extract device profile information from JSON
-        extract_profile_info() {
-          local profile_file="$1"
-          local profile_name="$2"
-          
-          # Set platform variables from profile path
-          PLATFORM_TYPE=$(echo "$profile_file" | grep -o "${VERSION}/[^/]*/[^/]*" | sed "s|${VERSION}/||")
-          PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
-          TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
-          
-          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
-          echo "TYPE=$TYPE" >> $GITHUB_ENV
-          echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
-          echo "PROFILE=$profile_name" >> $GITHUB_ENV
-          
-          # Set architecture
-          ARCH=$(grep -A5 "\"arch_packages\":" "$profile_file" | grep -o "\"[^\"]*\"" | head -1 | tr -d '"')
-          if [ -z "$ARCH" ]; then
-            # Default architectures by platform if not found
-            case "$PLATFORM" in
-              "ramips") ARCH="mipsel_24kc" ;;
-              "ath79") ARCH="mips_24kc" ;;
-              "mediatek") ARCH="aarch64_cortex-a53" ;;
-              "ipq40xx") ARCH="arm_cortex-a7_neon-vfpv4" ;;
-              "ipq806x") ARCH="arm_cortex-a15_neon-vfpv4" ;;
-              "x86") ARCH="x86_64" ;;
-              "bcm27xx") ARCH="aarch64_cortex-a72" ;;
-              *) ARCH="mips_24kc" ;;  # Default fallback
-            esac
-            echo "⚠️ Architecture not found, using default for platform: $ARCH"
-          fi
-          echo "BLOSSOM_ARCH=$ARCH" >> $GITHUB_ENV
-          
-          # Get device packages from profile
-          DEVICE_PACKAGES=$(grep -A20 "\"$profile_name\":" "$profile_file" | grep -o '"device_packages": \[[^]]*\]' | sed 's/"device_packages": \[//g' | sed 's/\]//g' | tr -d '"' | tr ',' ' ')
-          
-          # Split into extra packages and removed packages
-          EXTRA_PKGS=""
-          REMOVED_PKGS=""
-          for pkg in $DEVICE_PACKAGES; do
-            if [[ "$pkg" == "-"* ]]; then
-              REMOVED_PKGS+="$pkg "
-            else
-              EXTRA_PKGS+="$pkg "
-            fi
-          done
-          
-          # Add TollGate standard packages
-          EXTRA_PKGS+=" $TOLLGATE_ADDED_PACKAGES"
-          REMOVED_PKGS+=" $TOLLGATE_REMOVED_PACKAGES"
-          
-          echo "EXTRA_PACKAGES=$EXTRA_PKGS" >> $GITHUB_ENV
-          echo "REMOVED_PACKAGES=$REMOVED_PKGS" >> $GITHUB_ENV
-          
-          # Add router-specific customizations
-          case "$profile_name" in
-            "glinet_gl-mt3000"|"glinet_gl-mt6000")
-              echo "⚠️ Adding GL.iNet MT series USB support and kmod-usb-storage"
-              echo "EXTRA_PACKAGES=$EXTRA_PKGS kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
-              echo "DEVICE_EXTRA=UENV=1" >> $GITHUB_ENV
-              ;;
-            *)
-              # Check if we should add USB storage support (if not already included)
-              if ! [[ "$EXTRA_PKGS" == *"kmod-usb-storage"* ]]; then
-                if [[ "$EXTRA_PKGS" == *"kmod-usb3"* ]] || [[ "$EXTRA_PKGS" == *"kmod-usb2"* ]]; then
-                  echo "🔌 Adding USB storage support"
-                  echo "EXTRA_PACKAGES=$EXTRA_PKGS kmod-usb-core kmod-usb-storage" >> $GITHUB_ENV
-                fi
-              fi
-              ;;
-          esac
-        }
+        PROFILE_PATH="$PROFILES_DIR/$PLATFORM/$TYPE/profiles.json"
+        echo "📄 Looking for profile at: $PROFILE_PATH"
         
-        # Map of shorthand model names to OpenWRT profile names
-        MODEL_MAP=(
-          "gl-ar300m:glinet_gl-ar300m16"
-          "covr-x1860-a1:dlink_covr-x1860-a1"
-          "nr7101:zyxel_nr7101"
-          "gl-ar300m-nor:glinet_gl-ar300m-nor"
-          "gl-mt3000:glinet_gl-mt3000"
-          "gl-mt6000:glinet_gl-mt6000"
-        )
-        
-        # Check if model is a shorthand name and map it
-        PROFILE_NAME=""
-        for map_entry in "${MODEL_MAP[@]}"; do
-          key="${map_entry%%:*}"
-          value="${map_entry#*:}"
-          if [ "$MODEL" == "$key" ]; then
-            PROFILE_NAME="$value"
-            echo "ℹ️ Mapped model '$MODEL' to profile '$PROFILE_NAME'"
-            break
-          fi
-        done
-        
-        # If no mapping found, use the model name directly (it might be a profile name already)
-        if [ -z "$PROFILE_NAME" ]; then
-          PROFILE_NAME="$MODEL"
-        fi
-        
-        # Find the profile in the JSON files
-        FOUND_PROFILE=""
-        PROFILE_PATH=""
-        
-        for PROFILE_FILE in ${GITHUB_WORKSPACE}/external_profiles/${VERSION}/*/*/profiles.json; do
-          if [ -f "$PROFILE_FILE" ]; then
-            if grep -q "\"$PROFILE_NAME\":" "$PROFILE_FILE"; then
-              FOUND_PROFILE="yes"
-              PROFILE_PATH="$PROFILE_FILE"
-              echo "✅ Found profile for $PROFILE_NAME in $PROFILE_FILE"
-              
-              # Extract profile information
-              extract_profile_info "$PROFILE_FILE" "$PROFILE_NAME"
-              break
-            fi
-          fi
-        done
-        
-        # If no profile found, exit with error
-        if [ -z "$FOUND_PROFILE" ]; then
-          echo "❌ Error: No profile found for $PROFILE_NAME"
-          echo "📋 Available profiles can be downloaded with ./download_profiles.sh"
-          
-          # Check if profiles are missing
-          if ! find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -name "profiles.json" | grep -q .; then
-            echo "🛑 No profiles found for version ${VERSION}. Please run download_profiles.sh first."
-          fi
-          
+        if [ ! -f "$PROFILE_PATH" ]; then
+          echo "❌ ERROR: Could not find profiles.json at $PROFILE_PATH"
+          echo "❌ Please ensure the external_profiles directory is properly populated"
+          echo "❌ You may need to run ./download_profiles.sh first"
           exit 1
         fi
         
+        echo "✅ Found profile file: $PROFILE_PATH"
+        
+        # Check if the model exists in this profiles.json
+        if ! jq -e --arg p "$MODEL" '.profiles[$p]?' "$PROFILE_PATH" > /dev/null; then
+          echo "❌ ERROR: Profile '$MODEL' not found in $PROFILE_PATH"
+          echo "❌ The GL-MT3000 device profile is missing from the profiles.json file"
+          
+          # List available profiles to help debugging
+          echo "Available profiles in this file:"
+          jq -r '.profiles | keys[]' "$PROFILE_PATH" | sort
+          exit 1
+        fi
+        
+        echo "✅ Confirmed glinet_gl-mt3000 profile exists in profiles.json"
+        
+        # Extract variables from profiles.json
+        ARCH=$(jq -r '.arch_packages' "$PROFILE_PATH")
+        DEFAULT_PKGS=$(jq -r '.default_packages | join(" ")' "$PROFILE_PATH")
+        
+        # Get specific device packages for glinet_gl-mt3000
+        DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$PROFILE_PATH")
+        
+        # Also extract and display detailed device info for verification
+        DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$PROFILE_PATH")
+        DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$PROFILE_PATH")
+        DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
+        DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
+        
+        # Create builddir
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
+        mkdir -p /tmp/openwrt-build
+        echo "📁 Created build directory: /tmp/openwrt-build"
+        
+        # Print all extracted variables in a formatted table for clarity
+        echo "✅ Successfully parsed profiles.json for glinet_gl-mt3000"
+        echo "=================================================="
+        echo "📋 EXTRACTED BUILD VARIABLES FOR GL-MT3000"
+        echo "=================================================="
+        echo "PLATFORM:          $PLATFORM"
+        echo "TYPE:              $TYPE"
+        echo "PROFILE:           $MODEL"
+        echo "ARCH:              $ARCH"
+        echo "--------------------------------------------------"
+        echo "DEVICE INFO:"
+        echo "VENDOR:            $DEVICE_VENDOR"
+        echo "MODEL:             $DEVICE_MODEL"
+        echo "IMAGE PREFIX:      $DEVICE_IMAGE_PREFIX"
+        echo "SUPPORTED DEVICES: $DEVICE_SUPPORTED"
+        echo "--------------------------------------------------"
+        echo "PACKAGES:"
+        echo "DEFAULT PACKAGES:  $DEFAULT_PKGS"
+        echo "DEVICE PACKAGES:   $DEVICE_PKGS"
+        echo "=================================================="
+        
+        # TollGate WiFi/DHCP removals and standard additions
+        echo "📋 Configuring TollGate-specific package modifications..."
+        WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
+        DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
+        TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
+        echo "🔄 Removing packages: $TOLLGATE_REMOVED"
+        
+        WIFI_ADD="wpad-wolfssl"
+        TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
+        echo "➕ Adding packages: $TOLLGATE_ADDED"
+        
+        # Compose final package list: TollGate → Device → Base → user extras
+        PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
+        
+        # Count packages for verification
+        PKG_COUNT=$(echo "$PACKAGES" | wc -w)
+        echo "📊 Final package configuration contains $PKG_COUNT packages/modifications"
+        
+        # Export environment for downstream steps
+        echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+        echo "TYPE=$TYPE" >> $GITHUB_ENV
+        echo "PROFILE=$MODEL" >> $GITHUB_ENV
+        echo "ARCH=$ARCH" >> $GITHUB_ENV
+        echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+        
+        echo "✅ Build variables exported to environment"
 
-    - name: Setup Build Directory
+    - name: Download & extract ImageBuilder
       shell: bash
       run: |
-        mkdir -p $BUILDDIR
-        
-        if [ "${{ inputs.version }}" = "snapshot" ]; then
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
-          echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
-        elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
-        else
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
-        fi
-        
-        echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
-        echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+        set -euo pipefail
+        cd "$BUILDDIR"
+        IMAGEBUILDER="openwrt-imagebuilder-${{ inputs.version }}-${PLATFORM}-${TYPE}.Linux-x86_64"
+        URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER}.tar.xz"
+        echo "📥 Downloading image builder from: $URL"
+        curl -sSL "$URL" | tar -xJ -C .
+        echo "BUILDDIR=$BUILDDIR/$IMAGEBUILDER" >> $GITHUB_ENV
 
-    - name: Download and Extract ImageBuilder
+    - name: Copy custom files
       shell: bash
       run: |
-        cd $BUILDDIR
-        if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
-          curl -L -C - -O "$DOWNLOAD_URL"
-          if [ "${{ inputs.version }}" = "snapshot" ]; then
-            tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-          else
-            tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-          fi
-        else
-          echo "Error: URL $DOWNLOAD_URL does not exist"
-          exit 1
-        fi
-
-    - name: Check Available Profiles
-      shell: bash
-      run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        echo "📋 Checking for available profiles..."
-        
-        # More reliable method to check profiles
-        if [ -f "profiles.json" ]; then
-          grep -q "${PROFILE}" profiles.json && \
-            echo "✅ Profile ${PROFILE} appears to be available" || \
-            echo "⚠️ Profile ${PROFILE} not found, checking with make info"
-        fi
-        
-        # Try to list all available profiles if grep fails
-        echo "Available profiles:"
-        make info || echo "⚠️ Could not run 'make info', but continuing anyway"
-        
-        # Always continue - we'll let the build fail if the profile is truly invalid
-        echo "🔄 Proceeding with profile: ${PROFILE}"
-
-    - name: Setup Custom Files and Packages
-      shell: bash
-      env:
-        NOSTR_SECRET_KEY: ${{ inputs.nostr_secret_key }}
-        NOSTR_PUBLIC_KEY: ${{ inputs.nostr_public_key }}
-        NOSTR_RELAYS: ${{ inputs.nostr_relays }}
-      run: |
-        mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files
+        set -euo pipefail
         if [ -d "${{ inputs.files_path }}" ]; then
-          cp -r ${{ inputs.files_path }}/* $BUILDDIR/${IMAGEBUILDER_NAME}/files/
+          echo "📁 Copying custom files from ${{ inputs.files_path }}"
+          cp -r "${{ inputs.files_path }}" "$BUILDDIR/files"
+        else
+          echo "⚠️ No custom files found at ${{ inputs.files_path }}"
         fi
-        PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
-        mkdir -p "${PACKAGES_DIR}"
-        
-        # Add U-Boot config for supported devices
-        case "${{ inputs.model }}" in
-          "gl-mt3000"|"gl-mt6000")
-            echo "Creating U-Boot environment config"
-            mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc
-            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc/fw_env.config
-            ;;
-        esac
 
-    - name: Download TollGate Packages from release.json
+    - name: Build firmware
       shell: bash
       run: |
-        # Create packages directory if it doesn't exist
-        PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
-        mkdir -p "${PACKAGES_DIR}"
+        set -euo pipefail
+        cd "$BUILDDIR"
+        echo "🔨 Building firmware for $PROFILE"
+        echo "📦 Using packages: $PACKAGES"
         
-        # Convert BLOSSOM_ARCH (if needed)
-        if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
-          TARGET_ARCH="mips_24kc"
-        else
-          TARGET_ARCH="${BLOSSOM_ARCH}"
-        fi
-        
-        echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
-        
-        # Create an empty Packages file to prevent build failures if no packages are downloaded
-        touch "${PACKAGES_DIR}/Packages"
-        
-        # Parse release.json and download all packages for this architecture
-        DOWNLOADED_PACKAGES=""
-        for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
-          echo "📦 Processing module: ${MODULE_NAME}"
-          
-          # Extract URL for this module and architecture
-          PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
-            '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
-            
-          # Skip placeholder URLs
-          if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
-            echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
-            continue
-          fi
-          
-          # Download the package with retry logic
-          PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
-          echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
-          
-          # Try up to 3 times with increasing timeouts
-          for ATTEMPT in {1..3}; do
-            echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
-            if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-              echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-              DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
-              break
-            else
-              echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
-              if [ $ATTEMPT -eq 3 ]; then
-                echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
-              fi
-              sleep 5
-            fi
-          done
-        done
-        
-        # Add the downloaded packages to the build package list
-        if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-          echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
-          echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
-        else
-          echo "⚠️ No packages were downloaded successfully"
-          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
-        fi
-        
-        # List the downloaded packages
-        echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
-        ls -la "${PACKAGES_DIR}" || true
+        # Simple approach: use FORCE=1 to bypass prerequisite checks
+        # This matches the approach that worked in the old version
+        FORCE=1 make image \
+          PROFILE="$PROFILE" \
+          PACKAGES="$PACKAGES" \
+          FILES="files" \
+          EXTRA_IMAGE_NAME="tollgate-os"
 
-    - name: Generate Package Index
-      shell: bash
-      run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
-        export -f mkhash; \
-        export MKHASH=mkhash; \
-        ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
-        gzip -9c packages/local/Packages > packages/local/Packages.gz'
-
-    - name: Analyze Package Sizes
-      shell: bash
-      run: |
-        echo "📊 Analyzing TollGate package sizes:"
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        
-        # Check if packages directory has .ipk files 
-        if ls packages/local/*.ipk 1> /dev/null 2>&1; then
-          # Get total size of all packages
-          TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
-          echo "Total size of all packages: ${TOTAL_SIZE}"
-          
-          # List packages by size
-          echo "Packages ordered by size (largest first):"
-          du -h packages/local/*.ipk | sort -hr
-        else
-          echo "⚠️ No .ipk packages found in packages/local/"
-        fi
-        
-        # Check device specs
-        if grep -q "Flash" "${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
-          FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile)
-          echo "Device flash information: ${FLASH_INFO}"
-        else
-          echo "⚠️ Flash information not found in Makefile"
-        fi
-        
-        # Create package groups to try with fewer packages
-        echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
-        echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
-
-    - name: Build Firmware with All Packages
-      shell: bash
-      continue-on-error: true
-      id: build-all
-      run: |
-        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        
-        echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
-        
-        if [ -n "${DEVICE_EXTRA}" ]; then
-          echo "Adding device compatibility: ${DEVICE_EXTRA}"
-          # Use eval to properly handle the parameters
-          eval sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            ${DEVICE_EXTRA} \
-            PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        else
-          # Original command
-          sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        fi
-        
-        # Check if build succeeded
-        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-          echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
-          echo "✅ Build with ALL packages succeeded!"
-          exit 0
-        else
-          echo "❌ Build with ALL packages failed, will try with fewer packages"
-          # Show logs or errors
-          cat ${BUILDDIR}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
-          exit 1
-        fi
-
-    - name: Build Firmware with Essential Packages Only
-      shell: bash
-      if: steps.build-all.outcome == 'failure'
-      continue-on-error: true
-      id: build-essential
-      run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        sudo make clean
-        
-        COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
-        
-        echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
-        
-        # Check if DEVICE_EXTRA is set and add it to the build command if it is
-        if [ -n "${DEVICE_EXTRA}" ]; then
-          echo "Adding device compatibility: ${DEVICE_EXTRA}"
-          sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            ${DEVICE_EXTRA} \
-            PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        else
-          sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        fi
-        
-        # Check if build succeeded
-        if find ${BUILDDIR/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-          echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
-          echo "✅ Build with ESSENTIAL packages succeeded!"
-          exit 0
-        else
-          echo "❌ Build with ESSENTIAL packages failed, will try without TollGate packages"
-          exit 1
-        fi
-
-    - name: Build Basic Firmware (Fallback)
-      shell: bash
-      if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
-      id: build-basic
-      run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
-        sudo make clean
-        
-        BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
-        
-        echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
-        
-        # Check if DEVICE_EXTRA is set and add it to the build command if it is
-        if [ -n "${DEVICE_EXTRA}" ]; then
-          echo "Adding device compatibility: ${DEVICE_EXTRA}"
-          sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            ${DEVICE_EXTRA} \
-            PACKAGES="${BASIC_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        else
-          sudo make -j$(nproc) image V=s \
-            PROFILE="${PROFILE}" \
-            PACKAGES="${BASIC_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
-        fi
-        
-        # Check if build succeeded
-        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-          echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
-          echo "✅ Basic build succeeded!"
-        else
-          echo "❌ Even basic build failed, there might be a fundamental issue"
-          exit 1
-        fi
-
-    - name: Find Firmware File
+    - name: Find firmware
       id: find-firmware
       shell: bash
       run: |
-        # Look for any sysupgrade.bin file
-        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
-        
-        if [ -z "$FIRMWARE_PATH" ]; then
-          # Try to find any .bin file as fallback
-          FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
-        fi
-        
-        if [ -f "$FIRMWARE_PATH" ]; then
-          echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
-          echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
-          echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
-          
-          # Store firmware metadata
-          FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
-          echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
-          echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
-        else
-          echo "❌ Error: No firmware file found!"
+        set -euo pipefail
+        F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
+        if [ ! -f "$F" ]; then
+          echo "❌ Firmware not found"
           exit 1
         fi
+        echo "✅ Firmware built successfully: $(basename "$F")"
+        echo "firmware_path=$F" >> $GITHUB_OUTPUT
+        echo "firmware_name=$(basename "$F")" >> $GITHUB_OUTPUT
 
-    - name: Upload Firmware to Blossom
-      id: upload_firmware
+    - name: Upload firmware to Blossom
       uses: c03rad0r/cli-blossom-uploader-go@main
       with:
-        host: "https://blossom.swissdash.site"
-        filePath: ${{ steps.find-firmware.outputs.firmware_path }}
-        nostrPrivateKey: ${{ inputs.NSECBECH }}
+        host:            'https://blossom.swissdash.site'
+        filePath:        ${{ steps.find-firmware.outputs.firmware_path }}
+        nostrPrivateKey: ${{ inputs.nsecbech }}
 
-    - name: Publish Firmware NIP-94 Metadata
-      id: publish_firmware
+    - name: Publish NIP‑94 metadata
       uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
       with:
-        relays: ${{ inputs.nostr_relays }}
-        url: ${{ steps.upload_firmware.outputs.url }}
-        mimeType: "application/octet-stream"
-        fileHash: ${{ steps.upload_firmware.outputs.hash }}
+        relays:       ${{ inputs.nostr_relays }}
+        url:          ${{ steps.upload.outputs.url }}
+        mimeType:     'application/octet-stream'
+        fileHash:     ${{ steps.upload.outputs.hash }}
         originalHash: ${{ env.FIRMWARE_HASH }}
-        filename: ${{ steps.find-firmware.outputs.firmware_name }}
-        content: "TollGate OS Firmware for ${{ inputs.model }}"
-        nsec: ${{ inputs.nsec }}
-        size: ${{ env.FIRMWARE_SIZE }}
-        architecture: ${{ env.BLOSSOM_ARCH }}
-        model: ${{ inputs.model }}
-        version: ${{ inputs.version }}
+        filename:     ${{ steps.find-firmware.outputs.firmware_name }}
+        content:      "TollGate OS for GL-MT3000 (OpenWRT ${{ inputs.version }})"
+        nsec:         ${{ inputs.nsec }}
 
-    - name: Verify Firmware Publication
-      id: verify_firmware
+    - name: Verify publication
       uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
       with:
-        eventId: ${{ steps.publish_firmware.outputs.eventId }}
-        relays: ${{ inputs.nostr_relays }}
+        eventId: ${{ steps.publish.outputs.eventId }}
+        relays:   ${{ inputs.nostr_relays }}

@@ -10,6 +10,7 @@
 # Default OpenWRT version
 DEFAULT_VERSION="23.05.5"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+MAX_RETRIES=3
 
 # Process arguments
 VERSION=${1:-$DEFAULT_VERSION}
@@ -49,19 +50,46 @@ download_platform() {
   
   echo "⬇️ Downloading ${platform}/${target}..."
   
-  # Download the file
-  if curl -s -f -o "$output_file" "$url"; then
-    # Count the number of profiles
-    local profile_count=$(grep -o "\"target\":" "$output_file" | wc -l)
-    echo "✅ Downloaded ${platform}/${target} - ${profile_count} device profiles"
-    return 0
-  else
-    echo "❌ Failed to download ${platform}/${target}"
-    # Clean up empty directory
+  # Validate URL exists before attempting download
+  if ! curl --head --silent --fail "$url" > /dev/null; then
+    echo "❌ URL does not exist or is unreachable: $url"
     rm -rf "$target_dir"
     return 1
   fi
+  
+  # Download with retries
+  for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
+    
+    if curl -s -f -o "$output_file" "$url"; then
+      # Validate downloaded file
+      if [ -s "$output_file" ] && grep -q "\"profiles\":" "$output_file"; then
+        # Count the number of profiles
+        local profile_count=$(grep -o "\"target\":" "$output_file" | wc -l)
+        echo "✅ Downloaded ${platform}/${target} - ${profile_count} device profiles"
+        return 0
+      else
+        echo "⚠️ Downloaded file appears invalid. Retrying..."
+        rm -f "$output_file"
+      fi
+    else
+      echo "⚠️ Download attempt $ATTEMPT failed"
+    fi
+    
+    # Only sleep if we're going to retry
+    if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+      sleep 5
+    fi
+  done
+  
+  echo "❌ Failed to download ${platform}/${target} after $MAX_RETRIES attempts"
+  # Clean up empty directory
+  rm -rf "$target_dir"
+  return 1
 }
+
+SUCCESS_COUNT=0
+FAILURE_COUNT=0
 
 # If specific platform provided, only download that one
 if [ -n "$SPECIFIC_PLATFORM" ]; then
@@ -69,7 +97,11 @@ if [ -n "$SPECIFIC_PLATFORM" ]; then
   PLATFORM=$(echo $SPECIFIC_PLATFORM | cut -d'/' -f1)
   TARGET=$(echo $SPECIFIC_PLATFORM | cut -d'/' -f2)
   
-  download_platform "$PLATFORM" "$TARGET" "$VERSION"
+  if download_platform "$PLATFORM" "$TARGET" "$VERSION"; then
+    SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+  else
+    FAILURE_COUNT=$((FAILURE_COUNT+1))
+  fi
 else
   # Download all common platforms
   for PLATFORM_TARGET in "${COMMON_PLATFORMS[@]}"; do
@@ -77,12 +109,25 @@ else
     PLATFORM=$(echo $PLATFORM_TARGET | cut -d'/' -f1)
     TARGET=$(echo $PLATFORM_TARGET | cut -d'/' -f2)
     
-    download_platform "$PLATFORM" "$TARGET" "$VERSION"
+    if download_platform "$PLATFORM" "$TARGET" "$VERSION"; then
+      SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+    else
+      FAILURE_COUNT=$((FAILURE_COUNT+1))
+    fi
   done
 fi
 
 echo ""
 echo "📊 Summary: Profiles downloaded to ${BASE_DIR}"
+echo "  • Successful downloads: $SUCCESS_COUNT"
+echo "  • Failed downloads: $FAILURE_COUNT"
+
+PROFILE_COUNT=$(find "$BASE_DIR" -name "profiles.json" | wc -l)
+if [ "$PROFILE_COUNT" -eq 0 ]; then
+  echo "❌ ERROR: No profiles were downloaded successfully!"
+  exit 1
+fi
+
 find "$BASE_DIR" -name "profiles.json" | while read profile; do
   count=$(grep -o "\"target\":" "$profile" | wc -l)
   platform_path=${profile#$BASE_DIR/}
