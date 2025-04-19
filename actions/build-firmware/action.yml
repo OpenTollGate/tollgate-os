@@ -276,19 +276,19 @@ runs:
         
         # Create a simpler download process
         if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
-          # Get the module names from release.json
-          MODULE_NAMES=$(jq -r '.modules[].name' "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json")
+          # Extract module names directly rather than using jq to avoid quoting issues
+          MODULE_NAMES=$(cat "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" | jq -r '.modules[].name')
           
           for MODULE_NAME in $MODULE_NAMES; do
             echo "📦 Processing module: ${MODULE_NAME}"
             
-            # Extract URL for this module and architecture
-            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$ARCH" \
-              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' \
-              "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json")
+            # Create a simpler jq command with proper quoting
+            PACKAGE_URL=$(cat "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" | \
+                          jq -r --arg module "${MODULE_NAME}" --arg arch "${ARCH}" \
+                          '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url // ""')
             
             # Skip placeholder or missing URLs
-            if echo "$PACKAGE_URL" | grep -q "\[HASH\]" || [ "$PACKAGE_URL" == "null" ] || [ -z "$PACKAGE_URL" ]; then
+            if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
               continue
             fi
@@ -310,6 +310,7 @@ runs:
           touch "${PACKAGES_DIR}/Packages"
           
           # List all downloaded packages
+          ls -la "${PACKAGES_DIR}"
           for PKG in "${PACKAGES_DIR}"/*.ipk; do
             if [ -f "$PKG" ]; then
               FILENAME=$(basename "$PKG")
@@ -317,6 +318,7 @@ runs:
               echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
               echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
               echo "" >> "${PACKAGES_DIR}/Packages"
+              echo "Added $PKG_NAME to package index"
             fi
           done
           
@@ -332,7 +334,8 @@ runs:
             echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
           fi
         else
-          echo "⚠️ release.json not found, skipping TollGate package download"
+          echo "⚠️ release.json not found at ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
+          ls -la "${GITHUB_WORKSPACE}/files/etc/tollgate/" || echo "Directory not found"
           echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
           touch "${PACKAGES_DIR}/Packages"
           gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
