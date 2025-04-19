@@ -74,39 +74,77 @@ runs:
         # Create build directory first
         mkdir -p /tmp/openwrt-build
         
-        case "${{ inputs.model }}" in
-          "gl-mt3000")
-            echo "PLATFORM=mediatek" >> $GITHUB_ENV
-            echo "TYPE=filogic" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-mt3000" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+        # Dynamic router profile discovery
+        echo "🔍 Searching for profile: ${{ inputs.model }}"
+        MODEL_FOUND=0
+        
+        # Search through all profile files to find the model
+        for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -name "profiles.json"); do
+          if grep -q "\"${{ inputs.model }}\":" "$PROFILE_PATH"; then
+            MODEL_FOUND=1
+            echo "✅ Found profile in: $PROFILE_PATH"
+            
+            # Extract platform and type from path (e.g., external_profiles/23.05.5/ramips/mt7621/profiles.json)
+            REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/}
+            PARTS=($(echo "$REL_PATH" | tr '/' ' '))
+            VERSION=${PARTS[0]}
+            PLATFORM=${PARTS[1]}
+            TYPE=${PARTS[2]}
+            
+            echo "📌 Version: $VERSION"
+            echo "📌 Platform: $PLATFORM"
+            echo "📌 Type: $TYPE"
+            
+            # Extract architecture from profiles.json
+            ARCH=$(grep -o '"arch_packages": "[^"]*"' "$PROFILE_PATH" | cut -d'"' -f4 | head -1)
+            echo "📌 Architecture: $ARCH"
+            
+            # Find the model's device packages
+            PROFILE_JSON=$(grep -A 100 "\"${{ inputs.model }}\":" "$PROFILE_PATH" | sed -n '/^        },/q;p')
+            DEVICE_PKGS=$(echo "$PROFILE_JSON" | grep -o '"device_packages": \[[^]]*\]' | sed 's/"device_packages": \[//g' | sed 's/\]//g' | tr -d '"' | tr ',' ' ')
+            echo "📌 Device packages: $DEVICE_PKGS"
+            
+            # Map architecture to BLOSSOM_ARCH
+            case "$ARCH" in
+              "aarch64_cortex-a53")
+                BLOSSOM_ARCH="aarch64_cortex-a53"
+                ;;
+              "mips_24kc")
+                BLOSSOM_ARCH="mips_24kc"
+                ;;
+              "x86_64")
+                BLOSSOM_ARCH="x86_64"
+                ;;
+              "arm_cortex-a7_neon-vfpv4")
+                BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
+                ;;
+              *)
+                BLOSSOM_ARCH="$ARCH"
+                ;;
+            esac
+            
+            # Set environment variables for build
+            echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+            echo "TYPE=$TYPE" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
+            echo "PROFILE=${{ inputs.model }}" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=$BLOSSOM_ARCH" >> $GITHUB_ENV
+            echo "ARCH=$ARCH" >> $GITHUB_ENV
+            
+            # Standard package configuration
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl $DEVICE_PKGS" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-            ;;
-          "gl-mt6000")
-            echo "PLATFORM=mediatek" >> $GITHUB_ENV
-            echo "TYPE=filogic" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-mt6000" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-            ;;
-          "gl-ar300m-nand")
-            echo "PLATFORM=ath79" >> $GITHUB_ENV
-            echo "TYPE=nand" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=ath79-nand" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-ar300m-nand" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
-            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-            ;;
-          *)
-            echo "Unsupported model: ${{ inputs.model }}" >> $GITHUB_ENV
-            exit 1
-            ;;
-        esac
+            
+            break
+          fi
+        done
+        
+        if [ $MODEL_FOUND -eq 0 ]; then
+          echo "❌ ERROR: Could not find router profile for '${{ inputs.model }}'"
+          echo "❌ Please ensure the profile exists in one of the external_profiles files"
+          exit 1
+        fi
+        
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
 
     - name: Extract from profiles.json
@@ -257,13 +295,12 @@ runs:
         mkdir -p "${PACKAGES_DIR}"
         
         # Add U-Boot config for supported devices
-        case "${{ inputs.model }}" in
-          "gl-mt3000"|"gl-mt6000")
-            echo "Creating U-Boot environment config"
-            mkdir -p $BUILDDIR/files/etc
-            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/files/etc/fw_env.config
-            ;;
-        esac
+        # MediaTek Filogic devices typically need U-Boot env config
+        if [[ "$PLATFORM" == "mediatek" && "$TYPE" == "filogic" ]]; then
+          echo "Creating U-Boot environment config for MediaTek Filogic device"
+          mkdir -p $BUILDDIR/files/etc
+          echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/files/etc/fw_env.config
+        fi
 
     - name: Download TollGate Packages
       shell: bash

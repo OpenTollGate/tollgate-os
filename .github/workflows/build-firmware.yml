@@ -14,7 +14,7 @@ jobs:
     name: Build firmware for ${{ matrix.model }}
     strategy:
       matrix:
-        model: [gl-mt3000, gl-mt6000, glinet_gl-ar300m-nand]
+        model: [glinet_gl-mt3000, glinet_gl-mt6000, glinet_gl-ar300m-nand]
       fail-fast: false
 
     steps:
@@ -36,27 +36,37 @@ jobs:
           echo "===== FILES DIRECTORY STRUCTURE ====="
           ls -la files/etc || echo "No files/etc directory"
           
-          # Check for OpenWRT profiles directory
-          if [[ "${{ matrix.model }}" == "gl-mt3000" || "${{ matrix.model }}" == "gl-mt6000" ]]; then
-            echo "===== CHECKING PROFILES DIRECTORY ====="
-            ls -la external_profiles/23.05.5/mediatek/filogic/ || echo "Profiles directory not found in repository"
-            
-            # Verify device profile exists in profiles.json
-            PROFILE_NAME="glinet_${{ matrix.model }}"
-            if [ -f "external_profiles/23.05.5/mediatek/filogic/profiles.json" ]; then
-              echo "===== VERIFYING $PROFILE_NAME PROFILE ====="
-              grep -A 20 "$PROFILE_NAME" external_profiles/23.05.5/mediatek/filogic/profiles.json || echo "$PROFILE_NAME not found in profiles.json"
+          # Search for the model in all profiles.json files
+          echo "===== SEARCHING FOR ROUTER PROFILE: ${{ matrix.model }} ====="
+          MODEL_FOUND=0
+          for PROFILE_PATH in $(find external_profiles -name "profiles.json"); do
+            if grep -q "\"${{ matrix.model }}\":" "$PROFILE_PATH"; then
+              MODEL_FOUND=1
+              echo "✅ Found profile in: $PROFILE_PATH"
+              
+              # Extract platform and type from path (e.g., external_profiles/23.05.5/ramips/mt7621/profiles.json)
+              REL_PATH=${PROFILE_PATH#external_profiles/}
+              PARTS=($(echo "$REL_PATH" | tr '/' ' '))
+              VERSION=${PARTS[0]}
+              PLATFORM=${PARTS[1]}
+              TYPE=${PARTS[2]}
+              
+              echo "===== EXTRACTED PATH COMPONENTS ====="
+              echo "Version: $VERSION"
+              echo "Platform: $PLATFORM"
+              echo "Type: $TYPE"
+              
+              # Show some profile information
+              echo "===== PROFILE DETAILS ====="
+              grep -A 30 "\"${{ matrix.model }}\":" "$PROFILE_PATH" | head -n 30
+              break
             fi
-          elif [[ "${{ matrix.model }}" == "glinet_gl-ar300m-nand" ]]; then
-            echo "===== CHECKING PROFILES DIRECTORY FOR AR300M ====="
-            ls -la external_profiles/23.05.5/ath79/nand/ || echo "Profiles directory not found in repository"
-            
-            # Verify device profile exists in profiles.json
-            if [ -f "external_profiles/23.05.5/ath79/nand/profiles.json" ]; then
-              echo "===== VERIFYING GL-AR300M-NAND PROFILE ====="
-              grep -A 20 "\"glinet_gl-ar300m-nand\":" external_profiles/23.05.5/ath79/nand/profiles.json || echo "glinet_gl-ar300m-nand not found in profiles.json"
-            fi
-          fi
+          done
+          
+          if [ $MODEL_FOUND -eq 0 ]; then
+            echo "❌ ERROR: Could not find router profile for '${{ matrix.model }}'"
+            echo "❌ Please ensure the profile exists in one of the external_profiles files"
+            exit 1
       
       - name: Build OpenWRT Image
         id: build-openwrt-image
