@@ -266,28 +266,25 @@ runs:
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
         
-        # Note: We're using a two-step build process to work around a package conflict.
-        # The tollgate-module-basic-go package and base-files package both try to install /etc/banner
+        # Note: We're using a two-step build process to work around a package conflict
         echo "⚠️ Note: Using two-step build to work around package file conflicts (/etc/banner)"
         
         # Parse release.json and download all packages for this architecture
         echo "🔍 Looking for packages for architecture: ${ARCH}"
         DOWNLOADED_PACKAGES=""
         
-        # Create a simpler download process
+        # Check if release.json exists
         if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
-          # Extract module names directly rather than using jq to avoid quoting issues
-          MODULE_NAMES=$(cat "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" | jq -r '.modules[].name')
+          # Extract relevant information in one command to avoid quoting issues
+          echo "📋 Extracting package information from release.json"
+          jq -r --arg arch "${ARCH}" '.modules[] | "\(.name)|\(.versions[0].architectures[$arch].url // \"\")"' \
+            "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" > "${BUILDDIR}/package_urls.txt"
           
-          for MODULE_NAME in $MODULE_NAMES; do
+          # Process each line with grep for simple parsing
+          cat "${BUILDDIR}/package_urls.txt" | while IFS='|' read -r MODULE_NAME PACKAGE_URL; do
             echo "📦 Processing module: ${MODULE_NAME}"
             
-            # Create a simpler jq command with proper quoting
-            PACKAGE_URL=$(cat "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" | \
-                          jq -r --arg module "${MODULE_NAME}" --arg arch "${ARCH}" \
-                          '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url // ""')
-            
-            # Skip placeholder or missing URLs
+            # Skip missing or placeholder URLs
             if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
               continue
@@ -309,8 +306,11 @@ runs:
           echo "📑 Generating package index"
           touch "${PACKAGES_DIR}/Packages"
           
-          # List all downloaded packages
-          ls -la "${PACKAGES_DIR}"
+          # List downloaded packages
+          echo "📦 Package directory contents:"
+          ls -la "${PACKAGES_DIR}" || echo "No packages found"
+          
+          # Create a simple package index
           for PKG in "${PACKAGES_DIR}"/*.ipk; do
             if [ -f "$PKG" ]; then
               FILENAME=$(basename "$PKG")
@@ -318,7 +318,6 @@ runs:
               echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
               echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
               echo "" >> "${PACKAGES_DIR}/Packages"
-              echo "Added $PKG_NAME to package index"
             fi
           done
           
@@ -335,7 +334,8 @@ runs:
           fi
         else
           echo "⚠️ release.json not found at ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
-          ls -la "${GITHUB_WORKSPACE}/files/etc/tollgate/" || echo "Directory not found"
+          echo "Current directory structure:"
+          find "${GITHUB_WORKSPACE}" -name "release.json" || echo "No release.json found"
           echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
           touch "${PACKAGES_DIR}/Packages"
           gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
