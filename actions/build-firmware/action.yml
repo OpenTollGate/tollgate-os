@@ -273,37 +273,20 @@ runs:
         echo "🔍 Looking for packages for architecture: ${ARCH}"
         DOWNLOADED_PACKAGES=""
         
-        # Check if release.json exists - use absolute path to avoid GITHUB_WORKSPACE confusion
-        RELEASE_JSON_PATH="${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
-        if [ -f "${RELEASE_JSON_PATH}" ]; then
-          echo "Found release.json at: ${RELEASE_JSON_PATH}"
+        # Check if release.json exists
+        if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
+          # Extract relevant information in one command to avoid quoting issues
+          echo "📋 Extracting package information from release.json"
+          jq -r --arg arch "${ARCH}" '.modules[] | "\(.name)|\(.versions[0].architectures[$arch].url // \"\")"' \
+            "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" > "${BUILDDIR}/package_urls.txt"
           
-          # Create a simple script to extract URLs without complex jq expressions
-          cat > "${BUILDDIR}/extract-urls.sh" << 'EOF'
-#!/bin/bash
-RELEASE_JSON="$1"
-ARCH="$2"
-jq -r '.modules[].name' "$RELEASE_JSON" | while read -r MODULE_NAME; do
-  URLS=$(jq -r --arg mod "$MODULE_NAME" --arg arch "$ARCH" \
-    '.modules[] | select(.name==$mod) | .versions[0].architectures[$arch].url // empty' \
-    "$RELEASE_JSON")
-  if [ -n "$URLS" ]; then
-    echo "$MODULE_NAME $URLS"
-  fi
-done
-EOF
-          chmod +x "${BUILDDIR}/extract-urls.sh"
-          
-          # Execute the script to get module names and URLs
-          "${BUILDDIR}/extract-urls.sh" "${RELEASE_JSON_PATH}" "${ARCH}" > "${BUILDDIR}/package-urls.txt"
-          
-          # Process each module and URL
-          cat "${BUILDDIR}/package-urls.txt" | while read -r MODULE_NAME PACKAGE_URL; do
+          # Process each line with grep for simple parsing
+          cat "${BUILDDIR}/package_urls.txt" | while IFS='|' read -r MODULE_NAME PACKAGE_URL; do
             echo "📦 Processing module: ${MODULE_NAME}"
             
-            # Skip placeholder or empty URLs
-            if [ -z "${PACKAGE_URL}" ] || [ "${PACKAGE_URL}" = "null" ] || [[ "${PACKAGE_URL}" == *"[HASH]"* ]]; then
-              echo "⚠️ No valid package URL for ${MODULE_NAME} (${ARCH})"
+            # Skip missing or placeholder URLs
+            if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
+              echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
               continue
             fi
             
@@ -313,16 +296,11 @@ EOF
             
             if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
               echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-              echo "tollgate-module-${MODULE_NAME}-go" >> "${BUILDDIR}/downloaded-packages.txt"
+              DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
             else
               echo "❌ Failed to download ${PACKAGE_FILENAME}"
             fi
           done
-          
-          # Collect downloaded packages into a variable
-          if [ -f "${BUILDDIR}/downloaded-packages.txt" ]; then
-            DOWNLOADED_PACKAGES=$(cat "${BUILDDIR}/downloaded-packages.txt" | tr '\n' ' ')
-          fi
           
           # Simple package index creation
           echo "📑 Generating package index"
@@ -355,7 +333,7 @@ EOF
             echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
           fi
         else
-          echo "⚠️ release.json not found at expected path: ${RELEASE_JSON_PATH}"
+          echo "⚠️ release.json not found at ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
           echo "Current directory structure:"
           find "${GITHUB_WORKSPACE}" -name "release.json" || echo "No release.json found"
           echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
