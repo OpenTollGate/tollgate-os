@@ -281,12 +281,21 @@ runs:
         set -euo pipefail
         cd "$BUILDDIR"
         echo "🔨 Building firmware for $PROFILE"
-        echo "📦 Using packages: $PACKAGES"
+        
+        # Backup banner file first to avoid conflicts
+        if [ -f "$BUILDDIR/files/etc/banner" ]; then
+          cp "$BUILDDIR/files/etc/banner" "$BUILDDIR/files/etc/banner.openwrt.bak"
+          echo "📝 Original banner backed up"
+        fi
+        
+        # Create the full package list including Tollgate packages
+        FULL_PACKAGES="$PACKAGES $TOLLGATE_PACKAGES"
+        echo "📦 Using packages: $FULL_PACKAGES"
         
         # Simple approach: use FORCE=1 to bypass prerequisite checks
         FORCE=1 make image \
           PROFILE="$PROFILE" \
-          PACKAGES="$PACKAGES" \
+          PACKAGES="$FULL_PACKAGES" \
           FILES="files" \
           EXTRA_IMAGE_NAME="tollgate-os"
 
