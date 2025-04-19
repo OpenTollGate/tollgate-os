@@ -377,7 +377,6 @@ runs:
     - name: Build firmware with TollGate modules
       shell: bash
       id: build-tollgate
-      continue-on-error: true
       run: |
         set -euo pipefail
         cd "$BUILDDIR"
@@ -402,11 +401,12 @@ runs:
             echo "✅ TollGate firmware built successfully"
             echo "BUILD_TYPE=TOLLGATE" >> $GITHUB_ENV
           else
-            echo "⚠️ TollGate firmware build failed, will use base firmware"
-            echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
+            echo "❌ ERROR: TollGate firmware build failed! No firmware with TollGate modules was produced."
+            echo "This is likely due to package conflicts. Check build logs for details."
+            exit 1
           fi
         else
-          echo "ℹ️ No TollGate packages to add, using base firmware"
+          echo "⚠️ No TollGate packages were specified or downloaded."
           echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
         fi
 
@@ -416,29 +416,27 @@ runs:
       run: |
         set -euo pipefail
         
-        # Try to find the TollGate firmware first, then fall back to base firmware
+        # Find the firmware based on build type
         if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+          # Look specifically for the TollGate firmware
           F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | head -1)
+          
           if [ -f "$F" ]; then
-            echo "✅ Using TollGate firmware: $(basename "$F")"
+            echo "✅ Found TollGate firmware: $(basename "$F")"
           else
-            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
-            echo "ℹ️ Falling back to base firmware: $(basename "$F")"
+            echo "❌ ERROR: TollGate firmware was supposedly built but can't be found"
+            exit 1
           fi
         else
+          # Only for the case when no TollGate packages were available
           F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
-          echo "ℹ️ Using base firmware: $(basename "$F")"
-        fi
-        
-        # If still no firmware found, look for any .bin file
-        if [ ! -f "$F" ]; then
-          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
-          echo "⚠️ Falling back to generic firmware: $(basename "$F")"
-        fi
-        
-        if [ ! -f "$F" ]; then
-          echo "❌ No firmware found"
-          exit 1
+          
+          if [ -f "$F" ]; then
+            echo "ℹ️ Using base firmware (no TollGate packages were available): $(basename "$F")"
+          else
+            echo "❌ ERROR: Base firmware can't be found"
+            exit 1
+          fi
         fi
         
         # Calculate hash for metadata
