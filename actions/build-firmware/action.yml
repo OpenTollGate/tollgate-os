@@ -93,6 +93,15 @@ runs:
             echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
+          "gl-ar300m-nand")
+            echo "PLATFORM=ath79" >> $GITHUB_ENV
+            echo "TYPE=nand" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=ath79-nand" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-ar300m-nand" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
           *)
             echo "Unsupported model: ${{ inputs.model }}" >> $GITHUB_ENV
             exit 1
