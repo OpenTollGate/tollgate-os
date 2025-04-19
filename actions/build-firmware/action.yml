@@ -280,8 +280,8 @@ runs:
           for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
             echo "📦 Processing module: ${MODULE_NAME}"
             
-            # Extract URL for this module and architecture
-            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+            # Extract URL for this module and architecture - fixed jq syntax
+            PACKAGE_URL=$(jq -r --arg module "${MODULE_NAME}" --arg arch "${TARGET_ARCH}" \
               '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
               
             # Skip placeholder URLs
