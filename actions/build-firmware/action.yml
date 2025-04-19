@@ -1,5 +1,5 @@
-name: 'Build OpenWRT Image for GL-MT3000'
-description: 'Builds an OpenWRT firmware image with TollGate packages specifically for GL.iNet GL-MT3000 router using OpenWRT profile name glinet_gl-mt3000'
+name: 'Build OpenWRT Image'
+description: 'Builds an OpenWRT firmware image with TollGate packages'
 author: 'c03rad0r'
 
 branding:
@@ -7,6 +7,9 @@ branding:
   icon: box
 
 inputs:
+  model:
+    description: 'The device model to build for'
+    required: true
   version:
     description: 'OpenWRT version'
     default: '23.05.5'
@@ -64,16 +67,48 @@ runs:
         python -m pip install --upgrade pip
         pip install nostr
 
-    - name: Extract build variables for glinet_gl-mt3000
+    - name: Set Build Variables
       id: vars
+      shell: bash
+      run: |
+        # Create build directory first
+        mkdir -p /tmp/openwrt-build
+        
+        case "${{ inputs.model }}" in
+          "gl-mt3000")
+            echo "PLATFORM=mediatek" >> $GITHUB_ENV
+            echo "TYPE=filogic" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-mt3000" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          "gl-mt6000")
+            echo "PLATFORM=mediatek" >> $GITHUB_ENV
+            echo "TYPE=filogic" >> $GITHUB_ENV
+            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
+            echo "PROFILE=glinet_gl-mt6000" >> $GITHUB_ENV
+            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "Unsupported model: ${{ inputs.model }}" >> $GITHUB_ENV
+            exit 1
+            ;;
+        esac
+        echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
+
+    - name: Extract from profiles.json
       shell: bash
       run: |
         set -euo pipefail
         
-        echo "🔍 Starting build variable extraction for GL-MT3000..."
+        echo "🔍 Starting build variable extraction for ${{ inputs.model }}..."
         
-        # Explicitly set to GL-MT3000 OpenWRT profile name - no other models supported
-        MODEL="glinet_gl-mt3000"
+        # Set profile name based on input model
+        MODEL="${PROFILE}"
         echo "📌 Target device set to OpenWRT profile name: $MODEL"
         
         VERSION="${{ inputs.version }}"
@@ -81,20 +116,12 @@ runs:
         
         # Path to profiles in repository
         PROFILES_DIR="${GITHUB_WORKSPACE}/external_profiles/$VERSION"
-        echo "📁 Using profiles directory: $PROFILES_DIR"
-        
-        # GL-MT3000 is in mediatek/filogic platform according to profiles.json
-        PLATFORM="mediatek"
-        TYPE="filogic"
-        echo "📌 Using platform: $PLATFORM/$TYPE (specific to GL-MT3000)"
-        
-        PROFILE_PATH="$PROFILES_DIR/$PLATFORM/$TYPE/profiles.json"
+        PROFILE_PATH="$PROFILES_DIR/${PLATFORM}/${TYPE}/profiles.json"
         echo "📄 Looking for profile at: $PROFILE_PATH"
         
         if [ ! -f "$PROFILE_PATH" ]; then
           echo "❌ ERROR: Could not find profiles.json at $PROFILE_PATH"
           echo "❌ Please ensure the external_profiles directory is properly populated"
-          echo "❌ You may need to run ./download_profiles.sh first"
           exit 1
         fi
         
@@ -103,7 +130,7 @@ runs:
         # Check if the model exists in this profiles.json
         if ! jq -e --arg p "$MODEL" '.profiles[$p]?' "$PROFILE_PATH" > /dev/null; then
           echo "❌ ERROR: Profile '$MODEL' not found in $PROFILE_PATH"
-          echo "❌ The GL-MT3000 device profile is missing from the profiles.json file"
+          echo "❌ The device profile is missing from the profiles.json file"
           
           # List available profiles to help debugging
           echo "Available profiles in this file:"
@@ -111,13 +138,13 @@ runs:
           exit 1
         fi
         
-        echo "✅ Confirmed glinet_gl-mt3000 profile exists in profiles.json"
+        echo "✅ Confirmed $MODEL profile exists in profiles.json"
         
         # Extract variables from profiles.json
         ARCH=$(jq -r '.arch_packages' "$PROFILE_PATH")
         DEFAULT_PKGS=$(jq -r '.default_packages | join(" ")' "$PROFILE_PATH")
         
-        # Get specific device packages for glinet_gl-mt3000
+        # Get specific device packages
         DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$PROFILE_PATH")
         
         # Also extract and display detailed device info for verification
@@ -126,15 +153,10 @@ runs:
         DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
         DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
         
-        # Create builddir
-        echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
-        mkdir -p /tmp/openwrt-build
-        echo "📁 Created build directory: /tmp/openwrt-build"
-        
         # Print all extracted variables in a formatted table for clarity
-        echo "✅ Successfully parsed profiles.json for glinet_gl-mt3000"
+        echo "✅ Successfully parsed profiles.json for $MODEL"
         echo "=================================================="
-        echo "📋 EXTRACTED BUILD VARIABLES FOR GL-MT3000"
+        echo "📋 EXTRACTED BUILD VARIABLES FOR ${{ inputs.model }}"
         echo "=================================================="
         echo "PLATFORM:          $PLATFORM"
         echo "TYPE:              $TYPE"
@@ -152,8 +174,7 @@ runs:
         echo "DEVICE PACKAGES:   $DEVICE_PKGS"
         echo "=================================================="
         
-        # TollGate WiFi/DHCP removals and standard additions
-        echo "📋 Configuring TollGate-specific package modifications..."
+        # TollGate WiFi/DHCP removals and standard additions already set in previous step
         WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
         DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
         TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
@@ -166,40 +187,147 @@ runs:
         # Compose final package list: TollGate → Device → Base → user extras
         PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
         
-        # Count packages for verification
-        PKG_COUNT=$(echo "$PACKAGES" | wc -w)
-        echo "📊 Final package configuration contains $PKG_COUNT packages/modifications"
-        
         # Export environment for downstream steps
-        echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
-        echo "TYPE=$TYPE" >> $GITHUB_ENV
-        echo "PROFILE=$MODEL" >> $GITHUB_ENV
-        echo "ARCH=$ARCH" >> $GITHUB_ENV
         echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+        echo "ARCH=$ARCH" >> $GITHUB_ENV
         
         echo "✅ Build variables exported to environment"
 
-    - name: Download & extract ImageBuilder
+    - name: Setup Build Directory
       shell: bash
       run: |
-        set -euo pipefail
-        cd "$BUILDDIR"
-        IMAGEBUILDER="openwrt-imagebuilder-${{ inputs.version }}-${PLATFORM}-${TYPE}.Linux-x86_64"
-        URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER}.tar.xz"
-        echo "📥 Downloading image builder from: $URL"
-        curl -sSL "$URL" | tar -xJ -C .
-        echo "BUILDDIR=$BUILDDIR/$IMAGEBUILDER" >> $GITHUB_ENV
-
-    - name: Copy custom files
-      shell: bash
-      run: |
-        set -euo pipefail
-        if [ -d "${{ inputs.files_path }}" ]; then
-          echo "📁 Copying custom files from ${{ inputs.files_path }}"
-          cp -r "${{ inputs.files_path }}" "$BUILDDIR/files"
+        mkdir -p $BUILDDIR
+        
+        if [ "${{ inputs.version }}" = "snapshot" ]; then
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+          echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+        elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
         else
-          echo "⚠️ No custom files found at ${{ inputs.files_path }}"
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
         fi
+        
+        echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
+        echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+
+    - name: Download and Extract ImageBuilder
+      shell: bash
+      run: |
+        cd $BUILDDIR
+        if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+          curl -L -C - -O "$DOWNLOAD_URL"
+          if [ "${{ inputs.version }}" = "snapshot" ]; then
+            tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+          else
+            tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+          fi
+        else
+          echo "Error: URL $DOWNLOAD_URL does not exist"
+          exit 1
+        fi
+        
+        echo "BUILDDIR=$BUILDDIR/${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
+
+    - name: Setup Custom Files and Packages
+      shell: bash
+      env:
+        NOSTR_SECRET_KEY: ${{ inputs.nostr_secret_key }}
+        NOSTR_PUBLIC_KEY: ${{ inputs.nostr_public_key }}
+        NOSTR_RELAYS: ${{ inputs.nostr_relays }}
+      run: |
+        mkdir -p $BUILDDIR/files
+        if [ -d "${{ inputs.files_path }}" ]; then
+          cp -r ${{ inputs.files_path }}/* $BUILDDIR/files/
+        fi
+        PACKAGES_DIR="${BUILDDIR}/packages/local"
+        mkdir -p "${PACKAGES_DIR}"
+        
+        # Add U-Boot config for supported devices
+        case "${{ inputs.model }}" in
+          "gl-mt3000"|"gl-mt6000")
+            echo "Creating U-Boot environment config"
+            mkdir -p $BUILDDIR/files/etc
+            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/files/etc/fw_env.config
+            ;;
+        esac
+
+    - name: Download TollGate Packages
+      shell: bash
+      run: |
+        # Create packages directory if it doesn't exist
+        PACKAGES_DIR="${BUILDDIR}/packages/local"
+        mkdir -p "${PACKAGES_DIR}"
+        
+        # Convert BLOSSOM_ARCH (if needed)
+        TARGET_ARCH="${BLOSSOM_ARCH}"
+        
+        echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+        
+        # Create an empty Packages file to prevent build failures if no packages are downloaded
+        touch "${PACKAGES_DIR}/Packages"
+        
+        # Parse release.json and download all packages for this architecture
+        DOWNLOADED_PACKAGES=""
+        if [ -f "files/etc/tollgate/release.json" ]; then
+          for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
+            echo "📦 Processing module: ${MODULE_NAME}"
+            
+            # Extract URL for this module and architecture
+            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
+              
+            # Skip placeholder URLs
+            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+              echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+              continue
+            fi
+            
+            # Download the package with retry logic
+            PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+            echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
+            
+            # Try up to 3 times with increasing timeouts
+            for ATTEMPT in {1..3}; do
+              echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
+              if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+                echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+                break
+              else
+                echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
+                if [ $ATTEMPT -eq 3 ]; then
+                  echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
+                fi
+                sleep 5
+              fi
+            done
+          done
+        else
+          echo "⚠️ release.json not found in files/etc/tollgate/"
+        fi
+        
+        # Add the downloaded packages to the build package list
+        if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+          echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
+          echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+          PACKAGES="$PACKAGES $DOWNLOADED_PACKAGES"
+          echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+        else
+          echo "⚠️ No packages were downloaded successfully"
+          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+        fi
+        
+        # Generate package index
+        sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+        export -f mkhash; \
+        export MKHASH=mkhash; \
+        '"${BUILDDIR}"'/scripts/ipkg-make-index.sh '"${PACKAGES_DIR}"' > '"${PACKAGES_DIR}"'/Packages && \
+        gzip -9c '"${PACKAGES_DIR}"'/Packages > '"${PACKAGES_DIR}"'/Packages.gz'
 
     - name: Build firmware
       shell: bash
@@ -210,7 +338,6 @@ runs:
         echo "📦 Using packages: $PACKAGES"
         
         # Simple approach: use FORCE=1 to bypass prerequisite checks
-        # This matches the approach that worked in the old version
         FORCE=1 make image \
           PROFILE="$PROFILE" \
           PACKAGES="$PACKAGES" \
@@ -227,11 +354,18 @@ runs:
           echo "❌ Firmware not found"
           exit 1
         fi
+        
+        # Calculate hash for metadata
+        FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
+        echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+        echo "FIRMWARE_SIZE=$(stat -c%s "$F")" >> $GITHUB_ENV
+        
         echo "✅ Firmware built successfully: $(basename "$F")"
         echo "firmware_path=$F" >> $GITHUB_OUTPUT
         echo "firmware_name=$(basename "$F")" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to Blossom
+      id: upload
       uses: c03rad0r/cli-blossom-uploader-go@main
       with:
         host:            'https://blossom.swissdash.site'
@@ -239,6 +373,7 @@ runs:
         nostrPrivateKey: ${{ inputs.nsecbech }}
 
     - name: Publish NIP‑94 metadata
+      id: publish
       uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
       with:
         relays:       ${{ inputs.nostr_relays }}
@@ -247,8 +382,12 @@ runs:
         fileHash:     ${{ steps.upload.outputs.hash }}
         originalHash: ${{ env.FIRMWARE_HASH }}
         filename:     ${{ steps.find-firmware.outputs.firmware_name }}
-        content:      "TollGate OS for GL-MT3000 (OpenWRT ${{ inputs.version }})"
+        content:      "TollGate OS for ${{ inputs.model }} (OpenWRT ${{ inputs.version }})"
         nsec:         ${{ inputs.nsec }}
+        size:         ${{ env.FIRMWARE_SIZE }}
+        architecture: ${{ env.BLOSSOM_ARCH }}
+        model:        ${{ inputs.model }}
+        version:      ${{ inputs.version }}
 
     - name: Verify publication
       uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
