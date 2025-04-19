@@ -317,7 +317,7 @@ runs:
           echo "📑 Generating package index"
           touch "${PACKAGES_DIR}/Packages"
           
-          # Use mkhash helper function for package index generation
+          # Use mkhash helper function for package index generation - fixing syntax error
           sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
           export -f mkhash; \
           export MKHASH=mkhash; \
@@ -329,7 +329,7 @@ runs:
             for PKG in packages/local/*.ipk; do \
               [ -f "$PKG" ] || continue; \
               FILENAME=$(basename "$PKG"); \
-              echo "Package: $(echo $FILENAME | sed -e '"'"'s/_.*//'\')" >> packages/local/Packages; \
+              echo "Package: $(echo $FILENAME | sed -e '\''s/_.*//'\')" >> packages/local/Packages; \
               echo "Filename: $FILENAME" >> packages/local/Packages; \
               echo "" >> packages/local/Packages; \
             done; \
