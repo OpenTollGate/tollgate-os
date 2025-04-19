@@ -276,16 +276,23 @@ runs:
         
         # Parse release.json and download all packages for this architecture
         DOWNLOADED_PACKAGES=""
-        if [ -f "files/etc/tollgate/release.json" ]; then
-          for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
+        RELEASE_JSON="files/etc/tollgate/release.json"
+        if [ -f "${RELEASE_JSON}" ]; then
+          # First run a debug script to help troubleshoot if there are issues
+          if [ -f "${GITHUB_WORKSPACE}/actions/build-firmware/debug-jq.sh" ]; then
+            echo "🔍 Running jq debug script..."
+            bash "${GITHUB_WORKSPACE}/actions/build-firmware/debug-jq.sh" || echo "Debug script exited with non-zero code"
+          fi
+          
+          for MODULE_NAME in $(jq -r '.modules[].name' "${RELEASE_JSON}"); do
             echo "📦 Processing module: ${MODULE_NAME}"
             
-            # Extract URL for this module and architecture - fixed jq syntax
-            PACKAGE_URL=$(jq -r --arg module "${MODULE_NAME}" --arg arch "${TARGET_ARCH}" \
-              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
+            # Use a more reliable method: hard-code the module name and architecture in the jq query
+            # This avoids shell variable expansion issues
+            PACKAGE_URL=$(jq -r ".modules[] | select(.name == \"${MODULE_NAME}\") | .versions[0].architectures.\"${TARGET_ARCH}\".url" "${RELEASE_JSON}")
               
             # Skip placeholder URLs
-            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
               continue
             fi
