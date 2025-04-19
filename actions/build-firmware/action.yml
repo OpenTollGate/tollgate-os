@@ -145,9 +145,11 @@ runs:
             WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
             DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
             TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
+            echo "🔄 Removing packages: $TOLLGATE_REMOVED"
             
             WIFI_ADD="wpad-wolfssl"
             TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
+            echo "➕ Adding packages: $TOLLGATE_ADDED"
             
             # Compose final package list: TollGate → Device → Base → user extras
             PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
@@ -165,99 +167,6 @@ runs:
         fi
         
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
-
-    - name: Extract from profiles.json
-      shell: bash
-      run: |
-        set -euo pipefail
-        
-        echo "🔍 Starting build variable extraction for ${{ inputs.model }}..."
-        
-        # Set profile name based on input model
-        MODEL="${PROFILE}"
-        echo "📌 Target device set to OpenWRT profile name: $MODEL"
-        
-        VERSION="${{ inputs.version }}"
-        echo "📌 Using OpenWRT version: $VERSION"
-        
-        # Path to profiles in repository
-        PROFILES_DIR="${GITHUB_WORKSPACE}/external_profiles/$VERSION"
-        PROFILE_PATH="$PROFILES_DIR/${PLATFORM}/${TYPE}/profiles.json"
-        echo "📄 Looking for profile at: $PROFILE_PATH"
-        
-        if [ ! -f "$PROFILE_PATH" ]; then
-          echo "❌ ERROR: Could not find profiles.json at $PROFILE_PATH"
-          echo "❌ Please ensure the external_profiles directory is properly populated"
-          exit 1
-        fi
-        
-        echo "✅ Found profile file: $PROFILE_PATH"
-        
-        # Check if the model exists in this profiles.json
-        if ! jq -e --arg p "$MODEL" '.profiles[$p]?' "$PROFILE_PATH" > /dev/null; then
-          echo "❌ ERROR: Profile '$MODEL' not found in $PROFILE_PATH"
-          echo "❌ The device profile is missing from the profiles.json file"
-          
-          # List available profiles to help debugging
-          echo "Available profiles in this file:"
-          jq -r '.profiles | keys[]' "$PROFILE_PATH" | sort
-          exit 1
-        fi
-        
-        echo "✅ Confirmed $MODEL profile exists in profiles.json"
-        
-        # Extract variables from profiles.json
-        ARCH=$(jq -r '.arch_packages' "$PROFILE_PATH")
-        DEFAULT_PKGS=$(jq -r '.default_packages | join(" ")' "$PROFILE_PATH")
-        
-        # Get specific device packages
-        DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$PROFILE_PATH")
-        
-        # Also extract and display detailed device info for verification
-        DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$PROFILE_PATH")
-        DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$PROFILE_PATH")
-        DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
-        DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
-        
-        # Print all extracted variables in a formatted table for clarity
-        echo "✅ Successfully parsed profiles.json for $MODEL"
-        echo "=================================================="
-        echo "📋 EXTRACTED BUILD VARIABLES FOR ${{ inputs.model }}"
-        echo "=================================================="
-        echo "PLATFORM:          $PLATFORM"
-        echo "TYPE:              $TYPE"
-        echo "PROFILE:           $MODEL"
-        echo "ARCH:              $ARCH"
-        echo "--------------------------------------------------"
-        echo "DEVICE INFO:"
-        echo "VENDOR:            $DEVICE_VENDOR"
-        echo "MODEL:             $DEVICE_MODEL"
-        echo "IMAGE PREFIX:      $DEVICE_IMAGE_PREFIX"
-        echo "SUPPORTED DEVICES: $DEVICE_SUPPORTED"
-        echo "--------------------------------------------------"
-        echo "PACKAGES:"
-        echo "DEFAULT PACKAGES:  $DEFAULT_PKGS"
-        echo "DEVICE PACKAGES:   $DEVICE_PKGS"
-        echo "=================================================="
-        
-        # TollGate WiFi/DHCP removals and standard additions already set in previous step
-        WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
-        DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
-        TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
-        echo "🔄 Removing packages: $TOLLGATE_REMOVED"
-        
-        WIFI_ADD="wpad-wolfssl"
-        TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
-        echo "➕ Adding packages: $TOLLGATE_ADDED"
-        
-        # Compose final package list: TollGate → Device → Base → user extras
-        PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
-        
-        # Export environment for downstream steps
-        echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
-        echo "ARCH=$ARCH" >> $GITHUB_ENV
-        
-        echo "✅ Build variables exported to environment"
 
     - name: Setup Build Directory
       shell: bash
