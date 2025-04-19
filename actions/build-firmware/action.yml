@@ -351,6 +351,61 @@ runs:
           gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
         fi
 
+    - name: Check for package conflicts
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$BUILDDIR"
+        
+        # Only run if we have TollGate packages to analyze
+        if [ -n "${TOLLGATE_PACKAGES:-}" ]; then
+          echo "🔍 Checking for potential package conflicts..."
+          mkdir -p "$BUILDDIR/package_analysis"
+          
+          # Extract files from base-files package for reference
+          BASE_FILES_PACKAGE=$(find "$BUILDDIR/packages" -name "base-files_*.ipk" | head -1)
+          if [ -n "$BASE_FILES_PACKAGE" ]; then
+            echo "Analyzing base-files package: $(basename "$BASE_FILES_PACKAGE")"
+            mkdir -p "$BUILDDIR/package_analysis/base-files"
+            cd "$BUILDDIR/package_analysis/base-files"
+            ar x "$BASE_FILES_PACKAGE"
+            tar xzf data.tar.gz
+            
+            # List all files in the base-files package
+            find . -type f | sort > "$BUILDDIR/package_analysis/base-files-files.txt"
+          fi
+          
+          # Check TollGate packages
+          for PKG in $(ls "$BUILDDIR/packages/local"/*.ipk 2>/dev/null || echo ""); do
+            if [ -f "$PKG" ]; then
+              PKG_NAME=$(basename "$PKG" | sed -e 's/_.*//')
+              echo "Analyzing package: $PKG_NAME"
+              
+              mkdir -p "$BUILDDIR/package_analysis/$PKG_NAME"
+              cd "$BUILDDIR/package_analysis/$PKG_NAME"
+              ar x "$PKG"
+              tar xzf data.tar.gz 2>/dev/null || tar xf data.tar 2>/dev/null || echo "No data.tar in $PKG"
+              
+              # Check for common conflict files
+              if [ -f "./etc/banner" ]; then
+                echo "⚠️ WARNING: Package $PKG_NAME contains /etc/banner, which may conflict with base-files"
+                
+                # Show content diff to help diagnose the issue
+                echo "Content comparison:"
+                echo "===== base-files /etc/banner ====="
+                cat "$BUILDDIR/package_analysis/base-files/etc/banner" 2>/dev/null || echo "[File not found]"
+                echo "===== $PKG_NAME /etc/banner ====="
+                cat "./etc/banner" 2>/dev/null || echo "[File not found]"
+              fi
+              
+              # List all files in this package for future use
+              find . -type f | sort > "$BUILDDIR/package_analysis/${PKG_NAME}-files.txt"
+            fi
+          done
+          
+          echo "✅ Package conflict analysis complete"
+        fi
+
     - name: Build base firmware
       shell: bash
       run: |
