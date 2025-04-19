@@ -67,6 +67,7 @@ jobs:
             echo "❌ ERROR: Could not find router profile for '${{ matrix.model }}'"
             echo "❌ Please ensure the profile exists in one of the external_profiles files"
             exit 1
+          fi
       
       - name: Build OpenWRT Image
         id: build-openwrt-image
