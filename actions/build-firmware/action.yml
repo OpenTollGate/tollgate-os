@@ -57,202 +57,154 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          gawk \
-          build-essential \
-          curl \
-          zstd \
-          libssl-dev \
-          jq
+        sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
         python -m pip install --upgrade pip
         pip install nostr
 
-    - name: Set Build Variables
-      id: vars
+    - name: Find Router Profile
+      id: profile
       shell: bash
       run: |
-        # Create build directory first
-        mkdir -p /tmp/openwrt-build
-        
-        # Dynamic router profile discovery
-        echo "🔍 Searching for profile: ${{ inputs.model }}"
-        MODEL_FOUND=0
+        # Create build directory
+        export BUILDDIR="/tmp/openwrt-build"
+        mkdir -p "$BUILDDIR"
+        echo "BUILDDIR=$BUILDDIR" >> $GITHUB_ENV
+
+        MODEL="${{ inputs.model }}"
         VERSION="${{ inputs.version }}"
+        MODEL_FOUND=0
         
-        # Debug: Show all available profiles.json files first
-        echo "📋 Available profiles.json files:"
-        find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort
+        echo "🔍 Searching for profile: $MODEL"
         
-        # Search for the model in all profiles.json files
-        for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json"); do
-          # Skip empty files or invalid JSON
+        # Find profile for the model
+        for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort); do
+          # Skip invalid profiles
           if [ ! -s "$PROFILE_PATH" ] || ! jq empty "$PROFILE_PATH" 2>/dev/null; then
-            echo "⚠️ Skipping invalid or empty profile: $PROFILE_PATH"
             continue
           fi
           
           # Check if this file contains our model
-          if jq -e --arg model "${{ inputs.model }}" '.profiles[$model]' "$PROFILE_PATH" > /dev/null 2>&1; then
+          if jq -e --arg model "$MODEL" '.profiles[$model]' "$PROFILE_PATH" > /dev/null 2>&1; then
             MODEL_FOUND=1
             echo "✅ Found profile in: $PROFILE_PATH"
             
-            # Extract platform and type from path (e.g., external_profiles/23.05.5/ramips/mt7621/profiles.json)
+            # Extract path components: external_profiles/VERSION/PLATFORM/TYPE/profiles.json
             REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/}
-            
-            # Safely extract path components
             PATH_PARTS=()
             IFS='/' read -ra PATH_PARTS <<< "$REL_PATH"
             
-            # Make sure we have enough parts
             if [ ${#PATH_PARTS[@]} -ge 3 ]; then
               VERSION=${PATH_PARTS[0]}
               PLATFORM=${PATH_PARTS[1]}
               TYPE=${PATH_PARTS[2]}
               
-              echo "📌 Version: $VERSION"
-              echo "📌 Platform: $PLATFORM"
-              echo "📌 Type: $TYPE"
+              echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
               
-              # Use jq to properly extract all information from profiles.json
-              MODEL="${{ inputs.model }}"
-              
-              # Extract architecture and packages - with better error handling
+              # Extract all required build information
               ARCH=$(jq -r '.arch_packages // "unknown"' "$PROFILE_PATH")
               DEFAULT_PKGS=$(jq -r '.default_packages // [] | join(" ")' "$PROFILE_PATH")
               DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$PROFILE_PATH")
               
-              # Extract device information
+              # Device information for metadata
               DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$PROFILE_PATH")
               DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$PROFILE_PATH")
               DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
               DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
               
               echo "📌 Architecture: $ARCH"
-              echo "📌 Device packages: $DEVICE_PKGS"
-              echo "📌 Device model: $DEVICE_MODEL"
-              echo "📌 Device vendor: $DEVICE_VENDOR"
+              echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
               
-              # Print all extracted variables in a formatted table for clarity
-              echo "=================================================="
-              echo "📋 EXTRACTED BUILD VARIABLES FOR $MODEL"
-              echo "=================================================="
-              echo "PLATFORM:          $PLATFORM"
-              echo "TYPE:              $TYPE"
-              echo "PROFILE:           $MODEL"
-              echo "ARCH:              $ARCH"
-              echo "--------------------------------------------------"
-              echo "DEVICE INFO:"
-              echo "VENDOR:            $DEVICE_VENDOR"
-              echo "MODEL:             $DEVICE_MODEL"
-              echo "IMAGE PREFIX:      $DEVICE_IMAGE_PREFIX"
-              echo "SUPPORTED DEVICES: $DEVICE_SUPPORTED"
-              echo "--------------------------------------------------"
-              echo "PACKAGES:"
-              echo "DEFAULT PACKAGES:  $DEFAULT_PKGS"
-              echo "DEVICE PACKAGES:   $DEVICE_PKGS"
-              echo "=================================================="
-              
-              # Set environment variables for build
+              # Set environment variables
               echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
               echo "TYPE=$TYPE" >> $GITHUB_ENV
               echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
               echo "PROFILE=$MODEL" >> $GITHUB_ENV
               echo "ARCH=$ARCH" >> $GITHUB_ENV
               
-              # Standard package configuration
+              # Configure packages
               WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
               DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
-              TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
-              echo "🔄 Removing packages: $TOLLGATE_REMOVED"
-              
               WIFI_ADD="wpad-wolfssl"
               TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
-              echo "➕ Adding packages: $TOLLGATE_ADDED"
               
-              # Compose final package list: TollGate → Device → Base → user extras
-              PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
+              # Final package list
+              PACKAGES="$WIFI_REMOVE $DHCP_REMOVE $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
               echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
-              echo "REMOVED_PACKAGES=$TOLLGATE_REMOVED" >> $GITHUB_ENV
               
               break
-            else
-              echo "⚠️ Unexpected profiles.json path format: $PROFILE_PATH"
             fi
           fi
         done
         
         if [ $MODEL_FOUND -eq 0 ]; then
-          echo "❌ ERROR: Could not find router profile for '${{ inputs.model }}'"
-          echo "❌ Available profiles:"
+          echo "❌ ERROR: Could not find router profile for '$MODEL'"
+          echo "❌ Available models:"
           for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -name "profiles.json"); do
             if [ -s "$PROFILE_PATH" ]; then
-              echo "  - $PROFILE_PATH:"
-              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | sed 's/^/    - /' || echo "    (Invalid JSON or no profiles)"
+              echo "  - $(basename $(dirname $(dirname $PROFILE_PATH)))/$(basename $(dirname $PROFILE_PATH)):"
+              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | sed 's/^/    - /' || echo "    (Invalid JSON)"
             fi
           done
-          echo "❌ Please ensure the profile exists in one of the external_profiles files"
-          echo "❌ If needed, run the download_profiles.sh script to update profiles"
           exit 1
         fi
-        
-        echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
 
-    - name: Setup Build Directory
+    - name: Setup ImageBuilder
       shell: bash
       run: |
-        mkdir -p $BUILDDIR
-        
         if [ "${{ inputs.version }}" = "snapshot" ]; then
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
-          echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+          ARCHIVE_EXT="tar.zst"
         elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+          ARCHIVE_EXT="tar.xz"
         else
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+          ARCHIVE_EXT="tar.xz"
         fi
         
         echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
         echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
-
-    - name: Download and Extract ImageBuilder
-      shell: bash
-      run: |
+        echo "ARCHIVE_EXT=${ARCHIVE_EXT}" >> $GITHUB_ENV
+        
+        # Download and extract ImageBuilder
         cd $BUILDDIR
+        echo "⬇️ Downloading ImageBuilder from $DOWNLOAD_URL"
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
           curl -L -C - -O "$DOWNLOAD_URL"
-          if [ "${{ inputs.version }}" = "snapshot" ]; then
+          if [ "$ARCHIVE_EXT" = "tar.zst" ]; then
             tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
           else
             tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
           fi
+          echo "✅ ImageBuilder extracted successfully"
         else
-          echo "Error: URL $DOWNLOAD_URL does not exist"
+          echo "❌ Error: URL $DOWNLOAD_URL does not exist"
           exit 1
         fi
         
         echo "BUILDDIR=$BUILDDIR/${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
 
-    - name: Setup Custom Files and Packages
+    - name: Setup Build Environment
       shell: bash
       env:
         NOSTR_SECRET_KEY: ${{ inputs.nostr_secret_key }}
         NOSTR_PUBLIC_KEY: ${{ inputs.nostr_public_key }}
         NOSTR_RELAYS: ${{ inputs.nostr_relays }}
       run: |
+        # Setup files directory
         mkdir -p $BUILDDIR/files
         if [ -d "${{ inputs.files_path }}" ]; then
           cp -r ${{ inputs.files_path }}/* $BUILDDIR/files/
         fi
+        
+        # Setup packages directory
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
         
-        # Add U-Boot config for supported devices
-        # MediaTek Filogic devices typically need U-Boot env config
+        # Add U-Boot config for supported devices (MediaTek Filogic)
         if [[ "$PLATFORM" == "mediatek" && "$TYPE" == "filogic" ]]; then
           echo "Creating U-Boot environment config for MediaTek Filogic device"
           mkdir -p $BUILDDIR/files/etc
@@ -260,31 +212,25 @@ runs:
         fi
 
     - name: Download TollGate Packages
+      id: packages
       shell: bash
       run: |
-        # Create packages directory if it doesn't exist
+        # Setup local packages
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
-        
-        # Note: We're using a two-step build process to work around a package conflict
-        echo "⚠️ Note: Using two-step build to work around package file conflicts (/etc/banner)"
-        
-        # Parse release.json and download all packages for this architecture
-        echo "🔍 Looking for packages for architecture: ${ARCH}"
         DOWNLOADED_PACKAGES=""
         
         # Check if release.json exists
         if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
-          # Extract relevant information in one command to avoid quoting issues
-          echo "📋 Extracting package information from release.json"
+          echo "📦 Processing TollGate modules from release.json"
+          
+          # Extract package URLs
           jq -r --arg arch "${ARCH}" '.modules[] | "\(.name)|\(.versions[0].architectures[$arch].url // \"\")"' \
             "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" > "${BUILDDIR}/package_urls.txt"
           
-          # Process each line with grep for simple parsing
-          cat "${BUILDDIR}/package_urls.txt" | while IFS='|' read -r MODULE_NAME PACKAGE_URL; do
-            echo "📦 Processing module: ${MODULE_NAME}"
-            
-            # Skip missing or placeholder URLs
+          # Download each package
+          while IFS='|' read -r MODULE_NAME PACKAGE_URL; do
+            # Skip packages without valid URLs
             if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
               continue
@@ -300,56 +246,50 @@ runs:
             else
               echo "❌ Failed to download ${PACKAGE_FILENAME}"
             fi
-          done
+          done < "${BUILDDIR}/package_urls.txt"
           
-          # Simple package index creation
-          echo "📑 Generating package index"
-          touch "${PACKAGES_DIR}/Packages"
-          
-          # List downloaded packages
-          echo "📦 Package directory contents:"
-          ls -la "${PACKAGES_DIR}" || echo "No packages found"
-          
-          # Create a simple package index
-          for PKG in "${PACKAGES_DIR}"/*.ipk; do
-            if [ -f "$PKG" ]; then
-              FILENAME=$(basename "$PKG")
-              PKG_NAME=$(echo "$FILENAME" | sed 's/_.*//g')
-              echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
-              echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
-              echo "" >> "${PACKAGES_DIR}/Packages"
-            fi
-          done
-          
-          # Compress the package index
-          gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
-          
-          # Set environment variable for package inclusion
+          # Create package index
           if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-            echo "🔧 Adding TollGate packages to build: ${DOWNLOADED_PACKAGES}"
+            echo "📦 Adding TollGate packages to build: ${DOWNLOADED_PACKAGES}"
             echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+            
+            echo "📑 Creating package index"
+            touch "${PACKAGES_DIR}/Packages"
+            for PKG in "${PACKAGES_DIR}"/*.ipk; do
+              if [ -f "$PKG" ]; then
+                FILENAME=$(basename "$PKG")
+                PKG_NAME=$(echo "$FILENAME" | sed 's/_.*//g')
+                echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
+                echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
+                echo "" >> "${PACKAGES_DIR}/Packages"
+              fi
+            done
+            gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
           else
             echo "⚠️ No TollGate packages were downloaded successfully"
             echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
           fi
         else
           echo "⚠️ release.json not found at ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
-          echo "Current directory structure:"
-          find "${GITHUB_WORKSPACE}" -name "release.json" || echo "No release.json found"
           echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+        fi
+        
+        # Create empty package index if needed
+        if [ ! -f "${PACKAGES_DIR}/Packages" ]; then
           touch "${PACKAGES_DIR}/Packages"
           gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
         fi
 
-    - name: Build base firmware
+    - name: Build Firmware
+      id: build
       shell: bash
       run: |
-        set -euo pipefail
         cd "$BUILDDIR"
+        
+        # Step 1: Build base firmware
         echo "🔨 Building base firmware for $PROFILE"
         echo "📦 Using packages: $PACKAGES"
         
-        # First build: just the base packages without TollGate modules
         FORCE=1 make image \
           PROFILE="$PROFILE" \
           PACKAGES="$PACKAGES" \
@@ -364,23 +304,13 @@ runs:
           echo "✅ Base firmware built successfully"
         fi
         
-    - name: Build firmware with TollGate modules
-      shell: bash
-      id: build-tollgate
-      continue-on-error: true
-      run: |
-        set -euo pipefail
-        cd "$BUILDDIR"
-        
-        # If we have TollGate packages to add
+        # Step 2: Build firmware with TollGate modules if available
         if [ -n "${TOLLGATE_PACKAGES:-}" ]; then
           echo "🔨 Building firmware with TollGate modules"
           echo "📦 Adding packages: ${TOLLGATE_PACKAGES}"
           
-          # Clean the build directory to prepare for second build
           make clean
           
-          # Second build: add TollGate packages
           FORCE=1 make image \
             PROFILE="$PROFILE" \
             PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
@@ -400,13 +330,11 @@ runs:
           echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
         fi
 
-    - name: Find firmware
+    - name: Find Firmware
       id: find-firmware
       shell: bash
       run: |
-        set -euo pipefail
-        
-        # Try to find the TollGate firmware first, then fall back to base firmware
+        # Find the appropriate firmware file
         if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
           F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | head -1)
           if [ -f "$F" ]; then
@@ -420,7 +348,7 @@ runs:
           echo "ℹ️ Using base firmware: $(basename "$F")"
         fi
         
-        # If still no firmware found, look for any .bin file
+        # If still no firmware found, look for any sysupgrade file
         if [ ! -f "$F" ]; then
           F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
           echo "⚠️ Falling back to generic firmware: $(basename "$F")"
@@ -431,11 +359,12 @@ runs:
           exit 1
         fi
         
-        # Calculate hash for metadata
+        # Calculate hash and size for metadata
         FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
-        echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
-        echo "FIRMWARE_SIZE=$(stat -c%s "$F")" >> $GITHUB_ENV
+        FIRMWARE_SIZE=$(stat -c%s "$F")
         
+        echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+        echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
         echo "firmware_path=$F" >> $GITHUB_OUTPUT
         echo "firmware_name=$(basename "$F")" >> $GITHUB_OUTPUT
 
