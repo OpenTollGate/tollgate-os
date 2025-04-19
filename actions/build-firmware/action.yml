@@ -266,47 +266,172 @@ runs:
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
         
-        # TEMPORARILY DISABLED: Skip package download to avoid file conflicts with base-files
-        echo "⚠️ NOTICE: TollGate module installation temporarily disabled to avoid file conflicts."
-        echo "⚠️ Issue: Package tollgate-module-basic-go conflicts with base-files over /etc/banner"
-        echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+        # Parse release.json and download all packages for this architecture
+        echo "🔍 Looking for packages for architecture: ${ARCH}"
+        DOWNLOADED_PACKAGES=""
         
-        # Create an empty Packages file to prevent build failures
-        touch "${PACKAGES_DIR}/Packages"
-        gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
+        # Check if release.json exists
+        if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
+          for MODULE_NAME in $(jq -r '.modules[].name' ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json); do
+            echo "📦 Processing module: ${MODULE_NAME}"
+            
+            # Extract URL for this module and architecture
+            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$ARCH" \
+              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' \
+              ${GITHUB_WORKSPACE}/files/etc/tollgate/release.json)
+              
+            # Skip placeholder URLs
+            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
+              echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
+              continue
+            fi
+            
+            # Download the package with retry logic
+            PACKAGE_FILENAME="tollgate-module-${MODULE_NAME}-go_${ARCH}.ipk"
+            echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
+            
+            # Try up to 3 times with increasing timeouts
+            for ATTEMPT in {1..3}; do
+              echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
+              if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+                echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+                break
+              else
+                echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
+                if [ $ATTEMPT -eq 3 ]; then
+                  echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
+                fi
+                sleep 5
+              fi
+            done
+          done
+          
+          # Generate package index
+          echo "📑 Generating package index"
+          touch "${PACKAGES_DIR}/Packages"
+          
+          # Use mkhash helper function for package index generation
+          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+          export -f mkhash; \
+          export MKHASH=mkhash; \
+          cd "'"${BUILDDIR}"'" && \
+          if [ -x "./scripts/ipkg-make-index.sh" ]; then \
+            ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages; \
+          else \
+            echo "WARNING: ipkg-make-index.sh not found, creating minimal Packages file"; \
+            for PKG in packages/local/*.ipk; do \
+              [ -f "$PKG" ] || continue; \
+              FILENAME=$(basename "$PKG"); \
+              echo "Package: $(echo $FILENAME | sed -e '"'"'s/_.*//'\')" >> packages/local/Packages; \
+              echo "Filename: $FILENAME" >> packages/local/Packages; \
+              echo "" >> packages/local/Packages; \
+            done; \
+          fi && \
+          gzip -9c packages/local/Packages > packages/local/Packages.gz'
+          
+          # Add the downloaded packages to build environment
+          if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+            echo "🔧 Adding TollGate packages to build: ${DOWNLOADED_PACKAGES}"
+            echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+          else
+            echo "⚠️ No TollGate packages were downloaded successfully"
+            echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+          fi
+        else
+          echo "⚠️ release.json not found, skipping TollGate package download"
+          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+          touch "${PACKAGES_DIR}/Packages"
+          gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
+        fi
 
-    - name: Build firmware
+    - name: Build base firmware
       shell: bash
       run: |
         set -euo pipefail
         cd "$BUILDDIR"
-        echo "🔨 Building firmware for $PROFILE"
+        echo "🔨 Building base firmware for $PROFILE"
+        echo "📦 Using packages: $PACKAGES"
         
-        # Backup banner file first to avoid conflicts
-        if [ -f "$BUILDDIR/files/etc/banner" ]; then
-          cp "$BUILDDIR/files/etc/banner" "$BUILDDIR/files/etc/banner.openwrt.bak"
-          echo "📝 Original banner backed up"
-        fi
-        
-        # Create the full package list including Tollgate packages
-        FULL_PACKAGES="$PACKAGES $TOLLGATE_PACKAGES"
-        echo "📦 Using packages: $FULL_PACKAGES"
-        
-        # Simple approach: use FORCE=1 to bypass prerequisite checks
+        # First build: just the base packages without TollGate modules
         FORCE=1 make image \
           PROFILE="$PROFILE" \
-          PACKAGES="$FULL_PACKAGES" \
+          PACKAGES="$PACKAGES" \
           FILES="files" \
-          EXTRA_IMAGE_NAME="tollgate-os"
+          EXTRA_IMAGE_NAME="base"
+        
+        # Check if base build was successful
+        if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | grep -q .; then
+          echo "❌ Base firmware build failed"
+          exit 1
+        else
+          echo "✅ Base firmware built successfully"
+        fi
+        
+    - name: Build firmware with TollGate modules
+      shell: bash
+      id: build-tollgate
+      continue-on-error: true
+      run: |
+        set -euo pipefail
+        cd "$BUILDDIR"
+        
+        # If we have TollGate packages to add
+        if [ -n "${TOLLGATE_PACKAGES:-}" ]; then
+          echo "🔨 Building firmware with TollGate modules"
+          echo "📦 Adding packages: ${TOLLGATE_PACKAGES}"
+          
+          # Clean the build directory to prepare for second build
+          make clean
+          
+          # Second build: add TollGate packages
+          FORCE=1 make image \
+            PROFILE="$PROFILE" \
+            PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
+            FILES="files" \
+            EXTRA_IMAGE_NAME="tollgate-os"
+          
+          # Check if TollGate build was successful
+          if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | grep -q .; then
+            echo "✅ TollGate firmware built successfully"
+            echo "BUILD_TYPE=TOLLGATE" >> $GITHUB_ENV
+          else
+            echo "⚠️ TollGate firmware build failed, will use base firmware"
+            echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
+          fi
+        else
+          echo "ℹ️ No TollGate packages to add, using base firmware"
+          echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
+        fi
 
     - name: Find firmware
       id: find-firmware
       shell: bash
       run: |
         set -euo pipefail
-        F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
+        
+        # Try to find the TollGate firmware first, then fall back to base firmware
+        if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | head -1)
+          if [ -f "$F" ]; then
+            echo "✅ Using TollGate firmware: $(basename "$F")"
+          else
+            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
+            echo "ℹ️ Falling back to base firmware: $(basename "$F")"
+          fi
+        else
+          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
+          echo "ℹ️ Using base firmware: $(basename "$F")"
+        fi
+        
+        # If still no firmware found, look for any .bin file
         if [ ! -f "$F" ]; then
-          echo "❌ Firmware not found"
+          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
+          echo "⚠️ Falling back to generic firmware: $(basename "$F")"
+        fi
+        
+        if [ ! -f "$F" ]; then
+          echo "❌ No firmware found"
           exit 1
         fi
         
@@ -315,7 +440,6 @@ runs:
         echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
         echo "FIRMWARE_SIZE=$(stat -c%s "$F")" >> $GITHUB_ENV
         
-        echo "✅ Firmware built successfully: $(basename "$F")"
         echo "firmware_path=$F" >> $GITHUB_OUTPUT
         echo "firmware_name=$(basename "$F")" >> $GITHUB_OUTPUT
 
