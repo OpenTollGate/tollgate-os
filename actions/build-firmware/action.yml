@@ -95,45 +95,64 @@ runs:
             echo "📌 Platform: $PLATFORM"
             echo "📌 Type: $TYPE"
             
-            # Extract architecture from profiles.json
-            ARCH=$(grep -o '"arch_packages": "[^"]*"' "$PROFILE_PATH" | cut -d'"' -f4 | head -1)
+            # Use jq to properly extract all information from profiles.json
+            MODEL="${{ inputs.model }}"
+            
+            # Extract architecture and packages
+            ARCH=$(jq -r '.arch_packages' "$PROFILE_PATH")
+            DEFAULT_PKGS=$(jq -r '.default_packages | join(" ")' "$PROFILE_PATH")
+            DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$PROFILE_PATH")
+            
+            # Extract device information
+            DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$PROFILE_PATH")
+            DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$PROFILE_PATH")
+            DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
+            DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
+            
             echo "📌 Architecture: $ARCH"
-            
-            # Find the model's device packages
-            PROFILE_JSON=$(grep -A 100 "\"${{ inputs.model }}\":" "$PROFILE_PATH" | sed -n '/^        },/q;p')
-            DEVICE_PKGS=$(echo "$PROFILE_JSON" | grep -o '"device_packages": \[[^]]*\]' | sed 's/"device_packages": \[//g' | sed 's/\]//g' | tr -d '"' | tr ',' ' ')
             echo "📌 Device packages: $DEVICE_PKGS"
+            echo "📌 Device model: $DEVICE_MODEL"
+            echo "📌 Device vendor: $DEVICE_VENDOR"
             
-            # Map architecture to BLOSSOM_ARCH
-            case "$ARCH" in
-              "aarch64_cortex-a53")
-                BLOSSOM_ARCH="aarch64_cortex-a53"
-                ;;
-              "mips_24kc")
-                BLOSSOM_ARCH="mips_24kc"
-                ;;
-              "x86_64")
-                BLOSSOM_ARCH="x86_64"
-                ;;
-              "arm_cortex-a7_neon-vfpv4")
-                BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
-                ;;
-              *)
-                BLOSSOM_ARCH="$ARCH"
-                ;;
-            esac
+            # Print all extracted variables in a formatted table for clarity
+            echo "=================================================="
+            echo "📋 EXTRACTED BUILD VARIABLES FOR $MODEL"
+            echo "=================================================="
+            echo "PLATFORM:          $PLATFORM"
+            echo "TYPE:              $TYPE"
+            echo "PROFILE:           $MODEL"
+            echo "ARCH:              $ARCH"
+            echo "--------------------------------------------------"
+            echo "DEVICE INFO:"
+            echo "VENDOR:            $DEVICE_VENDOR"
+            echo "MODEL:             $DEVICE_MODEL"
+            echo "IMAGE PREFIX:      $DEVICE_IMAGE_PREFIX"
+            echo "SUPPORTED DEVICES: $DEVICE_SUPPORTED"
+            echo "--------------------------------------------------"
+            echo "PACKAGES:"
+            echo "DEFAULT PACKAGES:  $DEFAULT_PKGS"
+            echo "DEVICE PACKAGES:   $DEVICE_PKGS"
+            echo "=================================================="
             
             # Set environment variables for build
             echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
             echo "TYPE=$TYPE" >> $GITHUB_ENV
             echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
-            echo "PROFILE=${{ inputs.model }}" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=$BLOSSOM_ARCH" >> $GITHUB_ENV
+            echo "PROFILE=$MODEL" >> $GITHUB_ENV
             echo "ARCH=$ARCH" >> $GITHUB_ENV
             
             # Standard package configuration
-            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl $DEVICE_PKGS" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
+            DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
+            TOLLGATE_REMOVED="$WIFI_REMOVE $DHCP_REMOVE"
+            
+            WIFI_ADD="wpad-wolfssl"
+            TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
+            
+            # Compose final package list: TollGate → Device → Base → user extras
+            PACKAGES="$TOLLGATE_REMOVED $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
+            echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+            echo "REMOVED_PACKAGES=$TOLLGATE_REMOVED" >> $GITHUB_ENV
             
             break
           fi
@@ -310,7 +329,7 @@ runs:
         mkdir -p "${PACKAGES_DIR}"
         
         # Convert BLOSSOM_ARCH (if needed)
-        TARGET_ARCH="${BLOSSOM_ARCH}"
+        TARGET_ARCH="${ARCH}"
         
         echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
         
@@ -431,7 +450,7 @@ runs:
         content:      "TollGate OS for ${{ inputs.model }} (OpenWRT ${{ inputs.version }})"
         nsec:         ${{ inputs.nsec }}
         size:         ${{ env.FIRMWARE_SIZE }}
-        architecture: ${{ env.BLOSSOM_ARCH }}
+        architecture: ${{ env.ARCH }}
         model:        ${{ inputs.model }}
         version:      ${{ inputs.version }}
 
