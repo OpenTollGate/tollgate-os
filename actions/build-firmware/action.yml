@@ -389,12 +389,16 @@ runs:
           # Clean the build directory to prepare for second build
           make clean
           
+          # Create a log directory for build logs
+          mkdir -p "$BUILDDIR/build_logs"
+          
           # Second build: add TollGate packages
           FORCE=1 make image \
             PROFILE="$PROFILE" \
             PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
             FILES="files" \
-            EXTRA_IMAGE_NAME="tollgate-os"
+            EXTRA_IMAGE_NAME="tollgate-os" \
+            2>&1 | tee "$BUILDDIR/build_logs/tollgate_build.log"
           
           # Check if TollGate build was successful
           if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | grep -q .; then
@@ -403,6 +407,19 @@ runs:
           else
             echo "❌ ERROR: TollGate firmware build failed! No firmware with TollGate modules was produced."
             echo "This is likely due to package conflicts. Check build logs for details."
+            
+            # Print relevant error logs to help diagnose package installation issues
+            echo "📋 Checking for package installation errors..."
+            if [ -d "$BUILDDIR/logs/package" ]; then
+              grep -l "ERROR\|Failed\|Cannot\|Error\|Failure" $BUILDDIR/logs/package/*.log 2>/dev/null | \
+                xargs -r cat 2>/dev/null || echo "No specific package errors found"
+            fi
+            
+            # Check specifically for file conflicts
+            echo "📋 Checking for file conflicts..."
+            grep -r "File exists\|conflicts\|duplicate" $BUILDDIR/logs 2>/dev/null || \
+              echo "No file conflicts found in logs"
+            
             exit 1
           fi
         else
