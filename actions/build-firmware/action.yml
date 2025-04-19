@@ -266,78 +266,14 @@ runs:
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
         
-        # Convert BLOSSOM_ARCH (if needed)
-        TARGET_ARCH="${ARCH}"
+        # TEMPORARILY DISABLED: Skip package download to avoid file conflicts with base-files
+        echo "⚠️ NOTICE: TollGate module installation temporarily disabled to avoid file conflicts."
+        echo "⚠️ Issue: Package tollgate-module-basic-go conflicts with base-files over /etc/banner"
+        echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
         
-        echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
-        
-        # Create an empty Packages file to prevent build failures if no packages are downloaded
+        # Create an empty Packages file to prevent build failures
         touch "${PACKAGES_DIR}/Packages"
-        
-        # Parse release.json and download all packages for this architecture
-        DOWNLOADED_PACKAGES=""
-        RELEASE_JSON="files/etc/tollgate/release.json"
-        if [ -f "${RELEASE_JSON}" ]; then
-          # First run a debug script to help troubleshoot if there are issues
-          if [ -f "${GITHUB_WORKSPACE}/actions/build-firmware/debug-jq.sh" ]; then
-            echo "🔍 Running jq debug script..."
-            bash "${GITHUB_WORKSPACE}/actions/build-firmware/debug-jq.sh" || echo "Debug script exited with non-zero code"
-          fi
-          
-          for MODULE_NAME in $(jq -r '.modules[].name' "${RELEASE_JSON}"); do
-            echo "📦 Processing module: ${MODULE_NAME}"
-            
-            # Use a more reliable method: hard-code the module name and architecture in the jq query
-            # This avoids shell variable expansion issues
-            PACKAGE_URL=$(jq -r ".modules[] | select(.name == \"${MODULE_NAME}\") | .versions[0].architectures.\"${TARGET_ARCH}\".url" "${RELEASE_JSON}")
-              
-            # Skip placeholder URLs
-            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
-              echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
-              continue
-            fi
-            
-            # Download the package with retry logic
-            PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
-            echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
-            
-            # Try up to 3 times with increasing timeouts
-            for ATTEMPT in {1..3}; do
-              echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
-              if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-                echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
-                break
-              else
-                echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
-                if [ $ATTEMPT -eq 3 ]; then
-                  echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
-                fi
-                sleep 5
-              fi
-            done
-          done
-        else
-          echo "⚠️ release.json not found in files/etc/tollgate/"
-        fi
-        
-        # Add the downloaded packages to the build package list
-        if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-          echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
-          echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
-          PACKAGES="$PACKAGES $DOWNLOADED_PACKAGES"
-          echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
-        else
-          echo "⚠️ No packages were downloaded successfully"
-          echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
-        fi
-        
-        # Generate package index
-        sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
-        export -f mkhash; \
-        export MKHASH=mkhash; \
-        '"${BUILDDIR}"'/scripts/ipkg-make-index.sh '"${PACKAGES_DIR}"' > '"${PACKAGES_DIR}"'/Packages && \
-        gzip -9c '"${PACKAGES_DIR}"'/Packages > '"${PACKAGES_DIR}"'/Packages.gz'
+        gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
 
     - name: Build firmware
       shell: bash
