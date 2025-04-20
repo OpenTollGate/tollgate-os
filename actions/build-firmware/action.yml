@@ -151,29 +151,40 @@ runs:
     - name: Setup ImageBuilder
       shell: bash
       run: |
-        if [ "${{ inputs.version }}" = "snapshot" ]; then
+        # Determine the ImageBuilder URL based on version and platform
+        VERSION="${{ inputs.version }}"
+        BASE_URL="https://downloads.openwrt.org"
+        ARCHIVE_EXT="tar.xz"
+        
+        if [ "$VERSION" = "snapshot" ]; then
+          # Snapshot builds have a different naming convention and use zst compression
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+          DOWNLOAD_URL="${BASE_URL}/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
           ARCHIVE_EXT="tar.zst"
-        elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          ARCHIVE_EXT="tar.xz"
         else
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-          ARCHIVE_EXT="tar.xz"
+          # Regular release builds
+          # Handle special case for ath79/nand
+          if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+            TARGET_SUFFIX="ath79-nand"
+          else
+            TARGET_SUFFIX="${TARGET_DEVICE}"
+          fi
+          
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${VERSION}-${TARGET_SUFFIX}.Linux-x86_64"
+          DOWNLOAD_URL="${BASE_URL}/releases/${VERSION}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
         fi
         
         echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
-        echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
-        echo "ARCHIVE_EXT=${ARCHIVE_EXT}" >> $GITHUB_ENV
         
         # Download and extract ImageBuilder
         cd $BUILDDIR
         echo "⬇️ Downloading ImageBuilder from $DOWNLOAD_URL"
+        
+        # Verify the URL exists before downloading
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
           curl -L -C - -O "$DOWNLOAD_URL"
+          
+          # Extract based on archive type
           if [ "$ARCHIVE_EXT" = "tar.zst" ]; then
             tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
           else
