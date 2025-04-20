@@ -9,6 +9,10 @@ on:
       device_model:
         description: 'Device model to build (use profile ID like glinet_gl-mt3000)'
         required: false
+      firmware_type:
+        description: 'Type of firmware to build (sysupgrade, factory, kernel, all)'
+        default: 'all' 
+        required: false
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
@@ -103,6 +107,10 @@ jobs:
               echo "Platform: $PLATFORM"
               echo "Type: $TYPE"
               
+              # Extract available image types for this device
+              AVAILABLE_TYPES=$(jq -r --arg p "${{ matrix.device.id }}" '.profiles[$p].images | map(.type) | unique | join(", ")' "$PROFILE_PATH")
+              echo "✅ Available image types: $AVAILABLE_TYPES"
+              
               # Show device information from profile
               echo "===== DEVICE DETAILS ====="
               DEVICE_VENDOR=$(jq -r --arg p "${{ matrix.device.id }}" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
@@ -136,6 +144,7 @@ jobs:
           files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
+          firmware_type: ${{ github.event.inputs.firmware_type || 'all' }}
       
       # Add a step to collect and display build logs if available
       - name: Collect build logs
@@ -165,10 +174,19 @@ jobs:
           echo "===== CHECKING FOR WPAD PACKAGE CONFLICTS ====="
           grep -r "wpad" build_logs/ || echo "No wpad-related issues found in logs"
       
-      - name: Upload Firmware Artifact
+      - name: Extract Firmware Types Information
+        id: firmware-types
+        run: |
+          # Parse the all_firmware_paths JSON to get image types
+          ALL_PATHS='${{ steps.build-openwrt-image.outputs.all_firmware_paths }}'
+          AVAILABLE_TYPES=$(echo "$ALL_PATHS" | jq -r 'keys | join(", ")')
+          echo "Available firmware types: $AVAILABLE_TYPES"
+          echo "available_types=$AVAILABLE_TYPES" >> $GITHUB_OUTPUT
+      
+      - name: Upload All Firmware Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.device.id }}.img
+          name: firmware-${{ matrix.device.id }}
           path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
           retention-days: 5
       
