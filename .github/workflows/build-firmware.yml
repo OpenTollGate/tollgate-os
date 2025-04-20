@@ -29,6 +29,12 @@ jobs:
           - id: glinet_gl-mt6000
             name: GL.iNet GL-MT6000
             platform: mediatek/filogic
+          - id: glinet_gl-ar300m-nor
+            name: GL.iNet GL-AR300M (NOR)
+            platform: ath79/nand
+          - id: glinet_gl-ar300m-nand
+            name: GL.iNet GL-AR300M (NAND)
+            platform: ath79/nand
       fail-fast: false
 
     steps:
@@ -42,13 +48,14 @@ jobs:
           
           echo "Fetching profiles for required platforms..."
           bash ./download_profiles.sh 23.05.5 mediatek/filogic
+          bash ./download_profiles.sh 23.05.5 ath79/nand
           
           # Generate device search helper file
           echo "Generating device search file..."
           find external_profiles/23.05.5 -name "profiles.json" | xargs -I{} jq -r '.profiles | to_entries[] | .key + " | " + (.value.target_only // "unknown") + " | " + (.value.titles[0].vendor // "unknown") + " | " + (.value.titles[0].model // "unknown")' {} | sort > external_profiles/23.05.5/device-search.txt
           
           echo "Device search file contents:"
-          grep -i "gl-mt" external_profiles/23.05.5/device-search.txt
+          grep -i "gl-" external_profiles/23.05.5/device-search.txt
       
       # Add debug information about the OS environment before building
       - name: Debug environment
