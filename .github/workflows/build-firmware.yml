@@ -179,15 +179,30 @@ jobs:
         run: |
           # Parse the all_firmware_paths JSON to get image types
           ALL_PATHS='${{ steps.build-openwrt-image.outputs.all_firmware_paths }}'
+          echo "ALL_PATHS JSON: $ALL_PATHS"
           AVAILABLE_TYPES=$(echo "$ALL_PATHS" | jq -r 'keys | join(", ")')
           echo "Available firmware types: $AVAILABLE_TYPES"
           echo "available_types=$AVAILABLE_TYPES" >> $GITHUB_OUTPUT
+          
+          # Create directory for all firmware files
+          mkdir -p firmware_files
+          
+          # Extract filesystem paths from the JSON and copy them to the firmware_files directory
+          echo "$ALL_PATHS" | jq -r 'to_entries | .[] | .value.path' | while read -r filepath; do
+            if [ -f "$filepath" ]; then
+              cp "$filepath" firmware_files/
+              echo "Copied $(basename "$filepath") to firmware_files/"
+            else
+              echo "Warning: File $filepath not found"
+            fi
+          done
       
+      # Upload all firmware files as a single artifact 
       - name: Upload All Firmware Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.device.id }}
-          path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+          path: firmware_files/
           retention-days: 5
       
       # Also upload the build logs as artifacts for troubleshooting
@@ -198,3 +213,76 @@ jobs:
           name: build-logs-${{ matrix.device.id }}
           path: build_logs/
           retention-days: 5
+      
+      # Upload each firmware type to Blossom and publish metadata
+      - name: Upload Multiple Firmware Types
+        id: multi-upload
+        run: |
+          # Parse the JSON from the build output
+          ALL_PATHS='${{ steps.build-openwrt-image.outputs.all_firmware_paths }}'
+          
+          # Process each firmware type
+          echo "$ALL_PATHS" | jq -r 'to_entries | .[] | @json' | while read -r json_entry; do
+            # Extract information from the JSON entry
+            TYPE=$(echo "$json_entry" | jq -r '.key')
+            FILE_PATH=$(echo "$json_entry" | jq -r '.value.path')
+            FILE_NAME=$(echo "$json_entry" | jq -r '.value.name')
+            FILE_HASH=$(echo "$json_entry" | jq -r '.value.hash')
+            FILE_SIZE=$(echo "$json_entry" | jq -r '.value.size')
+            
+            echo "Processing $TYPE firmware: $FILE_NAME"
+            
+            if [ -f "$FILE_PATH" ]; then
+              echo "✅ Found file: $FILE_PATH"
+              
+              # Only upload additional types if they're not the primary type
+              # The primary type is already uploaded and published by the main action
+              if [ "$TYPE" != "${{ env.PRIMARY_FIRMWARE_TYPE }}" ]; then
+                echo "📤 Uploading $TYPE firmware to Blossom..."
+                
+                # Perform upload using the CLI tool 
+                UPLOAD_RESULT=$(cd /tmp && \
+                  NSEC="${{ secrets.NSECBECH }}" \
+                  /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/blossom-uploader \
+                  -f "$FILE_PATH" \
+                  -u "https://blossom.swissdash.site")
+                
+                echo "Upload result: $UPLOAD_RESULT"
+                
+                # Extract URL and hash from the JSON result
+                BLOSSOM_URL=$(echo "$UPLOAD_RESULT" | jq -r '.url')
+                BLOSSOM_HASH=$(echo "$UPLOAD_RESULT" | jq -r '.hash')
+                
+                if [ -n "$BLOSSOM_URL" ] && [ "$BLOSSOM_URL" != "null" ]; then
+                  echo "✅ Uploaded $TYPE firmware to $BLOSSOM_URL"
+                  
+                  # Publish NIP-94 metadata
+                  echo "📝 Publishing NIP-94 metadata for $TYPE firmware..."
+                  
+                  # This uses the Python script directly instead of the action to avoid nesting actions
+                  python3 /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/publish_metadata.py \
+                    --relays "${{ inputs.nostr_relays }}" \
+                    --url "$BLOSSOM_URL" \
+                    --mime-type "application/octet-stream" \
+                    --file-hash "$BLOSSOM_HASH" \
+                    --original-hash "$FILE_HASH" \
+                    --filename "$FILE_NAME" \
+                    --content "TollGate OS $TYPE firmware for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ matrix.device.id }}, OpenWRT ${{ inputs.version }})" \
+                    --nsec "${{ secrets.NSEC }}" \
+                    --size "$FILE_SIZE" \
+                    --architecture "${{ env.ARCH }}" \
+                    --model "${{ matrix.device.id }}" \
+                    --version "${{ inputs.version }}" \
+                    --firmware-type "$TYPE"
+                  
+                  echo "✅ Published metadata for $TYPE firmware"
+                else
+                  echo "❌ Failed to upload $TYPE firmware"
+                fi
+              else
+                echo "ℹ️ Skipping upload for primary firmware type ($TYPE) as it's already handled by the main action"
+              fi
+            else
+              echo "⚠️ File not found: $FILE_PATH"
+            fi
+          done
