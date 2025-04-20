@@ -1,0 +1,57 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/mediatek/filogic/profiles.json
+# Generated on: Sun Apr 20 17:23:14 CEST 2025
+
+acelink_ew-7886cax | Acelink | EW-7886CAX | Acelink EW-7886CAX
+acer_predator-w6 | Acer | Predator W6 | Acer Predator W6
+asus_rt-ax59u | ASUS | RT-AX59U | ASUS RT-AX59U
+asus_tuf-ax4200 | ASUS | TUF-AX4200 | ASUS TUF-AX4200
+asus_tuf-ax6000 | ASUS | TUF-AX6000 | ASUS TUF-AX6000
+bananapi_bpi-r3 | Bananapi | BPi-R3 | Bananapi BPi-R3
+cetron_ct3003 | Cetron | CT3003 | Cetron CT3003
+cmcc_rax3000m | CMCC | RAX3000M | CMCC RAX3000M
+comfast_cf-e393ax | Comfast | CF-E393AX | Comfast CF-E393AX
+confiabits_mt7981 | Confiabits | MT7981 | Confiabits MT7981
+cudy_m3000-v1 | Cudy | M3000 | Cudy M3000 (v1)
+cudy_re3000-v1 | Cudy | RE3000 | Cudy RE3000 (v1)
+cudy_tr3000-v1 | Cudy | TR3000 | Cudy TR3000 (v1)
+cudy_wr3000-v1 | Cudy | WR3000 | Cudy WR3000 (v1)
+dlink_aquila-pro-ai-m30-a1 | D-Link | AQUILA PRO AI M30 | D-Link AQUILA PRO AI M30 (A1)
+glinet_gl-mt3000 | GL.iNet | GL-MT3000 | GL.iNet GL-MT3000
+glinet_gl-mt6000 | GL.iNet | GL-MT6000 | GL.iNet GL-MT6000
+h3c_magic-nx30-pro | H3C | Magic NX30 Pro | H3C Magic NX30 Pro
+jcg_q30-pro | JCG | Q30 PRO | JCG Q30 PRO
+jdcloud_re-cp-03 | JDCloud | RE-CP-03 | JDCloud RE-CP-03
+mediatek_mt7981-rfb | MediaTek | MT7981 rfb | MediaTek MT7981 rfb
+mediatek_mt7986a-rfb-nand | MediaTek | MT7986 rfba AP (NAND) | MediaTek MT7986 rfba AP (NAND)
+mediatek_mt7986b-rfb | MediaTek | MTK7986 rfbb AP | MediaTek MTK7986 rfbb AP
+mediatek_mt7988a-rfb | MediaTek | MT7988A rfb | MediaTek MT7988A rfb
+mercusys_mr90x-v1 | MERCUSYS | MR90X v1 | MERCUSYS MR90X v1
+netcore_n60 | Netcore | N60 | Netcore N60
+netgear_wax220 | NETGEAR | WAX220 | NETGEAR WAX220
+qihoo_360t7 | Qihoo | 360T7 | Qihoo 360T7
+routerich_ax3000 | Routerich | AX3000 | Routerich AX3000
+smartrg_sdg-8612 | Adtran | SDG-8612 | Adtran SDG-8612
+smartrg_sdg-8614 | Adtran | SDG-8614 | Adtran SDG-8614
+smartrg_sdg-8622 | Adtran | SDG-8622 | Adtran SDG-8622
+smartrg_sdg-8632 | Adtran | SDG-8632 | Adtran SDG-8632
+tplink_tl-xdr4288 | TP-Link | TL-XDR4288 | TP-Link TL-XDR4288
+tplink_tl-xdr6086 | TP-Link | TL-XDR6086 | TP-Link TL-XDR6086
+tplink_tl-xdr6088 | TP-Link | TL-XDR6088 | TP-Link TL-XDR6088
+ubnt_unifi-6-plus | Ubiquiti | UniFi U6+ | Ubiquiti UniFi U6+
+unielec_u7981-01-emmc | Unielec | U7981-01 | Unielec U7981-01 ((EMMC))
+unielec_u7981-01-nand | Unielec | U7981-01 | Unielec U7981-01 ((NAND))
+xiaomi_mi-router-ax3000t | Xiaomi | Mi Router AX3000T | Xiaomi Mi Router AX3000T
+xiaomi_mi-router-ax3000t-ubootmod | Xiaomi | Mi Router AX3000T (OpenWrt U-Boot layout) | Xiaomi Mi Router AX3000T (OpenWrt U-Boot layout)
+xiaomi_mi-router-wr30u-stock | Xiaomi | Mi Router WR30U (stock layout) | Xiaomi Mi Router WR30U (stock layout)
+xiaomi_mi-router-wr30u-ubootmod | Xiaomi | Mi Router WR30U (OpenWrt U-Boot layout) | Xiaomi Mi Router WR30U (OpenWrt U-Boot layout)
+xiaomi_redmi-router-ax6000-stock | Xiaomi | Redmi Router AX6000 (stock layout) | Xiaomi Redmi Router AX6000 (stock layout)
+xiaomi_redmi-router-ax6000-ubootmod | Xiaomi | Redmi Router AX6000 (OpenWrt U-Boot layout) | Xiaomi Redmi Router AX6000 (OpenWrt U-Boot layout)
+yuncore_ax835 | YunCore | AX835 | YunCore AX835
+zbtlink_zbt-z8102ax | Zbtlink | ZBT-Z8102AX | Zbtlink ZBT-Z8102AX
+zbtlink_zbt-z8103ax | Zbtlink | ZBT-Z8103AX | Zbtlink ZBT-Z8103AX
+zyxel_ex5601-t0-stock | Zyxel | EX5601-T0 | Zyxel EX5601-T0 ((stock layout))
+zyxel_ex5601-t0-ubootmod | Zyxel | EX5601-T0 | Zyxel EX5601-T0 ((OpenWrt U-Boot layout))
+zyxel_ex5700-telenor | ZyXEL | EX5700 (Telenor) | ZyXEL EX5700 (Telenor)
+zyxel_nwa50ax-pro | ZyXEL | NWA50AX Pro | ZyXEL NWA50AX Pro

@@ -1,0 +1,761 @@
+# OpenWrt Device Search Helper
+# Version: 23.05.5
+# Generated: Sun Apr 20 17:23:19 CEST 2025
+# Format: device_id | platform/target | vendor | model
+
+8dev_habanero-dvk | ipq40xx/generic | 8devices | Habanero DVK
+8dev_jalapeno | ipq40xx/generic | 8devices | Jalapeno
+alfa-network_ap120c-ac | ipq40xx/generic | ALFA Network | AP120C-AC
+aruba_ap-303 | ipq40xx/generic | Aruba | AP-303
+aruba_ap-303h | ipq40xx/generic | Aruba | AP-303H
+aruba_ap-365 | ipq40xx/generic | Aruba | AP-365
+asus_map-ac2200 | ipq40xx/generic | ASUS | Lyra (MAP-AC2200)
+asus_rt-ac42u | ipq40xx/generic | ASUS | RT-AC42U
+asus_rt-ac58u | ipq40xx/generic | ASUS | RT-AC58U
+avm_fritzbox-4040 | ipq40xx/generic | AVM | FRITZ!Box 4040
+avm_fritzbox-7530 | ipq40xx/generic | AVM | FRITZ!Box 7530
+avm_fritzrepeater-1200 | ipq40xx/generic | AVM | FRITZ!Repeater 1200
+avm_fritzrepeater-3000 | ipq40xx/generic | AVM | FRITZ!Repeater 3000
+buffalo_wtr-m2133hp | ipq40xx/generic | Buffalo | WTR-M2133HP
+cellc_rtl30vw | ipq40xx/generic | Cell C | RTL30VW
+dlink_dap-2610 | ipq40xx/generic | D-Link | DAP-2610
+edgecore_ecw5211 | ipq40xx/generic | Edgecore | ECW5211
+engenius_eap1300 | ipq40xx/generic | EnGenius | EAP1300
+extreme-networks_ws-ap3915i | ipq40xx/generic | Extreme Networks | WS-AP3915i
+ezviz_cs-w3-wd1200g-eup | ipq40xx/generic | EZVIZ | CS-W3-WD1200G
+glinet_gl-a1300 | ipq40xx/generic | GL.iNet | GL-A1300
+glinet_gl-ap1300 | ipq40xx/generic | GL.iNet | GL-AP1300
+glinet_gl-b1300 | ipq40xx/generic | GL.iNet | GL-B1300
+glinet_gl-b2200 | ipq40xx/generic | GL.iNet | GL-B2200
+linksys_ea6350v3 | ipq40xx/generic | Linksys | EA6350
+linksys_ea8300 | ipq40xx/generic | Linksys | EA8300
+linksys_mr8300 | ipq40xx/generic | Linksys | MR8300
+linksys_whw01 | ipq40xx/generic | Linksys | WHW01
+linksys_whw03v2 | ipq40xx/generic | Linksys | WHW03
+luma_wrtq-329acn | ipq40xx/generic | Luma Home | WRTQ-329ACN
+meraki_mr33 | ipq40xx/generic | Cisco Meraki | MR33
+meraki_mr74 | ipq40xx/generic | Cisco Meraki | MR74
+mobipromo_cm520-79f | ipq40xx/generic | MobiPromo | CM520-79F
+netgear_ex6100v2 | ipq40xx/generic | NETGEAR | EX6100
+netgear_ex6150v2 | ipq40xx/generic | NETGEAR | EX6150
+netgear_rbr50 | ipq40xx/generic | NETGEAR | RBR50
+netgear_rbs50 | ipq40xx/generic | NETGEAR | RBS50
+netgear_srr60 | ipq40xx/generic | NETGEAR | SRR60
+netgear_srs60 | ipq40xx/generic | NETGEAR | SRS60
+netgear_wac510 | ipq40xx/generic | Netgear | WAC510
+openmesh_a42 | ipq40xx/generic | OpenMesh | A42
+openmesh_a62 | ipq40xx/generic | OpenMesh | A62
+p2w_r619ac-128m | ipq40xx/generic | P&W | R619AC
+p2w_r619ac-64m | ipq40xx/generic | P&W | R619AC
+pakedge_wr-1 | ipq40xx/generic | Pakedge | WR-1
+plasmacloud_pa1200 | ipq40xx/generic | Plasma Cloud | PA1200
+plasmacloud_pa2200 | ipq40xx/generic | Plasma Cloud | PA2200
+qxwlan_e2600ac-c1 | ipq40xx/generic | Qxwlan | E2600AC
+qxwlan_e2600ac-c2 | ipq40xx/generic | Qxwlan | E2600AC
+sony_ncp-hg100-cellular | ipq40xx/generic | Sony | NCP-HG100/Cellular
+teltonika_rutx50 | ipq40xx/generic | Teltonika | RUTX50
+wallys_dr40x9 | ipq40xx/generic | Wallys | DR40X9
+zte_mf18a | ipq40xx/generic | ZTE | MF18A
+zte_mf286d | ipq40xx/generic | ZTE | MF286D
+zte_mf287 | ipq40xx/generic | ZTE | MF287
+zte_mf287plus | ipq40xx/generic | ZTE | MF287Plus
+zte_mf287pro | ipq40xx/generic | ZTE | MF287Pro
+zte_mf289f | ipq40xx/generic | ZTE | MF289F
+zyxel_nbg6617 | ipq40xx/generic | ZyXEL | NBG6617
+acelink_ew-7886cax | mediatek/filogic | Acelink | EW-7886CAX
+acer_predator-w6 | mediatek/filogic | Acer | Predator W6
+asus_rt-ax59u | mediatek/filogic | ASUS | RT-AX59U
+asus_tuf-ax4200 | mediatek/filogic | ASUS | TUF-AX4200
+asus_tuf-ax6000 | mediatek/filogic | ASUS | TUF-AX6000
+bananapi_bpi-r3 | mediatek/filogic | Bananapi | BPi-R3
+cetron_ct3003 | mediatek/filogic | Cetron | CT3003
+cmcc_rax3000m | mediatek/filogic | CMCC | RAX3000M
+comfast_cf-e393ax | mediatek/filogic | Comfast | CF-E393AX
+confiabits_mt7981 | mediatek/filogic | Confiabits | MT7981
+cudy_m3000-v1 | mediatek/filogic | Cudy | M3000
+cudy_re3000-v1 | mediatek/filogic | Cudy | RE3000
+cudy_tr3000-v1 | mediatek/filogic | Cudy | TR3000
+cudy_wr3000-v1 | mediatek/filogic | Cudy | WR3000
+dlink_aquila-pro-ai-m30-a1 | mediatek/filogic | D-Link | AQUILA PRO AI M30
+glinet_gl-mt3000 | mediatek/filogic | GL.iNet | GL-MT3000
+glinet_gl-mt6000 | mediatek/filogic | GL.iNet | GL-MT6000
+h3c_magic-nx30-pro | mediatek/filogic | H3C | Magic NX30 Pro
+jcg_q30-pro | mediatek/filogic | JCG | Q30 PRO
+jdcloud_re-cp-03 | mediatek/filogic | JDCloud | RE-CP-03
+mediatek_mt7981-rfb | mediatek/filogic | MediaTek | MT7981 rfb
+mediatek_mt7986a-rfb-nand | mediatek/filogic | MediaTek | MT7986 rfba AP (NAND)
+mediatek_mt7986b-rfb | mediatek/filogic | MediaTek | MTK7986 rfbb AP
+mediatek_mt7988a-rfb | mediatek/filogic | MediaTek | MT7988A rfb
+mercusys_mr90x-v1 | mediatek/filogic | MERCUSYS | MR90X v1
+netcore_n60 | mediatek/filogic | Netcore | N60
+netgear_wax220 | mediatek/filogic | NETGEAR | WAX220
+qihoo_360t7 | mediatek/filogic | Qihoo | 360T7
+routerich_ax3000 | mediatek/filogic | Routerich | AX3000
+smartrg_sdg-8612 | mediatek/filogic | Adtran | SDG-8612
+smartrg_sdg-8614 | mediatek/filogic | Adtran | SDG-8614
+smartrg_sdg-8622 | mediatek/filogic | Adtran | SDG-8622
+smartrg_sdg-8632 | mediatek/filogic | Adtran | SDG-8632
+tplink_tl-xdr4288 | mediatek/filogic | TP-Link | TL-XDR4288
+tplink_tl-xdr6086 | mediatek/filogic | TP-Link | TL-XDR6086
+tplink_tl-xdr6088 | mediatek/filogic | TP-Link | TL-XDR6088
+ubnt_unifi-6-plus | mediatek/filogic | Ubiquiti | UniFi U6+
+unielec_u7981-01-emmc | mediatek/filogic | Unielec | U7981-01
+unielec_u7981-01-nand | mediatek/filogic | Unielec | U7981-01
+xiaomi_mi-router-ax3000t | mediatek/filogic | Xiaomi | Mi Router AX3000T
+xiaomi_mi-router-ax3000t-ubootmod | mediatek/filogic | Xiaomi | Mi Router AX3000T (OpenWrt U-Boot layout)
+xiaomi_mi-router-wr30u-stock | mediatek/filogic | Xiaomi | Mi Router WR30U (stock layout)
+xiaomi_mi-router-wr30u-ubootmod | mediatek/filogic | Xiaomi | Mi Router WR30U (OpenWrt U-Boot layout)
+xiaomi_redmi-router-ax6000-stock | mediatek/filogic | Xiaomi | Redmi Router AX6000 (stock layout)
+xiaomi_redmi-router-ax6000-ubootmod | mediatek/filogic | Xiaomi | Redmi Router AX6000 (OpenWrt U-Boot layout)
+yuncore_ax835 | mediatek/filogic | YunCore | AX835
+zbtlink_zbt-z8102ax | mediatek/filogic | Zbtlink | ZBT-Z8102AX
+zbtlink_zbt-z8103ax | mediatek/filogic | Zbtlink | ZBT-Z8103AX
+zyxel_ex5601-t0-stock | mediatek/filogic | Zyxel | EX5601-T0
+zyxel_ex5601-t0-ubootmod | mediatek/filogic | Zyxel | EX5601-T0
+zyxel_ex5700-telenor | mediatek/filogic | ZyXEL | EX5700 (Telenor)
+zyxel_nwa50ax-pro | mediatek/filogic | ZyXEL | NWA50AX Pro
+8dev_carambola2 | ath79/generic | 8devices | Carambola2
+8dev_lima | ath79/generic | 8devices | Lima
+adtran_bsap1800-v2 | ath79/generic | Adtran/Bluesocket | BSAP-1800
+adtran_bsap1840 | ath79/generic | Adtran/Bluesocket | BSAP-1840
+airtight_c-75 | ath79/generic | AirTight Networks | C-75
+alcatel_hh40v | ath79/generic | Alcatel | HH40V
+alfa-network_ap121f | ath79/generic | ALFA Network | AP121F
+alfa-network_ap121fe | ath79/generic | ALFA Network | AP121FE
+alfa-network_n2q | ath79/generic | ALFA Network | N2Q
+alfa-network_n5q | ath79/generic | ALFA Network | N5Q
+alfa-network_pi-wifi4 | ath79/generic | ALFA Network | Pi-WiFi4
+alfa-network_r36a | ath79/generic | ALFA Network | R36A
+alfa-network_tube-2hq | ath79/generic | ALFA Network | Tube-2HQ
+allnet_all-wap02860ac | ath79/generic | ALLNET | ALL-WAP02860AC
+araknis_an-300-ap-i-n | ath79/generic | Araknis | AN-300-AP-I-N
+araknis_an-500-ap-i-ac | ath79/generic | Araknis | AN-500-AP-I-AC
+araknis_an-700-ap-i-ac | ath79/generic | Araknis | AN-700-AP-I-AC
+arduino_yun | ath79/generic | Arduino | Yun
+aruba_ap-105 | ath79/generic | Aruba | AP-105
+aruba_ap-115 | ath79/generic | Aruba | AP-115
+aruba_ap-175 | ath79/generic | Aruba | AP-175
+asus_pl-ac56 | ath79/generic | ASUS | PL-AC56
+asus_rp-ac51 | ath79/generic | ASUS | RP-AC51
+asus_rp-ac66 | ath79/generic | ASUS | RP-AC66
+atheros_db120 | ath79/generic | Atheros | DB120
+avm_fritz1750e | ath79/generic | AVM | FRITZ!WLAN Repeater 1750E
+avm_fritz300e | ath79/generic | AVM | FRITZ!WLAN Repeater 300E
+avm_fritz4020 | ath79/generic | AVM | FRITZ!Box 4020
+avm_fritz450e | ath79/generic | AVM | FRITZ!WLAN Repeater 450E
+avm_fritzdvbc | ath79/generic | AVM | FRITZ!WLAN Repeater DVB-C
+belkin_f9j1108-v2 | ath79/generic | Belkin | F9J1108 v2 (AC1750 DB Wi-Fi)
+belkin_f9k1115-v2 | ath79/generic | Belkin | F9K1115 v2 (AC1750 DB Wi-Fi)
+buffalo_bhr-4grv | ath79/generic | Buffalo | BHR-4GRV
+buffalo_bhr-4grv2 | ath79/generic | Buffalo | BHR-4GRV2
+buffalo_wzr-600dhp | ath79/generic | Buffalo | WZR-600DHP
+buffalo_wzr-hp-ag300h | ath79/generic | Buffalo | WZR-HP-AG300H
+buffalo_wzr-hp-g300nh-rb | ath79/generic | Buffalo | WZR-HP-G300NH (RTL8366RB switch)
+buffalo_wzr-hp-g300nh-s | ath79/generic | Buffalo | WZR-HP-G300NH (RTL8366S switch)
+buffalo_wzr-hp-g302h-a1a0 | ath79/generic | Buffalo | WZR-HP-G302H
+buffalo_wzr-hp-g450h | ath79/generic | Buffalo | WZR-HP-G450H/WZR-450HP
+comfast_cf-e110n-v2 | ath79/generic | COMFAST | CF-E110N
+comfast_cf-e120a-v3 | ath79/generic | COMFAST | CF-E120A
+comfast_cf-e130n-v2 | ath79/generic | COMFAST | CF-E130N
+comfast_cf-e313ac | ath79/generic | COMFAST | CF-E313AC
+comfast_cf-e314n-v2 | ath79/generic | COMFAST | CF-E314N
+comfast_cf-e375ac | ath79/generic | COMFAST | CF-E375AC
+comfast_cf-e5 | ath79/generic | COMFAST | CF-E5/E7
+comfast_cf-e560ac | ath79/generic | COMFAST | CF-E560AC
+comfast_cf-ew72 | ath79/generic | COMFAST | CF-EW72
+comfast_cf-wr650ac-v1 | ath79/generic | COMFAST | CF-WR650AC
+comfast_cf-wr650ac-v2 | ath79/generic | COMFAST | CF-WR650AC
+comfast_cf-wr752ac-v1 | ath79/generic | COMFAST | CF-WR752AC
+compex_wpj344-16m | ath79/generic | Compex | WPJ344
+compex_wpj531-16m | ath79/generic | Compex | WPJ531
+compex_wpj558-16m | ath79/generic | Compex | WPJ558
+compex_wpj563 | ath79/generic | Compex | WPJ563
+devolo_dlan-pro-1200plus-ac | ath79/generic | devolo | dLAN pro 1200+ WiFi ac
+devolo_dvl1200e | ath79/generic | devolo | WiFi pro 1200e
+devolo_dvl1200i | ath79/generic | devolo | WiFi pro 1200i
+devolo_dvl1750c | ath79/generic | devolo | WiFi pro 1750c
+devolo_dvl1750e | ath79/generic | devolo | WiFi pro 1750e
+devolo_dvl1750i | ath79/generic | devolo | WiFi pro 1750i
+devolo_dvl1750x | ath79/generic | devolo | WiFi pro 1750x
+devolo_magic-2-wifi | ath79/generic | devolo | Magic 2 WiFi
+dlink_dap-1330-a1 | ath79/generic | D-Link | DAP-1330
+dlink_dap-1365-a1 | ath79/generic | D-Link | DAP-1365
+dlink_dap-2230-a1 | ath79/generic | D-Link | DAP-2230
+dlink_dap-2660-a1 | ath79/generic | D-Link | DAP-2660
+dlink_dap-2680-a1 | ath79/generic | D-Link | DAP-2680
+dlink_dap-2695-a1 | ath79/generic | D-Link | DAP-2695
+dlink_dap-3320-a1 | ath79/generic | D-Link | DAP-3320
+dlink_dap-3662-a1 | ath79/generic | D-Link | DAP-3662
+dlink_dch-g020-a1 | ath79/generic | D-Link | DCH-G020
+dlink_dir-505 | ath79/generic | D-Link | DIR-505
+dlink_dir-629-a1 | ath79/generic | D-Link | DIR-629
+dlink_dir-825-b1 | ath79/generic | D-Link | DIR-825
+dlink_dir-825-c1 | ath79/generic | D-Link | DIR-825
+dlink_dir-835-a1 | ath79/generic | D-Link | DIR-835
+dlink_dir-842-c1 | ath79/generic | D-Link | DIR-842
+dlink_dir-842-c2 | ath79/generic | D-Link | DIR-842
+dlink_dir-842-c3 | ath79/generic | D-Link | DIR-842
+dlink_dir-859-a1 | ath79/generic | D-Link | DIR-859
+dlink_dir-859-a3 | ath79/generic | D-Link | DIR-859
+dlink_dir-869-a1 | ath79/generic | D-Link | DIR-869
+elecom_wrc-1750ghbk2-i | ath79/generic | ELECOM | WRC-1750GHBK2-I/C
+elecom_wrc-300ghbk2-i | ath79/generic | ELECOM | WRC-300GHBK2-I
+embeddedwireless_balin | ath79/generic | Embedded Wireless | Balin
+embeddedwireless_dorin | ath79/generic | Embedded Wireless | Dorin
+engenius_eap1200h | ath79/generic | EnGenius | EAP1200H
+engenius_eap1750h | ath79/generic | EnGenius | EAP1750H
+engenius_eap300-v2 | ath79/generic | EnGenius | EAP300
+engenius_eap600 | ath79/generic | EnGenius | EAP600
+engenius_ecb1200 | ath79/generic | EnGenius | ECB1200
+engenius_ecb1750 | ath79/generic | EnGenius | ECB1750
+engenius_ecb600 | ath79/generic | EnGenius | ECB600
+engenius_ens202ext-v1 | ath79/generic | EnGenius | ENS202EXT
+engenius_enstationac-v1 | ath79/generic | EnGenius | EnStationAC
+engenius_epg5000 | ath79/generic | EnGenius | EPG5000
+engenius_esr1200 | ath79/generic | EnGenius | ESR1200
+engenius_esr1750 | ath79/generic | EnGenius | ESR1750
+engenius_esr900 | ath79/generic | EnGenius | ESR900
+engenius_ews511ap | ath79/generic | EnGenius | EWS511AP
+engenius_ews660ap | ath79/generic | EnGenius | EWS660AP
+enterasys_ws-ap3705i | ath79/generic | Enterasys | WS-AP3705i
+etactica_eg200 | ath79/generic | eTactica | EG200
+extreme-networks_ws-ap3805i | ath79/generic | Extreme Networks | WS-AP3805i
+fortinet_fap-221-b | ath79/generic | Fortinet | FAP-221-B
+glinet_6408 | ath79/generic | GL.iNet | 6408
+glinet_6416 | ath79/generic | GL.iNet | 6416
+glinet_gl-ar150 | ath79/generic | GL.iNet | GL-AR150
+glinet_gl-ar300m-lite | ath79/generic | GL.iNet | GL-AR300M
+glinet_gl-ar300m16 | ath79/generic | GL.iNet | GL-AR300M16
+glinet_gl-ar750 | ath79/generic | GL.iNet | GL-AR750
+glinet_gl-mifi | ath79/generic | GL.iNET | GL-MiFi
+glinet_gl-usb150 | ath79/generic | GL.iNET | GL-USB150
+glinet_gl-x300b | ath79/generic | GL.iNet | GL-X300B
+glinet_gl-x750 | ath79/generic | GL.iNet | GL-X750
+hak5_lan-turtle | ath79/generic | Hak5 | LAN Turtle
+hak5_packet-squirrel | ath79/generic | Hak5 | Packet Squirrel
+hak5_wifi-pineapple-nano | ath79/generic | Hak5 | WiFi Pineapple NANO
+hiwifi_hc6361 | ath79/generic | HiWiFi | HC6361
+huawei_ap5030dn | ath79/generic | Huawei | AP5030DN
+iodata_etg3-r | ath79/generic | I-O DATA | ETG3-R
+iodata_wn-ac1167dgr | ath79/generic | I-O DATA | WN-AC1167DGR
+iodata_wn-ac1600dgr | ath79/generic | I-O DATA | WN-AC1600DGR
+iodata_wn-ac1600dgr2 | ath79/generic | I-O DATA | WN-AC1600DGR2/DGR3
+iodata_wn-ag300dgr | ath79/generic | I-O DATA | WN-AG300DGR
+jjplus_ja76pf2 | ath79/generic | jjPlus | JA76PF2
+jjplus_jwap230 | ath79/generic | jjPlus | JWAP230
+joyit_jt-or750i | ath79/generic | Joy-IT | JT-OR750i
+kuwfi_c910 | ath79/generic | KuWFi | C910
+letv_lba-047-ch | ath79/generic | Letv | LBA-047-CH
+librerouter_librerouter-v1 | ath79/generic | Librerouter | LibreRouter
+meraki_mr12 | ath79/generic | Meraki | MR12
+meraki_mr16 | ath79/generic | Meraki | MR16
+mercury_mw4530r-v1 | ath79/generic | Mercury | MW4530R
+nec_wf1200cr | ath79/generic | NEC | Aterm WF1200CR
+nec_wg1200cr | ath79/generic | NEC | Aterm WG1200CR
+nec_wg800hp | ath79/generic | NEC | Aterm WG800HP
+netgear_ex7300 | ath79/generic | NETGEAR | EX7300
+netgear_ex7300-v2 | ath79/generic | NETGEAR | EX7300
+netgear_wndap360 | ath79/generic | NETGEAR | WNDAP360
+netgear_wndr3700 | ath79/generic | NETGEAR | WNDR3700
+netgear_wndr3700-v2 | ath79/generic | NETGEAR | WNDR3700
+netgear_wndr3800 | ath79/generic | NETGEAR | WNDR3800
+netgear_wndr3800ch | ath79/generic | NETGEAR | WNDR3800CH
+netgear_wndrmac-v1 | ath79/generic | NETGEAR | WNDRMAC
+netgear_wndrmac-v2 | ath79/generic | NETGEAR | WNDRMAC
+netgear_wnr2200-16m | ath79/generic | NETGEAR | WNR2200
+netgear_wnr2200-8m | ath79/generic | NETGEAR | WNR2200
+ocedo_koala | ath79/generic | Ocedo | Koala
+ocedo_raccoon | ath79/generic | Ocedo | Raccoon
+ocedo_ursus | ath79/generic | Ocedo | Ursus
+onion_omega | ath79/generic | Onion | Omega
+openmesh_a40 | ath79/generic | OpenMesh | A40
+openmesh_a60 | ath79/generic | OpenMesh | A60
+openmesh_mr1750-v1 | ath79/generic | OpenMesh | MR1750
+openmesh_mr1750-v2 | ath79/generic | OpenMesh | MR1750
+openmesh_mr600-v1 | ath79/generic | OpenMesh | MR600
+openmesh_mr600-v2 | ath79/generic | OpenMesh | MR600
+openmesh_mr900-v1 | ath79/generic | OpenMesh | MR900
+openmesh_mr900-v2 | ath79/generic | OpenMesh | MR900
+openmesh_om2p-hs-v1 | ath79/generic | OpenMesh | OM2P-HS
+openmesh_om2p-hs-v2 | ath79/generic | OpenMesh | OM2P-HS
+openmesh_om2p-hs-v3 | ath79/generic | OpenMesh | OM2P-HS
+openmesh_om2p-hs-v4 | ath79/generic | OpenMesh | OM2P-HS
+openmesh_om2p-lc | ath79/generic | OpenMesh | OM2P-LC
+openmesh_om2p-v1 | ath79/generic | OpenMesh | OM2P
+openmesh_om2p-v2 | ath79/generic | OpenMesh | OM2P
+openmesh_om2p-v4 | ath79/generic | OpenMesh | OM2P
+openmesh_om5p | ath79/generic | OpenMesh | OM5P
+openmesh_om5p-ac-v1 | ath79/generic | OpenMesh | OM5P-AC
+openmesh_om5p-ac-v2 | ath79/generic | OpenMesh | OM5P-AC
+openmesh_om5p-an | ath79/generic | OpenMesh | OM5P-AN
+pcs_cap324 | ath79/generic | PowerCloud Systems | CAP324
+pcs_cr3000 | ath79/generic | PowerCloud Systems | CR3000
+pcs_cr5000 | ath79/generic | PowerCloud Systems | CR5000
+phicomm_k2t | ath79/generic | Phicomm | K2T
+pisen_ts-d084 | ath79/generic | PISEN | TS-D084
+pisen_wmb001n | ath79/generic | PISEN | WMB001N
+pisen_wmm003n | ath79/generic | PISEN | Cloud Easy Power (WMM003N)
+plasmacloud_pa300 | ath79/generic | Plasma Cloud | PA300
+plasmacloud_pa300e | ath79/generic | Plasma Cloud | PA300E
+qca_ap143-16m | ath79/generic | Qualcomm Atheros | AP143
+qca_ap143-8m | ath79/generic | Qualcomm Atheros | AP143
+qihoo_c301 | ath79/generic | Qihoo | C301
+qxwlan_e1700ac-v2-16m | ath79/generic | Qxwlan | E1700AC
+qxwlan_e1700ac-v2-8m | ath79/generic | Qxwlan | E1700AC
+qxwlan_e558-v2-16m | ath79/generic | Qxwlan | E558
+qxwlan_e558-v2-8m | ath79/generic | Qxwlan | E558
+qxwlan_e600g-v2-16m | ath79/generic | Qxwlan | E600G
+qxwlan_e600g-v2-8m | ath79/generic | Qxwlan | E600G
+qxwlan_e600gac-v2-16m | ath79/generic | Qxwlan | E600GAC
+qxwlan_e600gac-v2-8m | ath79/generic | Qxwlan | E600GAC
+qxwlan_e750a-v4-16m | ath79/generic | Qxwlan | E750A
+qxwlan_e750a-v4-8m | ath79/generic | Qxwlan | E750A
+qxwlan_e750g-v8-16m | ath79/generic | Qxwlan | E750G
+qxwlan_e750g-v8-8m | ath79/generic | Qxwlan | E750G
+rosinson_wr818 | ath79/generic | Rosinson | WR818
+ruckus_zf7025 | ath79/generic | Ruckus | ZoneFlex 7025
+ruckus_zf7321 | ath79/generic | Ruckus | ZoneFlex 7321[-U]
+ruckus_zf7341 | ath79/generic | Ruckus | ZoneFlex 7341[-U]
+ruckus_zf7351 | ath79/generic | Ruckus | ZoneFlex 7351[-U]
+ruckus_zf7363 | ath79/generic | Ruckus | ZoneFlex 7363[-U]
+ruckus_zf7372 | ath79/generic | Ruckus | ZoneFlex 7352/7372[-E/-U]
+samsung_wam250 | ath79/generic | Samsung | WAM250
+siemens_ws-ap3610 | ath79/generic | Siemens | WS-AP3610
+sitecom_wlr-7100 | ath79/generic | Sitecom | WLR-7100
+sitecom_wlr-8100 | ath79/generic | Sitecom | WLR-8100
+sophos_ap100 | ath79/generic | Sophos | AP100
+sophos_ap100c | ath79/generic | Sophos | AP100C
+sophos_ap15 | ath79/generic | Sophos | AP15
+sophos_ap55 | ath79/generic | Sophos | AP55
+sophos_ap55c | ath79/generic | Sophos | AP55C
+telco_t1 | ath79/generic | Telco | T1
+teltonika_rut230-v1 | ath79/generic | Teltonika | RUT230
+teltonika_rut300 | ath79/generic | Teltonika | RUT300
+teltonika_rut955 | ath79/generic | Teltonika | RUT955
+teltonika_rut955-h7v3c0 | ath79/generic | Teltonika | RUT955
+tplink_archer-a7-v5 | ath79/generic | TP-Link | Archer A7
+tplink_archer-a9-v6 | ath79/generic | TP-Link | Archer A9
+tplink_archer-c2-v3 | ath79/generic | TP-Link | Archer C2
+tplink_archer-c25-v1 | ath79/generic | TP-Link | Archer C25
+tplink_archer-c5-v1 | ath79/generic | TP-Link | Archer C5
+tplink_archer-c58-v1 | ath79/generic | TP-Link | Archer C58
+tplink_archer-c59-v1 | ath79/generic | TP-Link | Archer C59
+tplink_archer-c59-v2 | ath79/generic | TP-Link | Archer C59
+tplink_archer-c6-v2 | ath79/generic | TP-Link | Archer C6
+tplink_archer-c6-v2-us | ath79/generic | TP-Link | Archer C6
+tplink_archer-c60-v1 | ath79/generic | TP-Link | Archer C60
+tplink_archer-c60-v2 | ath79/generic | TP-Link | Archer C60
+tplink_archer-c60-v3 | ath79/generic | TP-Link | Archer C60
+tplink_archer-c7-v1 | ath79/generic | TP-Link | Archer C7
+tplink_archer-c7-v2 | ath79/generic | TP-Link | Archer C7
+tplink_archer-c7-v4 | ath79/generic | TP-Link | Archer C7
+tplink_archer-c7-v5 | ath79/generic | TP-Link | Archer C7
+tplink_archer-d50-v1 | ath79/generic | TP-Link | Archer D50
+tplink_archer-d7-v1 | ath79/generic | TP-Link | Archer D7
+tplink_archer-d7b-v1 | ath79/generic | TP-Link | Archer D7b
+tplink_cpe210-v1 | ath79/generic | TP-Link | CPE210
+tplink_cpe210-v2 | ath79/generic | TP-Link | CPE210
+tplink_cpe210-v3 | ath79/generic | TP-Link | CPE210
+tplink_cpe220-v2 | ath79/generic | TP-Link | CPE220
+tplink_cpe220-v3 | ath79/generic | TP-Link | CPE220
+tplink_cpe510-v1 | ath79/generic | TP-Link | CPE510
+tplink_cpe510-v2 | ath79/generic | TP-Link | CPE510
+tplink_cpe510-v3 | ath79/generic | TP-Link | CPE510
+tplink_cpe605-v1 | ath79/generic | TP-Link | CPE605
+tplink_cpe610-v1 | ath79/generic | TP-Link | CPE610
+tplink_cpe610-v2 | ath79/generic | TP-Link | CPE610
+tplink_cpe710-v1 | ath79/generic | TP-Link | CPE710
+tplink_deco-m4r-v1 | ath79/generic | TP-Link | Deco M4R
+tplink_deco-s4-v2 | ath79/generic | TP-Link | Deco S4
+tplink_eap225-outdoor-v1 | ath79/generic | TP-Link | EAP225-Outdoor
+tplink_eap225-outdoor-v3 | ath79/generic | TP-Link | EAP225-Outdoor
+tplink_eap225-v1 | ath79/generic | TP-Link | EAP225
+tplink_eap225-v3 | ath79/generic | TP-Link | EAP225
+tplink_eap225-v4 | ath79/generic | TP-Link | EAP225
+tplink_eap225-wall-v2 | ath79/generic | TP-Link | EAP225-Wall
+tplink_eap245-v1 | ath79/generic | TP-Link | EAP245
+tplink_eap245-v3 | ath79/generic | TP-Link | EAP245
+tplink_re350k-v1 | ath79/generic | TP-Link | RE350K
+tplink_re355-v1 | ath79/generic | TP-Link | RE355
+tplink_re450-v1 | ath79/generic | TP-Link | RE450
+tplink_re450-v2 | ath79/generic | TP-Link | RE450
+tplink_re450-v3 | ath79/generic | TP-Link | RE450
+tplink_re455-v1 | ath79/generic | TP-Link | RE455
+tplink_tl-mr6400-v1 | ath79/generic | TP-Link | TL-MR6400
+tplink_tl-wa1201-v2 | ath79/generic | TP-Link | TL-WA1201
+tplink_tl-wdr3500-v1 | ath79/generic | TP-Link | TL-WDR3500
+tplink_tl-wdr3600-v1 | ath79/generic | TP-Link | TL-WDR3600
+tplink_tl-wdr4300-v1 | ath79/generic | TP-Link | TL-WDR4300
+tplink_tl-wdr4300-v1-il | ath79/generic | TP-Link | TL-WDR4300
+tplink_tl-wdr4310-v1 | ath79/generic | TP-Link | TL-WDR4310
+tplink_tl-wdr4900-v2 | ath79/generic | TP-Link | TL-WDR4900
+tplink_tl-wdr7500-v3 | ath79/generic | TP-Link | TL-WDR7500
+tplink_tl-wpa8630-v1 | ath79/generic | TP-Link | TL-WPA8630
+tplink_tl-wr1043n-v5 | ath79/generic | TP-Link | TL-WR1043N
+tplink_tl-wr1043nd-v2 | ath79/generic | TP-Link | TL-WR1043N/ND
+tplink_tl-wr1043nd-v3 | ath79/generic | TP-Link | TL-WR1043N/ND
+tplink_tl-wr1043nd-v4 | ath79/generic | TP-Link | TL-WR1043N/ND
+tplink_tl-wr1045nd-v2 | ath79/generic | TP-Link | TL-WR1045ND
+tplink_tl-wr2543-v1 | ath79/generic | TP-Link | TL-WR2543N/ND
+tplink_tl-wr810n-v1 | ath79/generic | TP-Link | TL-WR810N
+tplink_tl-wr841hp-v2 | ath79/generic | TP-Link | TL-WR841HP
+tplink_tl-wr841hp-v3 | ath79/generic | TP-Link | TL-WR841HP
+tplink_tl-wr842n-v3 | ath79/generic | TP-Link | TL-WR842N
+tplink_tl-wr902ac-v1 | ath79/generic | TP-Link | TL-WR902AC
+tplink_tl-wr941hp-v1 | ath79/generic | TP-Link | TL-WR941HP
+tplink_wbs210-v1 | ath79/generic | TP-Link | WBS210
+tplink_wbs210-v2 | ath79/generic | TP-Link | WBS210
+tplink_wbs510-v1 | ath79/generic | TP-Link | WBS510
+tplink_wbs510-v2 | ath79/generic | TP-Link | WBS510
+trendnet_tew-673gru | ath79/generic | Trendnet | TEW-673GRU
+trendnet_tew-823dru | ath79/generic | Trendnet | TEW-823DRU
+ubnt_aircube-ac | ath79/generic | Ubiquiti | airCube AC
+ubnt_aircube-isp | ath79/generic | Ubiquiti | airCube ISP
+ubnt_bullet-ac | ath79/generic | Ubiquiti | Bullet AC
+ubnt_bullet-m-xw | ath79/generic | Ubiquiti | Bullet M
+ubnt_edgeswitch-5xp | ath79/generic | Ubiquiti | EdgeSwitch 5XP
+ubnt_lap-120 | ath79/generic | Ubiquiti | LiteAP ac (LAP-120)
+ubnt_litebeam-ac-gen2 | ath79/generic | Ubiquiti | LiteBeam AC
+ubnt_nanobeam-ac | ath79/generic | Ubiquiti | NanoBeam AC
+ubnt_nanobeam-ac-gen2 | ath79/generic | Ubiquiti | NanoBeam AC
+ubnt_nanobeam-ac-xc | ath79/generic | Ubiquiti | NanoBeam AC
+ubnt_nanobeam-m5-xw | ath79/generic | Ubiquiti | NanoBeam M5
+ubnt_nanostation-ac | ath79/generic | Ubiquiti | Nanostation AC
+ubnt_nanostation-ac-loco | ath79/generic | Ubiquiti | Nanostation AC loco
+ubnt_nanostation-loco-m-xw | ath79/generic | Ubiquiti | Nanostation Loco M
+ubnt_nanostation-m-xw | ath79/generic | Ubiquiti | Nanostation M
+ubnt_powerbeam-5ac-500 | ath79/generic | Ubiquiti | PowerBeam 5AC
+ubnt_powerbeam-5ac-gen2 | ath79/generic | Ubiquiti | PowerBeam 5AC
+ubnt_powerbeam-m2-xw | ath79/generic | Ubiquiti | PowerBeam M2
+ubnt_powerbeam-m5-xw | ath79/generic | Ubiquiti | PowerBeam M5
+ubnt_powerbridge-m | ath79/generic | Ubiquiti | PowerBridge M
+ubnt_rocket-5ac-lite | ath79/generic | Ubiquiti | Rocket 5AC
+ubnt_rocket-m | ath79/generic | Ubiquiti | Rocket M
+ubnt_routerstation | ath79/generic | Ubiquiti | RouterStation
+ubnt_routerstation-pro | ath79/generic | Ubiquiti | RouterStation Pro
+ubnt_uk-ultra | ath79/generic | Ubiquiti | UniFi Swiss Army Knife Ultra
+ubnt_unifi-ap | ath79/generic | Ubiquiti | UniFi AP
+ubnt_unifi-ap-lr | ath79/generic | Ubiquiti | UniFi AP
+ubnt_unifi-ap-outdoor-plus | ath79/generic | Ubiquiti | UniFi AP Outdoor+
+ubnt_unifi-ap-pro | ath79/generic | Ubiquiti | UniFi AP Pro
+ubnt_unifiac-lite | ath79/generic | Ubiquiti | UniFi AC Lite
+ubnt_unifiac-lr | ath79/generic | Ubiquiti | UniFi AC LR
+ubnt_unifiac-mesh | ath79/generic | Ubiquiti | UniFi AC Mesh
+ubnt_unifiac-mesh-pro | ath79/generic | Ubiquiti | UniFi AC Mesh Pro
+ubnt_unifiac-pro | ath79/generic | Ubiquiti | UniFi AC Pro
+wallys_dr531 | ath79/generic | Wallys | DR531
+watchguard_ap100 | ath79/generic | WatchGuard | AP100
+watchguard_ap200 | ath79/generic | WatchGuard | AP200
+watchguard_ap300 | ath79/generic | WatchGuard | AP300
+wd_mynet-n600 | ath79/generic | Western Digital | My Net N600
+wd_mynet-n750 | ath79/generic | Western Digital | My Net N750
+winchannel_wb2000 | ath79/generic | Winchannel | WB2000
+xiaomi_aiot-ac2350 | ath79/generic | Xiaomi | AIoT AC2350
+xiaomi_mi-router-4q | ath79/generic | Xiaomi | Mi Router 4Q
+yuncore_a770 | ath79/generic | YunCore | A770
+yuncore_a782 | ath79/generic | YunCore | A782
+yuncore_a930 | ath79/generic | YunCore | A930
+yuncore_xd3200 | ath79/generic | YunCore | XD3200
+yuncore_xd4200 | ath79/generic | YunCore | XD4200
+zbtlink_zbt-wd323 | ath79/generic | ZBT | WD323
+zyxel_nbg6616 | ath79/generic | ZyXEL | NBG6616
+zyxel_nwa1100-nh | ath79/generic | ZyXEL | NWA1100
+zyxel_nwa1121-ni | ath79/generic | ZyXEL | NWA1121
+zyxel_nwa1123-ac | ath79/generic | ZyXEL | NWA1123
+zyxel_nwa1123-ni | ath79/generic | ZyXEL | NWA1123
+8dev_rambutan | ath79/nand | 8devices | Rambutan
+aerohive_hiveap-121 | ath79/nand | Aerohive | HiveAP 121
+domywifi_dw33d | ath79/nand | DomyWifi | DW33D
+dongwon_dw02-412h-128m | ath79/nand | Dongwon T&I | DW02-412H
+dongwon_dw02-412h-64m | ath79/nand | Dongwon T&I | DW02-412H
+glinet_gl-ar300m-nand | ath79/nand | GL.iNet | GL-AR300M
+glinet_gl-ar300m-nor | ath79/nand | GL.iNet | GL-AR300M
+glinet_gl-ar750s-nor | ath79/nand | GL.iNet | GL-AR750S
+glinet_gl-ar750s-nor-nand | ath79/nand | GL.iNet | GL-AR750S
+glinet_gl-e750 | ath79/nand | GL.iNet | GL-E750
+glinet_gl-x1200-nor | ath79/nand | GL.iNet | GL-X1200
+glinet_gl-x1200-nor-nand | ath79/nand | GL.iNet | GL-X1200
+glinet_gl-xe300 | ath79/nand | GL.iNet | GL-XE300
+linksys_ea4500-v3 | ath79/nand | Linksys | EA4500
+meraki_mr18 | ath79/nand | Meraki | MR18
+netgear_pgzng1 | ath79/nand | NETGEAR | PGZNG1
+netgear_r6100 | ath79/nand | NETGEAR | R6100
+netgear_wndr3700-v4 | ath79/nand | NETGEAR | WNDR3700
+netgear_wndr4300 | ath79/nand | NETGEAR | WNDR4300
+netgear_wndr4300-v2 | ath79/nand | NETGEAR | WNDR4300
+netgear_wndr4300sw | ath79/nand | NETGEAR | WNDR4300SW
+netgear_wndr4300tn | ath79/nand | NETGEAR | WNDR4300TN
+netgear_wndr4500-v3 | ath79/nand | NETGEAR | WNDR4500
+zte_mf281 | ath79/nand | ZTE | MF281
+zte_mf282 | ath79/nand | ZTE | MF282
+zte_mf286 | ath79/nand | ZTE | MF286
+zte_mf286a | ath79/nand | ZTE | MF286A
+zte_mf286r | ath79/nand | ZTE | MF286R
+zyxel_emg2926_q10a | ath79/nand | ZyXEL | EMG2926-Q10A
+zyxel_nbg6716 | ath79/nand | ZyXEL | NBG6716
+arris_tr4400-v2 | ipq806x/generic | Arris | TR4400
+askey_rt4230w-rev6 | ipq806x/generic | Askey | RT4230W
+asrock_g10 | ipq806x/generic | ASRock | G10
+buffalo_wxr-2533dhp | ipq806x/generic | Buffalo | WXR-2533DHP
+compex_wpq864 | ipq806x/generic | Compex | WPQ864
+edgecore_ecw5410 | ipq806x/generic | Edgecore | ECW5410
+linksys_ea7500-v1 | ipq806x/generic | Linksys | EA7500
+linksys_ea8500 | ipq806x/generic | Linksys | EA8500
+meraki_mr42 | ipq806x/generic | Cisco Meraki | MR42
+meraki_mr52 | ipq806x/generic | Cisco Meraki | MR52
+nec_wg2600hp | ipq806x/generic | NEC | Aterm WG2600HP
+nec_wg2600hp3 | ipq806x/generic | NEC Platforms | Aterm WG2600HP3
+netgear_d7800 | ipq806x/generic | NETGEAR | Nighthawk X4 D7800
+netgear_r7500 | ipq806x/generic | NETGEAR | Nighthawk X4 R7500
+netgear_r7500v2 | ipq806x/generic | NETGEAR | Nighthawk X4 R7500
+netgear_r7800 | ipq806x/generic | NETGEAR | Nighthawk X4S R7800
+netgear_xr500 | ipq806x/generic | NETGEAR | Nighthawk XR500
+nokia_ac400i | ipq806x/generic | Nokia | AC400i
+qcom_ipq8064-ap148 | ipq806x/generic | Qualcomm | AP148
+qcom_ipq8064-ap148-legacy | ipq806x/generic | Qualcomm | AP148
+qcom_ipq8064-ap161 | ipq806x/generic | Qualcomm | AP161
+qcom_ipq8064-db149 | ipq806x/generic | Qualcomm | DB149
+tplink_ad7200 | ipq806x/generic | TP-Link | AD7200
+tplink_c2600 | ipq806x/generic | TP-Link | Archer C2600
+tplink_vr2600v | ipq806x/generic | TP-Link | Archer VR2600v
+ubnt_unifi-ac-hd | ipq806x/generic | Ubiquiti | UniFi AC HD
+zyxel_nbg6817 | ipq806x/generic | ZyXEL | NBG6817
+adslr_g7 | ramips/mt7621 | ADSLR | G7
+afoundry_ew1200 | ramips/mt7621 | AFOUNDRY | EW1200
+alfa-network_ax1800rm | ramips/mt7621 | ALFA Network | AX1800RM
+alfa-network_quad-e4g | ramips/mt7621 | ALFA Network | Quad-E4G
+ampedwireless_ally-00x19k | ramips/mt7621 | Amped Wireless | ALLY-00X19K
+ampedwireless_ally-r1900k | ramips/mt7621 | Amped Wireless | ALLY-R1900K
+arcadyan_we420223-99 | ramips/mt7621 | Arcadyan | WE420223-99
+asiarf_ap7621-001 | ramips/mt7621 | AsiaRF | AP7621-001
+asiarf_ap7621-nv1 | ramips/mt7621 | AsiaRF | AP7621-NV1
+asus_rp-ac56 | ramips/mt7621 | ASUS | RP-AC56
+asus_rp-ac87 | ramips/mt7621 | ASUS | RP-AC87
+asus_rt-ac57u-v1 | ramips/mt7621 | ASUS | RT-AC57U
+asus_rt-ac65p | ramips/mt7621 | ASUS | RT-AC65P
+asus_rt-ac85p | ramips/mt7621 | ASUS | RT-AC85P
+asus_rt-ax53u | ramips/mt7621 | ASUS | RT-AX53U
+asus_rt-ax54 | ramips/mt7621 | ASUS | RT-AX54
+asus_rt-n56u-b1 | ramips/mt7621 | ASUS | RT-N56U
+beeline_smartbox-flash | ramips/mt7621 | Beeline | SmartBox Flash
+beeline_smartbox-giga | ramips/mt7621 | Beeline | SmartBox GIGA
+beeline_smartbox-pro | ramips/mt7621 | Beeline | SmartBox PRO
+beeline_smartbox-turbo | ramips/mt7621 | Beeline | SmartBox TURBO
+beeline_smartbox-turbo-plus | ramips/mt7621 | Beeline | SmartBox TURBO+
+belkin_rt1800 | ramips/mt7621 | Belkin | RT1800
+bolt_arion | ramips/mt7621 | BOLT | Arion
+buffalo_wsr-1166dhp | ramips/mt7621 | Buffalo | WSR-1166DHP
+buffalo_wsr-2533dhpl | ramips/mt7621 | Buffalo | WSR-2533DHPL
+buffalo_wsr-600dhp | ramips/mt7621 | Buffalo | WSR-600DHP
+comfast_cf-e390ax | ramips/mt7621 | ComFast | CF-E390AX
+comfast_cf-ew72-v2 | ramips/mt7621 | ComFast | CF-EW72 V2
+cudy_m1800 | ramips/mt7621 | Cudy | M1800
+cudy_wr1300-v1 | ramips/mt7621 | Cudy | WR1300
+cudy_wr1300-v2 | ramips/mt7621 | Cudy | WR1300
+cudy_wr1300-v3 | ramips/mt7621 | Cudy | WR1300
+cudy_wr2100 | ramips/mt7621 | Cudy | WR2100
+cudy_x6-v1 | ramips/mt7621 | Cudy | X6
+cudy_x6-v2 | ramips/mt7621 | Cudy | X6
+d-team_newifi-d2 | ramips/mt7621 | D-Team | Newifi D2
+d-team_pbr-m1 | ramips/mt7621 | PandoraBox | PBR-M1
+dlink_covr-x1860-a1 | ramips/mt7621 | D-Link | COVR-X1860
+dlink_dap-1620-b1 | ramips/mt7621 | D-Link | DAP-1620
+dlink_dap-x1860-a1 | ramips/mt7621 | D-Link | DAP-X1860
+dlink_dir-1935-a1 | ramips/mt7621 | D-Link | DIR-1935
+dlink_dir-1960-a1 | ramips/mt7621 | D-Link | DIR-1960
+dlink_dir-2640-a1 | ramips/mt7621 | D-Link | DIR-2640
+dlink_dir-2660-a1 | ramips/mt7621 | D-Link | DIR-2660
+dlink_dir-3060-a1 | ramips/mt7621 | D-Link | DIR-3060
+dlink_dir-853-a1 | ramips/mt7621 | D-Link | DIR-853
+dlink_dir-853-a3 | ramips/mt7621 | D-Link | DIR-853
+dlink_dir-853-r1 | ramips/mt7621 | D-Link | DIR-853
+dlink_dir-860l-b1 | ramips/mt7621 | D-Link | DIR-860L
+dlink_dir-867-a1 | ramips/mt7621 | D-Link | DIR-867
+dlink_dir-878-a1 | ramips/mt7621 | D-Link | DIR-878
+dlink_dir-878-r1 | ramips/mt7621 | D-Link | DIR-878
+dlink_dir-882-a1 | ramips/mt7621 | D-Link | DIR-882
+dlink_dir-882-r1 | ramips/mt7621 | D-Link | DIR-882
+dual-q_h721 | ramips/mt7621 | Dual-Q | H721
+edimax_ra21s | ramips/mt7621 | Edimax | RA21S
+edimax_re23s | ramips/mt7621 | Edimax | RE23S
+edimax_rg21s | ramips/mt7621 | Edimax | Gemini AC2600 RG21S
+elecom_wrc-1167ghbk2-s | ramips/mt7621 | ELECOM | WRC-1167GHBK2-S
+elecom_wrc-1167gs2-b | ramips/mt7621 | ELECOM | WRC-1167GS2-B
+elecom_wrc-1167gst2 | ramips/mt7621 | ELECOM | WRC-1167GST2
+elecom_wrc-1750gs | ramips/mt7621 | ELECOM | WRC-1750GS
+elecom_wrc-1750gst2 | ramips/mt7621 | ELECOM | WRC-1750GST2
+elecom_wrc-1750gsv | ramips/mt7621 | ELECOM | WRC-1750GSV
+elecom_wrc-1900gst | ramips/mt7621 | ELECOM | WRC-1900GST
+elecom_wrc-2533ghbk-i | ramips/mt7621 | ELECOM | WRC-2533GHBK-I
+elecom_wrc-2533ghbk2-t | ramips/mt7621 | ELECOM | WRC-2533GHBK2-T
+elecom_wrc-2533gs2 | ramips/mt7621 | ELECOM | WRC-2533GS2
+elecom_wrc-2533gst | ramips/mt7621 | ELECOM | WRC-2533GST
+elecom_wrc-2533gst2 | ramips/mt7621 | ELECOM | WRC-2533GST2
+etisalat_s3 | ramips/mt7621 | Etisalat | S3
+firefly_firewrt | ramips/mt7621 | Firefly | FireWRT
+gehua_ghl-r-001 | ramips/mt7621 | GeHua | GHL-R-001
+glinet_gl-mt1300 | ramips/mt7621 | GL.iNet | GL-MT1300
+gnubee_gb-pc1 | ramips/mt7621 | GnuBee | Personal Cloud One
+gnubee_gb-pc2 | ramips/mt7621 | GnuBee | Personal Cloud Two
+h3c_tx1800-plus | ramips/mt7621 | H3C | TX1800 Plus
+h3c_tx1801-plus | ramips/mt7621 | H3C | TX1801 Plus
+h3c_tx1806 | ramips/mt7621 | H3C | TX1806
+haier_har-20s2u1 | ramips/mt7621 | Haier | HAR-20S2U1
+hanyang_hyc-g920 | ramips/mt7621 | Hanyang | CJ-Hello HYC-G920
+hilink_hlk-7621a-evb | ramips/mt7621 | HiLink | HLK-7621A evaluation board
+hiwifi_hc5962 | ramips/mt7621 | HiWiFi | HC5962
+huasifei_ws1208v2 | ramips/mt7621 | Huasifei | WS1208V2
+humax_e10 | ramips/mt7621 | HUMAX | E10
+iodata_wn-ax1167gr | ramips/mt7621 | I-O DATA | WN-AX1167GR
+iodata_wn-ax1167gr2 | ramips/mt7621 | I-O DATA | WN-AX1167GR2
+iodata_wn-ax2033gr | ramips/mt7621 | I-O DATA | WN-AX2033GR
+iodata_wn-dx1167r | ramips/mt7621 | I-O DATA | WN-DX1167R
+iodata_wn-dx1200gr | ramips/mt7621 | I-O DATA | WN-DX1200GR
+iodata_wn-dx2033gr | ramips/mt7621 | I-O DATA | WN-DX2033GR
+iodata_wn-gx300gr | ramips/mt7621 | I-O DATA | WN-GX300GR
+iodata_wnpr2600g | ramips/mt7621 | I-O DATA | WNPR2600G
+iptime_a3002mesh | ramips/mt7621 | ipTIME | A3002MESH
+iptime_a3004ns-dual | ramips/mt7621 | ipTIME | A3004NS-dual
+iptime_a3004t | ramips/mt7621 | ipTIME | A3004T
+iptime_a6004ns-m | ramips/mt7621 | ipTIME | A6004NS-M
+iptime_a6ns-m | ramips/mt7621 | ipTIME | A6ns-M
+iptime_a8004t | ramips/mt7621 | ipTIME | A8004T
+iptime_ax2004m | ramips/mt7621 | ipTIME | AX2004M
+iptime_t5004 | ramips/mt7621 | ipTIME | T5004
+jcg_jhr-ac876m | ramips/mt7621 | JCG | JHR-AC876M
+jcg_q20 | ramips/mt7621 | JCG | Q20
+jcg_y2 | ramips/mt7621 | JCG | Y2
+keenetic_kn-3010 | ramips/mt7621 | Keenetic | KN-3010
+lenovo_newifi-d1 | ramips/mt7621 | Lenovo | Newifi D1
+linksys_e5600 | ramips/mt7621 | Linksys | E5600
+linksys_e7350 | ramips/mt7621 | Linksys | E7350
+linksys_ea6350-v4 | ramips/mt7621 | Linksys | EA6350
+linksys_ea7300-v1 | ramips/mt7621 | Linksys | EA7300
+linksys_ea7300-v2 | ramips/mt7621 | Linksys | EA7300
+linksys_ea7500-v2 | ramips/mt7621 | Linksys | EA7500
+linksys_ea8100-v1 | ramips/mt7621 | Linksys | EA8100
+linksys_ea8100-v2 | ramips/mt7621 | Linksys | EA8100
+linksys_re6500 | ramips/mt7621 | Linksys | RE6500
+linksys_re7000 | ramips/mt7621 | Linksys | RE7000
+mediatek_ap-mt7621a-v60 | ramips/mt7621 | Mediatek | AP-MT7621A-V60 EVB
+mediatek_mt7621-eval-board | ramips/mt7621 | MediaTek | MT7621 EVB
+meig_slt866 | ramips/mt7621 | MeiG | SLT866
+mercusys_mr70x-v1 | ramips/mt7621 | MERCUSYS | MR70X
+mikrotik_ltap-2hnd | ramips/mt7621 | MikroTik | LtAP-2HnD
+mikrotik_routerboard-750gr3 | ramips/mt7621 | MikroTik | RouterBOARD 750Gr3
+mikrotik_routerboard-760igs | ramips/mt7621 | MikroTik | RouterBOARD 760iGS
+mikrotik_routerboard-m11g | ramips/mt7621 | MikroTik | RouterBOARD M11G
+mikrotik_routerboard-m33g | ramips/mt7621 | MikroTik | RouterBOARD M33G
+mqmaker_witi | ramips/mt7621 | MQmaker | WiTi
+mtc_wr1201 | ramips/mt7621 | MTC | Wireless Router WR1201
+mts_wg430223 | ramips/mt7621 | MTS | WG430223
+netgear_eax12 | ramips/mt7621 | NETGEAR | EAX12
+netgear_ex6150 | ramips/mt7621 | NETGEAR | EX6150
+netgear_r6220 | ramips/mt7621 | NETGEAR | R6220
+netgear_r6260 | ramips/mt7621 | NETGEAR | R6260
+netgear_r6350 | ramips/mt7621 | NETGEAR | R6350
+netgear_r6700-v2 | ramips/mt7621 | NETGEAR | R6700
+netgear_r6800 | ramips/mt7621 | NETGEAR | R6800
+netgear_r6850 | ramips/mt7621 | NETGEAR | R6850
+netgear_r6900-v2 | ramips/mt7621 | NETGEAR | R6900
+netgear_r7200 | ramips/mt7621 | NETGEAR | R7200
+netgear_r7450 | ramips/mt7621 | NETGEAR | R7450
+netgear_wac104 | ramips/mt7621 | NETGEAR | WAC104
+netgear_wac124 | ramips/mt7621 | NETGEAR | WAC124
+netgear_wax202 | ramips/mt7621 | NETGEAR | WAX202
+netgear_wndr3700-v5 | ramips/mt7621 | NETGEAR | WNDR3700
+netis_wf2881 | ramips/mt7621 | NETIS | WF2881
+oraybox_x3a | ramips/mt7621 | OrayBox | X3A
+phicomm_k2p | ramips/mt7621 | Phicomm | K2P
+planex_vr500 | ramips/mt7621 | Planex | VR500
+raisecom_msg1500-x-00 | ramips/mt7621 | RAISECOM | MSG1500
+renkforce_ws-wn530hp3-a | ramips/mt7621 | Renkforce | WS-WN530HP3-A
+rostelecom_rt-fe-1a | ramips/mt7621 | Rostelecom | RT-FE-1A
+rostelecom_rt-sf-1 | ramips/mt7621 | Rostelecom | RT-SF-1
+samknows_whitebox-v8 | ramips/mt7621 | SamKnows | Whitebox 8
+sercomm_na502 | ramips/mt7621 | SERCOMM | NA502
+sercomm_na502s | ramips/mt7621 | SERCOMM | NA502S
+sim_simax1800t | ramips/mt7621 | SIM | SIMAX1800T
+snr_snr-cpe-me1 | ramips/mt7621 | SNR | SNR-CPE-ME1
+snr_snr-cpe-me2-lite | ramips/mt7621 | SNR | SNR-CPE-ME2-Lite
+snr_snr-cpe-me2-sfp | ramips/mt7621 | SNR | SNR-CPE-ME2-SFP
+storylink_sap-g3200u3 | ramips/mt7621 | STORYLiNK | SAP-G3200U3
+telco-electronics_x1 | ramips/mt7621 | Telco Electronics | X1
+tenbay_t-mb5eu-v01 | ramips/mt7621 | Tenbay | T-MB5EU-V01
+thunder_timecloud | ramips/mt7621 | Thunder | Timecloud
+totolink_a7000r | ramips/mt7621 | TOTOLINK | A7000R
+totolink_x5000r | ramips/mt7621 | TOTOLINK | X5000R
+tozed_zlt-s12-pro | ramips/mt7621 | TOZED | ZLT S12 PRO
+tplink_archer-a6-v3 | ramips/mt7621 | TP-Link | Archer A6
+tplink_archer-ax23-v1 | ramips/mt7621 | TP-Link | Archer AX23
+tplink_archer-c6-v3 | ramips/mt7621 | TP-Link | Archer C6
+tplink_archer-c6u-v1 | ramips/mt7621 | TP-Link | Archer C6U
+tplink_deco-m4r-v4 | ramips/mt7621 | TP-Link | Deco M4R
+tplink_eap235-wall-v1 | ramips/mt7621 | TP-Link | EAP235-Wall
+tplink_eap613-v1 | ramips/mt7621 | TP-Link | EAP613
+tplink_eap615-wall-v1 | ramips/mt7621 | TP-Link | EAP615-Wall
+tplink_ec330-g5u-v1 | ramips/mt7621 | TP-Link | EC330-G5u
+tplink_er605-v2 | ramips/mt7621 | TP-Link | ER605
+tplink_ex220-v1 | ramips/mt7621 | TP-Link | EX220
+tplink_mr600-v2-eu | ramips/mt7621 | TP-Link | MR600
+tplink_re350-v1 | ramips/mt7621 | TP-Link | RE350
+tplink_re500-v1 | ramips/mt7621 | TP-Link | RE500
+tplink_re650-v1 | ramips/mt7621 | TP-Link | RE650
+tplink_re650-v2 | ramips/mt7621 | TP-Link | RE650
+tplink_tl-wpa8631p-v3 | ramips/mt7621 | TP-Link | TL-WPA8631P
+ubnt_edgerouter-x | ramips/mt7621 | Ubiquiti | EdgeRouter X
+ubnt_edgerouter-x-sfp | ramips/mt7621 | Ubiquiti | EdgeRouter X SFP
+ubnt_unifi-6-lite | ramips/mt7621 | Ubiquiti | UniFi U6 Lite
+ubnt_unifi-flexhd | ramips/mt7621 | Ubiquiti | UniFi FlexHD
+ubnt_unifi-nanohd | ramips/mt7621 | Ubiquiti | UniFi nanoHD
+ubnt_usw-flex | ramips/mt7621 | Ubiquiti | UniFi Switch Flex
+unielec_u7621-01-16m | ramips/mt7621 | UniElec | U7621-01
+unielec_u7621-06-16m | ramips/mt7621 | UniElec | U7621-06
+unielec_u7621-06-32m | ramips/mt7621 | UniElec | U7621-06
+unielec_u7621-06-64m | ramips/mt7621 | UniElec | U7621-06
+wavlink_wl-wn531a6 | ramips/mt7621 | Wavlink | WL-WN531A6
+wavlink_wl-wn533a8 | ramips/mt7621 | Wavlink | WL-WN533A8
+wavlink_ws-wn572hp3-4g | ramips/mt7621 | Wavlink | WS-WN572HP3
+wevo_11acnas | ramips/mt7621 | WeVO | 11AC NAS Router
+wevo_w2914ns-v2 | ramips/mt7621 | WeVO | W2914NS
+wifire_s1500-nbn | ramips/mt7621 | WiFire | S1500.NBN
+winstars_ws-wn583a6 | ramips/mt7621 | Winstars | WS-WN583A6
+xiaomi_mi-router-3-pro | ramips/mt7621 | Xiaomi | Mi Router 3 Pro
+xiaomi_mi-router-3g | ramips/mt7621 | Xiaomi | Mi Router 3G
+xiaomi_mi-router-3g-v2 | ramips/mt7621 | Xiaomi | Mi Router 3G
+xiaomi_mi-router-4 | ramips/mt7621 | Xiaomi | Mi Router 4
+xiaomi_mi-router-4a-gigabit | ramips/mt7621 | Xiaomi | Mi Router 4A
+xiaomi_mi-router-4a-gigabit-v2 | ramips/mt7621 | Xiaomi | Mi Router 4A
+xiaomi_mi-router-ac2100 | ramips/mt7621 | Xiaomi | Mi Router AC2100
+xiaomi_mi-router-cr6606 | ramips/mt7621 | Xiaomi | Mi Router CR6606
+xiaomi_mi-router-cr6608 | ramips/mt7621 | Xiaomi | Mi Router CR6608
+xiaomi_mi-router-cr6609 | ramips/mt7621 | Xiaomi | Mi Router CR6609
+xiaomi_redmi-router-ac2100 | ramips/mt7621 | Xiaomi | Redmi Router AC2100
+xiaoyu_xy-c5 | ramips/mt7621 | XiaoYu | XY-C5
+xzwifi_creativebox-v1 | ramips/mt7621 | CreativeBox | v1
+youhua_wr1200js | ramips/mt7621 | YouHua | WR1200JS
+youku_yk-l2 | ramips/mt7621 | Youku | YK-L2
+yuncore_ax820 | ramips/mt7621 | YunCore | AX820
+yuncore_fap640 | ramips/mt7621 | YunCore | FAP640
+yuncore_fap690 | ramips/mt7621 | YunCore | FAP690
+yuncore_g720 | ramips/mt7621 | YunCore | G720
+z-router_zr-2660 | ramips/mt7621 | Z-ROUTER | ZR-2660
+zbtlink_zbt-we1326 | ramips/mt7621 | Zbtlink | ZBT-WE1326
+zbtlink_zbt-we3526 | ramips/mt7621 | Zbtlink | ZBT-WE3526
+zbtlink_zbt-wg1602-16m | ramips/mt7621 | Zbtlink | ZBT-WG1602
+zbtlink_zbt-wg1602-v04-16m | ramips/mt7621 | Zbtlink | ZBT-WG1602-V04
+zbtlink_zbt-wg1602-v04-32m | ramips/mt7621 | Zbtlink | ZBT-WG1602-V04
+zbtlink_zbt-wg1608-16m | ramips/mt7621 | Zbtlink | ZBT-WG1608
+zbtlink_zbt-wg1608-32m | ramips/mt7621 | Zbtlink | ZBT-WG1608
+zbtlink_zbt-wg2626 | ramips/mt7621 | Zbtlink | ZBT-WG2626
+zbtlink_zbt-wg3526-16m | ramips/mt7621 | Zbtlink | ZBT-WG3526
+zbtlink_zbt-wg3526-32m | ramips/mt7621 | Zbtlink | ZBT-WG3526
+zio_freezio | ramips/mt7621 | ZIO | FREEZIO
+zyxel_lte3301-plus | ramips/mt7621 | ZyXEL | LTE3301-PLUS
+zyxel_nr7101 | ramips/mt7621 | ZyXEL | NR7101
+zyxel_nwa50ax | ramips/mt7621 | ZyXEL | NWA50AX
+zyxel_nwa55axe | ramips/mt7621 | ZyXEL | NWA55AXE
+zyxel_wap6805 | ramips/mt7621 | ZyXEL | WAP6805
+zyxel_wsm20 | ramips/mt7621 | ZyXEL | WSM20
+generic | x86/64 | Generic | x86/64
+rpi-4 | bcm27xx/bcm2711 | Raspberry Pi | 4B/400/CM4

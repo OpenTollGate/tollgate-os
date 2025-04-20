@@ -65,7 +65,7 @@ download_platform() {
       # Validate downloaded file
       if [ -s "$output_file" ] && grep -q "\"profiles\":" "$output_file"; then
         # Count the number of profiles
-        local profile_count=$(grep -o "\"target\":" "$output_file" | wc -l)
+        local profile_count=$(grep -o "\"titles\":" "$output_file" | wc -l)
         echo "✅ Downloaded ${platform}/${target} - ${profile_count} device profiles"
         return 0
       else
@@ -88,6 +88,49 @@ download_platform() {
   return 1
 }
 
+# Function to generate id-to-name mapping for a profile
+generate_device_mapping() {
+  local profile_file=$1
+  local output_file="${profile_file%.json}-mapping.txt"
+  
+  echo "📝 Generating device ID to name mapping for $(basename $(dirname "$profile_file"))/$(basename $(dirname $(dirname "$profile_file")))"
+  
+  # Check if profile file exists and is valid JSON
+  if [ ! -f "$profile_file" ] || ! jq empty "$profile_file" 2>/dev/null; then
+    echo "❌ Invalid profile file: $profile_file"
+    return 1
+  fi
+  
+  # Extract all profile IDs
+  local ids=$(jq -r '.profiles | keys[]' "$profile_file")
+  
+  # Create the mapping file
+  echo "# Device ID to Name mapping" > "$output_file"
+  echo "# Format: device_id | vendor | model | full_name" >> "$output_file"
+  echo "# Generated from: $profile_file" >> "$output_file"
+  echo "# Generated on: $(date)" >> "$output_file"
+  echo "" >> "$output_file"
+  
+  # For each ID, get the vendor and model name
+  echo "$ids" | while read -r id; do
+    vendor=$(jq -r --arg id "$id" '.profiles[$id].titles[0].vendor // "Unknown"' "$profile_file")
+    model=$(jq -r --arg id "$id" '.profiles[$id].titles[0].model // "Unknown"' "$profile_file")
+    variant=$(jq -r --arg id "$id" '.profiles[$id].titles[0].variant // ""' "$profile_file")
+    
+    # Construct full name
+    if [ -n "$variant" ] && [ "$variant" != "null" ]; then
+      full_name="$vendor $model ($variant)"
+    else
+      full_name="$vendor $model"
+    fi
+    
+    # Add to mapping file
+    echo "$id | $vendor | $model | $full_name" >> "$output_file"
+  done
+  
+  echo "✅ Generated mapping file: $output_file"
+}
+
 SUCCESS_COUNT=0
 FAILURE_COUNT=0
 
@@ -99,6 +142,7 @@ if [ -n "$SPECIFIC_PLATFORM" ]; then
   
   if download_platform "$PLATFORM" "$TARGET" "$VERSION"; then
     SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+    generate_device_mapping "${BASE_DIR}/${PLATFORM}/${TARGET}/profiles.json"
   else
     FAILURE_COUNT=$((FAILURE_COUNT+1))
   fi
@@ -111,6 +155,7 @@ else
     
     if download_platform "$PLATFORM" "$TARGET" "$VERSION"; then
       SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+      generate_device_mapping "${BASE_DIR}/${PLATFORM}/${TARGET}/profiles.json"
     else
       FAILURE_COUNT=$((FAILURE_COUNT+1))
     fi
@@ -128,12 +173,38 @@ if [ "$PROFILE_COUNT" -eq 0 ]; then
   exit 1
 fi
 
+echo ""
+echo "📋 Device count by platform:"
 find "$BASE_DIR" -name "profiles.json" | while read profile; do
-  count=$(grep -o "\"target\":" "$profile" | wc -l)
+  count=$(jq '.profiles | length' "$profile")
   platform_path=${profile#$BASE_DIR/}
   platform_path=${platform_path%/profiles.json}
   printf "%-25s %3d devices\n" "$platform_path" "$count"
 done
 
+# Create a summary file with quick device search capability
+SUMMARY_FILE="${BASE_DIR}/device-search.txt"
+echo "# OpenWrt Device Search Helper" > "$SUMMARY_FILE"
+echo "# Version: $VERSION" >> "$SUMMARY_FILE"
+echo "# Generated: $(date)" >> "$SUMMARY_FILE"
+echo "# Format: device_id | platform/target | vendor | model" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+
+find "$BASE_DIR" -name "profiles.json" | while read profile; do
+  platform_path=${profile#$BASE_DIR/}
+  platform_path=${platform_path%/profiles.json}
+  
+  jq -r '.profiles | keys[]' "$profile" | while read id; do
+    vendor=$(jq -r --arg id "$id" '.profiles[$id].titles[0].vendor // "Unknown"' "$profile")
+    model=$(jq -r --arg id "$id" '.profiles[$id].titles[0].model // "Unknown"' "$profile")
+    echo "$id | $platform_path | $vendor | $model" >> "$SUMMARY_FILE"
+  done
+done
+
+echo ""
+echo "📝 Created device search helper: $SUMMARY_FILE"
 echo ""
 echo "✨ Done! You can now use these profiles with the TollGate OS build system."
+echo ""
+echo "🔎 To find a device ID for a specific model, use:"
+echo "   grep -i \"your-model-name\" \"$SUMMARY_FILE\""

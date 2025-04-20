@@ -5,20 +5,66 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      device_model:
+        description: 'Device model to build (use profile ID like glinet_gl-mt3000)'
+        required: false
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build firmware for ${{ matrix.model }}
+    name: Build firmware for ${{ matrix.device.name || matrix.device.id }}
     strategy:
       matrix:
-        model: [glinet_gl-mt3000, glinet_gl-mt6000, glinet_gl-ar300m-nand]
+        device:
+          - id: glinet_gl-mt3000
+            name: GL.iNet GL-MT3000
+            platform: mediatek/filogic
+          - id: glinet_gl-mt6000
+            name: GL.iNet GL-MT6000
+            platform: mediatek/filogic
+          - id: glinet_gl-ar300m-nand
+            name: GL.iNet GL-AR300M NAND
+            platform: ath79/nand
       fail-fast: false
 
     steps:
       - uses: actions/checkout@v4
+      
+      # Download OpenWrt profiles for each target platform
+      - name: Fetch OpenWrt profiles
+        run: |
+          echo "===== FETCHING OPENWRT PROFILES ====="
+          mkdir -p external_profiles/23.05.5
+          
+          # Create a list of unique platforms from the matrix
+          echo "Fetching profiles for required platforms..."
+          
+          # Handle mediatek/filogic platform
+          if [[ "${{ contains(matrix.device.platform, 'mediatek/filogic') }}" == "true" ]]; then
+            echo "Fetching mediatek/filogic profiles..."
+            mkdir -p external_profiles/23.05.5/mediatek/filogic
+            curl -s https://downloads.openwrt.org/releases/23.05.5/targets/mediatek/filogic/profiles.json \
+              -o external_profiles/23.05.5/mediatek/filogic/profiles.json
+          fi
+          
+          # Handle ath79/nand platform
+          if [[ "${{ contains(matrix.device.platform, 'ath79/nand') }}" == "true" ]]; then
+            echo "Fetching ath79/nand profiles..."
+            mkdir -p external_profiles/23.05.5/ath79/nand
+            curl -s https://downloads.openwrt.org/releases/23.05.5/targets/ath79/nand/profiles.json \
+              -o external_profiles/23.05.5/ath79/nand/profiles.json
+          fi
+          
+          # Handle ath79/generic platform (for reference)
+          if [[ "${{ contains(matrix.device.platform, 'ath79/generic') }}" == "true" ]]; then
+            echo "Fetching ath79/generic profiles..."
+            mkdir -p external_profiles/23.05.5/ath79/generic
+            curl -s https://downloads.openwrt.org/releases/23.05.5/targets/ath79/generic/profiles.json \
+              -o external_profiles/23.05.5/ath79/generic/profiles.json
+          fi
       
       # Add debug information about the OS environment before building
       - name: Debug environment
@@ -37,10 +83,11 @@ jobs:
           ls -la files/etc || echo "No files/etc directory"
           
           # Search for the model in all profiles.json files
-          echo "===== SEARCHING FOR ROUTER PROFILE: ${{ matrix.model }} ====="
+          echo "===== SEARCHING FOR ROUTER PROFILE: ${{ matrix.device.id }} ====="
           MODEL_FOUND=0
+          
           for PROFILE_PATH in $(find external_profiles -name "profiles.json"); do
-            if grep -q "\"${{ matrix.model }}\":" "$PROFILE_PATH"; then
+            if jq -e --arg model "${{ matrix.device.id }}" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
               MODEL_FOUND=1
               echo "✅ Found profile in: $PROFILE_PATH"
               
@@ -56,16 +103,26 @@ jobs:
               echo "Platform: $PLATFORM"
               echo "Type: $TYPE"
               
+              # Show device information from profile
+              echo "===== DEVICE DETAILS ====="
+              DEVICE_VENDOR=$(jq -r --arg p "${{ matrix.device.id }}" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
+              DEVICE_MODEL=$(jq -r --arg p "${{ matrix.device.id }}" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
+              echo "Vendor: $DEVICE_VENDOR"
+              echo "Model: $DEVICE_MODEL" 
+              echo "Full name: $DEVICE_VENDOR $DEVICE_MODEL"
+              
               # Show some profile information
               echo "===== PROFILE DETAILS ====="
-              grep -A 30 "\"${{ matrix.model }}\":" "$PROFILE_PATH" | head -n 30
+              jq --arg model "${{ matrix.device.id }}" '.profiles[$model]' "$PROFILE_PATH" | head -30
               break
             fi
           done
           
           if [ $MODEL_FOUND -eq 0 ]; then
-            echo "❌ ERROR: Could not find router profile for '${{ matrix.model }}'"
-            echo "❌ Please ensure the profile exists in one of the external_profiles files"
+            echo "❌ ERROR: Could not find router profile for '${{ matrix.device.id }}'"
+            echo "❌ Please check the device ID and ensure it matches the OpenWrt naming convention"
+            echo "❌ Available device IDs in the downloaded profiles:"
+            find external_profiles -name "profiles.json" -exec jq -r '.profiles | keys[]' {} \; | sort | head -20
             exit 1
           fi
       
@@ -73,7 +130,7 @@ jobs:
         id: build-openwrt-image
         uses: ./actions/build-firmware
         with:
-          model: ${{ matrix.model }}
+          model: ${{ matrix.device.id }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           files_path: "./files"
@@ -107,19 +164,11 @@ jobs:
           # Look specifically for wpad-related issues
           echo "===== CHECKING FOR WPAD PACKAGE CONFLICTS ====="
           grep -r "wpad" build_logs/ || echo "No wpad-related issues found in logs"
-          
-          # Try to find specific package installation logs
-          echo "===== PACKAGE INSTALLATION LOGS ====="
-          find /tmp/openwrt-build -path "*/logs/package/*.txt" -type f | while read file; do
-            echo "==== $file ===="
-            cat "$file"
-            echo ""
-          done || echo "No package installation logs found"
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.model }}.img
+          name: firmware-${{ matrix.device.id }}.img
           path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
           retention-days: 5
       
@@ -128,6 +177,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ matrix.model }}
+          name: build-logs-${{ matrix.device.id }}
           path: build_logs/
           retention-days: 5

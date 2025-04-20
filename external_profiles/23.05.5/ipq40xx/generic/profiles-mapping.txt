@@ -1,0 +1,64 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ipq40xx/generic/profiles.json
+# Generated on: Sun Apr 20 17:23:16 CEST 2025
+
+8dev_habanero-dvk | 8devices | Habanero DVK | 8devices Habanero DVK
+8dev_jalapeno | 8devices | Jalapeno | 8devices Jalapeno
+alfa-network_ap120c-ac | ALFA Network | AP120C-AC | ALFA Network AP120C-AC
+aruba_ap-303 | Aruba | AP-303 | Aruba AP-303
+aruba_ap-303h | Aruba | AP-303H | Aruba AP-303H
+aruba_ap-365 | Aruba | AP-365 | Aruba AP-365
+asus_map-ac2200 | ASUS | Lyra (MAP-AC2200) | ASUS Lyra (MAP-AC2200)
+asus_rt-ac42u | ASUS | RT-AC42U | ASUS RT-AC42U
+asus_rt-ac58u | ASUS | RT-AC58U | ASUS RT-AC58U
+avm_fritzbox-4040 | AVM | FRITZ!Box 4040 | AVM FRITZ!Box 4040
+avm_fritzbox-7530 | AVM | FRITZ!Box 7530 | AVM FRITZ!Box 7530
+avm_fritzrepeater-1200 | AVM | FRITZ!Repeater 1200 | AVM FRITZ!Repeater 1200
+avm_fritzrepeater-3000 | AVM | FRITZ!Repeater 3000 | AVM FRITZ!Repeater 3000
+buffalo_wtr-m2133hp | Buffalo | WTR-M2133HP | Buffalo WTR-M2133HP
+cellc_rtl30vw | Cell C | RTL30VW | Cell C RTL30VW
+dlink_dap-2610 | D-Link | DAP-2610 | D-Link DAP-2610
+edgecore_ecw5211 | Edgecore | ECW5211 | Edgecore ECW5211
+engenius_eap1300 | EnGenius | EAP1300 | EnGenius EAP1300
+extreme-networks_ws-ap3915i | Extreme Networks | WS-AP3915i | Extreme Networks WS-AP3915i
+ezviz_cs-w3-wd1200g-eup | EZVIZ | CS-W3-WD1200G | EZVIZ CS-W3-WD1200G (EUP)
+glinet_gl-a1300 | GL.iNet | GL-A1300 | GL.iNet GL-A1300
+glinet_gl-ap1300 | GL.iNet | GL-AP1300 | GL.iNet GL-AP1300
+glinet_gl-b1300 | GL.iNet | GL-B1300 | GL.iNet GL-B1300
+glinet_gl-b2200 | GL.iNet | GL-B2200 | GL.iNet GL-B2200
+linksys_ea6350v3 | Linksys | EA6350 | Linksys EA6350 (v3)
+linksys_ea8300 | Linksys | EA8300 | Linksys EA8300
+linksys_mr8300 | Linksys | MR8300 | Linksys MR8300
+linksys_whw01 | Linksys | WHW01 | Linksys WHW01
+linksys_whw03v2 | Linksys | WHW03 | Linksys WHW03 (V2)
+luma_wrtq-329acn | Luma Home | WRTQ-329ACN | Luma Home WRTQ-329ACN
+meraki_mr33 | Cisco Meraki | MR33 | Cisco Meraki MR33
+meraki_mr74 | Cisco Meraki | MR74 | Cisco Meraki MR74
+mobipromo_cm520-79f | MobiPromo | CM520-79F | MobiPromo CM520-79F
+netgear_ex6100v2 | NETGEAR | EX6100 | NETGEAR EX6100 (v2)
+netgear_ex6150v2 | NETGEAR | EX6150 | NETGEAR EX6150 (v2)
+netgear_rbr50 | NETGEAR | RBR50 | NETGEAR RBR50 (v1)
+netgear_rbs50 | NETGEAR | RBS50 | NETGEAR RBS50 (v1)
+netgear_srr60 | NETGEAR | SRR60 | NETGEAR SRR60
+netgear_srs60 | NETGEAR | SRS60 | NETGEAR SRS60
+netgear_wac510 | Netgear | WAC510 | Netgear WAC510
+openmesh_a42 | OpenMesh | A42 | OpenMesh A42
+openmesh_a62 | OpenMesh | A62 | OpenMesh A62
+p2w_r619ac-128m | P&W | R619AC | P&W R619AC (128M NAND)
+p2w_r619ac-64m | P&W | R619AC | P&W R619AC (64M NAND)
+pakedge_wr-1 | Pakedge | WR-1 | Pakedge WR-1
+plasmacloud_pa1200 | Plasma Cloud | PA1200 | Plasma Cloud PA1200
+plasmacloud_pa2200 | Plasma Cloud | PA2200 | Plasma Cloud PA2200
+qxwlan_e2600ac-c1 | Qxwlan | E2600AC | Qxwlan E2600AC (C1)
+qxwlan_e2600ac-c2 | Qxwlan | E2600AC | Qxwlan E2600AC (C2)
+sony_ncp-hg100-cellular | Sony | NCP-HG100/Cellular | Sony NCP-HG100/Cellular
+teltonika_rutx50 | Teltonika | RUTX50 | Teltonika RUTX50
+wallys_dr40x9 | Wallys | DR40X9 | Wallys DR40X9
+zte_mf18a | ZTE | MF18A | ZTE MF18A
+zte_mf286d | ZTE | MF286D | ZTE MF286D
+zte_mf287 | ZTE | MF287 | ZTE MF287
+zte_mf287plus | ZTE | MF287Plus | ZTE MF287Plus
+zte_mf287pro | ZTE | MF287Pro | ZTE MF287Pro
+zte_mf289f | ZTE | MF289F | ZTE MF289F
+zyxel_nbg6617 | ZyXEL | NBG6617 | ZyXEL NBG6617

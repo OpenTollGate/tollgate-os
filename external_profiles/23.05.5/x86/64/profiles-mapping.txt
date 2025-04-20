@@ -1,0 +1,6 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/x86/64/profiles.json
+# Generated on: Sun Apr 20 17:23:19 CEST 2025
+
+generic | Generic | x86/64 | Generic x86/64

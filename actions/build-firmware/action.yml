@@ -5,7 +5,7 @@ description: >
   1. Identifies the target device profile
   2. Downloads the appropriate OpenWrt ImageBuilder
   3. Adds TollGate packages
-  4. Creates a flashable firmware image
+  4. Creates a flashable firmware image with all required kernel modules included
 author: 'c03rad0r'
 
 branding:
@@ -42,6 +42,10 @@ inputs:
   nsec:
     description: 'Nostr secret key for metadata signing'
     required: true
+  firmware_type:
+    description: 'Type of firmware to build (sysupgrade, factory, kernel, all)'
+    default: 'sysupgrade'
+    required: false
 
 outputs:
   firmware_path:
@@ -50,6 +54,9 @@ outputs:
   firmware_name:
     description: 'Name of the built firmware file'
     value: ${{ steps.find-firmware.outputs.firmware_name }}
+  all_firmware_paths:
+    description: 'JSON string containing paths to all built firmware files'
+    value: ${{ steps.find-firmware.outputs.all_firmware_paths }}
 
 runs:
   using: composite
@@ -82,34 +89,14 @@ runs:
         
         echo "🔍 Searching for profile: $MODEL"
         
-        # Debug: List all available profiles.json files
-        echo "📋 Available profiles.json files:"
-        find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort
-        
-        # First, try looking for an exact match in profiles.json files
+        # Find profile for the model
         for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort); do
           # Skip invalid profiles
           if [ ! -s "$PROFILE_PATH" ] || ! jq empty "$PROFILE_PATH" 2>/dev/null; then
-            echo "⚠️ Skipping invalid profile: $PROFILE_PATH"
             continue
           fi
           
-          # Debug: Check if file exists and is readable
-          echo "🔍 Examining profile: $PROFILE_PATH"
-          
-          # Extract platform and type from path for better debugging
-          REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/}
-          PATH_PARTS=()
-          IFS='/' read -ra PATH_PARTS <<< "$REL_PATH"
-          
-          if [ ${#PATH_PARTS[@]} -ge 3 ]; then
-            PROFILE_VERSION=${PATH_PARTS[0]}
-            PROFILE_PLATFORM=${PATH_PARTS[1]}
-            PROFILE_TYPE=${PATH_PARTS[2]}
-            echo "📍 Checking $PROFILE_PLATFORM/$PROFILE_TYPE for $MODEL"
-          fi
-          
-          # Check if this file contains our model as a direct key
+          # Check if this file contains our model
           if jq -e --arg model "$MODEL" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
             MODEL_FOUND=1
             echo "✅ Found profile in: $PROFILE_PATH"
@@ -137,6 +124,11 @@ runs:
               DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
               DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
               
+              # Extract available image types
+              AVAILABLE_TYPES=$(jq -r --arg p "$MODEL" '.profiles[$p].images | map(.type) | unique | join(",")' "$PROFILE_PATH")
+              echo "AVAILABLE_IMAGE_TYPES=${AVAILABLE_TYPES}" >> $GITHUB_ENV
+              echo "📌 Available image types: $AVAILABLE_TYPES"
+              
               echo "📌 Architecture: $ARCH"
               echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
               echo "📌 Supported devices: $DEVICE_SUPPORTED"
@@ -147,6 +139,8 @@ runs:
               echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
               echo "PROFILE=$MODEL" >> $GITHUB_ENV
               echo "ARCH=$ARCH" >> $GITHUB_ENV
+              echo "DEVICE_VENDOR=$DEVICE_VENDOR" >> $GITHUB_ENV
+              echo "DEVICE_MODEL=$DEVICE_MODEL" >> $GITHUB_ENV
               
               # Configure packages
               WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
@@ -167,14 +161,14 @@ runs:
         if [ $MODEL_FOUND -eq 0 ]; then
           echo "⚠️ Direct profile match not found, checking special cases..."
           
-          # Check specifically for ath79/nand if requested model is glinet_gl-ar300m-nand
-          if [ "$MODEL" = "glinet_gl-ar300m-nand" ]; then
-            SPECIFIC_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ inputs.version }}/ath79/nand/profiles.json"
+          # Check specifically for ath79/nand if requested model includes 'nand'
+          if [[ "$MODEL" == *"nand"* ]]; then
+            TARGET_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ inputs.version }}/ath79/nand/profiles.json"
             
-            if [ -f "$SPECIFIC_PATH" ]; then
-              echo "🔍 Checking specifically: $SPECIFIC_PATH"
+            if [ -f "$TARGET_PATH" ]; then
+              echo "🔍 Checking specifically: $TARGET_PATH"
               
-              if jq -e --arg model "$MODEL" '.profiles[$model]' "$SPECIFIC_PATH" > /dev/null 2>&1; then
+              if jq -e --arg model "$MODEL" '.profiles | has($model)' "$TARGET_PATH" > /dev/null 2>&1; then
                 echo "✅ Found profile for $MODEL in ath79/nand path"
                 MODEL_FOUND=1
                 
@@ -185,15 +179,20 @@ runs:
                 echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
                 
                 # Extract all required build information
-                ARCH=$(jq -r '.arch_packages // "unknown"' "$SPECIFIC_PATH")
-                DEFAULT_PKGS=$(jq -r '.default_packages // [] | join(" ")' "$SPECIFIC_PATH")
-                DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$SPECIFIC_PATH")
+                ARCH=$(jq -r '.arch_packages // "unknown"' "$TARGET_PATH")
+                DEFAULT_PKGS=$(jq -r '.default_packages // [] | join(" ")' "$TARGET_PATH")
+                DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$TARGET_PATH")
                 
                 # Device information for metadata
-                DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$SPECIFIC_PATH")
-                DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$SPECIFIC_PATH")
-                DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$SPECIFIC_PATH")
-                DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$SPECIFIC_PATH")
+                DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$TARGET_PATH")
+                DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$TARGET_PATH")
+                DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$TARGET_PATH")
+                DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$TARGET_PATH")
+                
+                # Extract available image types
+                AVAILABLE_TYPES=$(jq -r --arg p "$MODEL" '.profiles[$p].images | map(.type) | unique | join(",")' "$TARGET_PATH")
+                echo "AVAILABLE_IMAGE_TYPES=${AVAILABLE_TYPES}" >> $GITHUB_ENV
+                echo "📌 Available image types: $AVAILABLE_TYPES"
                 
                 echo "📌 Architecture: $ARCH"
                 echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
@@ -205,6 +204,8 @@ runs:
                 echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
                 echo "PROFILE=$MODEL" >> $GITHUB_ENV
                 echo "ARCH=$ARCH" >> $GITHUB_ENV
+                echo "DEVICE_VENDOR=$DEVICE_VENDOR" >> $GITHUB_ENV
+                echo "DEVICE_MODEL=$DEVICE_MODEL" >> $GITHUB_ENV
                 
                 # Configure packages
                 WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
@@ -216,10 +217,10 @@ runs:
                 PACKAGES="$WIFI_REMOVE $DHCP_REMOVE $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
                 echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
               else
-                echo "⚠️ Profile $MODEL not found in $SPECIFIC_PATH"
+                echo "⚠️ Profile $MODEL not found in $TARGET_PATH"
               fi
             else
-              echo "⚠️ Special path not found: $SPECIFIC_PATH"
+              echo "⚠️ Special path not found: $TARGET_PATH"
             fi
           fi
         fi
@@ -236,7 +237,12 @@ runs:
               if [ ${#PATH_PARTS[@]} -ge 3 ]; then
                 PROFILE_PATH_INFO="${PATH_PARTS[1]}/${PATH_PARTS[2]}"
                 echo "  - $PROFILE_PATH_INFO:"
-                jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | sed 's/^/    - /' || echo "    (Invalid JSON)"
+                jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | head -10 | sed 's/^/    - /' || echo "    (Invalid JSON)"
+                TOTAL_MODELS=$(jq -r '.profiles | keys | length' "$PROFILE_PATH" 2>/dev/null || echo 0)
+                if [ "$TOTAL_MODELS" -gt 10 ]; then
+                  REMAINING=$((TOTAL_MODELS - 10))
+                  echo "      ... and $REMAINING more"
+                fi
               fi
             fi
           done
@@ -250,19 +256,13 @@ runs:
         VERSION="${{ inputs.version }}"
         BASE_URL="https://downloads.openwrt.org"
         
-        # Determine if we're using snapshot or release builds
+        # Determine build path and archive type based on version and target
         if [ "$VERSION" = "snapshot" ]; then
           RELEASE_PATH="snapshots"
           DEFAULT_ARCHIVE_EXT="tar.zst"
-          # Snapshots use simplified naming
-          DEFAULT_IB_NAME_FORMAT="openwrt-imagebuilder-%s-%s.Linux-x86_64"
-          IB_NAME=$(printf "$DEFAULT_IB_NAME_FORMAT" "${PLATFORM}" "${TYPE}")
         else
           RELEASE_PATH="releases/$VERSION"
           DEFAULT_ARCHIVE_EXT="tar.xz"
-          # Releases include version in name
-          DEFAULT_IB_NAME_FORMAT="openwrt-imagebuilder-%s-%s-%s.Linux-x86_64"
-          IB_NAME=$(printf "$DEFAULT_IB_NAME_FORMAT" "$VERSION" "${PLATFORM}" "${TYPE}")
         fi
         
         # Build the target directory URL
@@ -270,27 +270,26 @@ runs:
         
         echo "🔍 Looking for ImageBuilder in: ${TARGET_URL}"
         
-        # Attempt to fetch directory listing to find the exact ImageBuilder filename
-        # This is more robust than hardcoding naming conventions
+        # Get directory listing to find the ImageBuilder
         LISTING=$(curl -s "${TARGET_URL}/")
         
-        # Look for the ImageBuilder archive in the directory listing
-        if echo "$LISTING" | grep -q "ImageBuilder.*\.tar\.${DEFAULT_ARCHIVE_EXT##*.}"; then
-          # Extract the full ImageBuilder filename from the listing
-          IB_ARCHIVE=$(echo "$LISTING" | grep -o "openwrt-imagebuilder[^\"]*\.tar\.${DEFAULT_ARCHIVE_EXT##*.}" | head -1)
-          
-          if [ -n "$IB_ARCHIVE" ]; then
-            echo "✅ Found ImageBuilder archive: $IB_ARCHIVE"
-            DOWNLOAD_URL="${TARGET_URL}/${IB_ARCHIVE}"
-            IB_NAME="${IB_ARCHIVE%.*.*}" # Remove the .tar.xz or .tar.zst extension
-          else
-            # Fallback to the default naming pattern if we couldn't extract from listing
-            echo "⚠️ Could not find ImageBuilder in directory listing, trying default name"
-            DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
-          fi
+        # Extract the ImageBuilder filename from the listing
+        IB_ARCHIVE=$(echo "$LISTING" | grep -o "openwrt-imagebuilder[^\"]*\.tar\.${DEFAULT_ARCHIVE_EXT##*.}" | head -1)
+        
+        if [ -n "$IB_ARCHIVE" ]; then
+          echo "✅ Found ImageBuilder archive: $IB_ARCHIVE"
+          DOWNLOAD_URL="${TARGET_URL}/${IB_ARCHIVE}"
+          IB_NAME="${IB_ARCHIVE%.*.*}" # Remove the .tar.xz or .tar.zst extension
         else
-          # Fallback to the default naming pattern if we couldn't parse the listing
-          echo "⚠️ Could not parse directory listing, trying default name"
+          echo "⚠️ Could not find ImageBuilder in directory listing, trying default naming"
+          
+          # Construct standard name based on version/platform
+          if [ "$VERSION" = "snapshot" ]; then
+            IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
+          else
+            IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
+          fi
+          
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
         
@@ -304,14 +303,13 @@ runs:
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
           curl -L -C - -O "$DOWNLOAD_URL"
           
-          # Determine archive type and extract accordingly
+          # Extract the archive based on its type
           ARCHIVE_FILE=$(basename "$DOWNLOAD_URL")
+          echo "📦 Extracting ${ARCHIVE_FILE}..."
           
           if [[ "$ARCHIVE_FILE" == *.tar.zst ]]; then
-            echo "📦 Extracting zstd compressed archive..."
             tar --zstd -xf "$ARCHIVE_FILE"
           elif [[ "$ARCHIVE_FILE" == *.tar.xz ]]; then
-            echo "📦 Extracting xz compressed archive..."
             tar xfJ "$ARCHIVE_FILE"
           else
             echo "❌ Unknown archive format: $ARCHIVE_FILE"
@@ -319,15 +317,9 @@ runs:
           fi
           
           echo "✅ ImageBuilder extracted successfully"
-          
-          # Set the build directory to the extracted ImageBuilder
           echo "BUILDDIR=$BUILDDIR/${IB_NAME}" >> $GITHUB_ENV
         else
           echo "❌ Error: ImageBuilder not found at $DOWNLOAD_URL"
-          echo "   Please check if the platform/type combination is supported for version $VERSION"
-          # List directories for debugging
-          echo "Available targets in $RELEASE_PATH:"
-          curl -s "${BASE_URL}/${RELEASE_PATH}/targets/" | grep -o 'href="[^"]*/"' | cut -d'"' -f2
           exit 1
         fi
 
@@ -353,6 +345,32 @@ runs:
           echo "Creating U-Boot environment config for MediaTek Filogic device"
           mkdir -p $BUILDDIR/files/etc
           echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/files/etc/fw_env.config
+        fi
+        
+        # Determine which firmware types to build based on input and available types
+        REQ_FIRMWARE_TYPE="${{ inputs.firmware_type }}"
+        AVAILABLE_TYPES="${AVAILABLE_IMAGE_TYPES}"
+        
+        # Default to sysupgrade if requested type is not available or not specified
+        if [[ "$REQ_FIRMWARE_TYPE" == "all" ]]; then
+          echo "BUILD_TYPES=${AVAILABLE_TYPES}" >> $GITHUB_ENV
+          echo "🔨 Will build all available image types: ${AVAILABLE_TYPES}"
+        elif [[ "$AVAILABLE_TYPES" == *"$REQ_FIRMWARE_TYPE"* ]]; then
+          echo "BUILD_TYPES=${REQ_FIRMWARE_TYPE}" >> $GITHUB_ENV
+          echo "🔨 Will build requested image type: ${REQ_FIRMWARE_TYPE}"
+        else
+          echo "⚠️ Requested firmware type '${REQ_FIRMWARE_TYPE}' not available for this device"
+          # Default to sysupgrade, or factory if sysupgrade not available
+          if [[ "$AVAILABLE_TYPES" == *"sysupgrade"* ]]; then
+            echo "BUILD_TYPES=sysupgrade" >> $GITHUB_ENV
+            echo "🔨 Defaulting to 'sysupgrade' image type"
+          elif [[ "$AVAILABLE_TYPES" == *"factory"* ]]; then
+            echo "BUILD_TYPES=factory" >> $GITHUB_ENV
+            echo "🔨 Defaulting to 'factory' image type"
+          else
+            echo "BUILD_TYPES=${AVAILABLE_TYPES%%,*}" >> $GITHUB_ENV
+            echo "🔨 Defaulting to first available type: ${AVAILABLE_TYPES%%,*}"
+          fi
         fi
 
     - name: Download TollGate Packages
@@ -460,43 +478,122 @@ runs:
       run: |
         cd "$BUILDDIR"
         
-        # Step 1: Build base firmware
-        echo "🔨 Building base firmware for $PROFILE"
-        echo "📦 Using packages: $PACKAGES"
+        # Display device and build information
+        echo "🔨 Building firmware for ${DEVICE_VENDOR} ${DEVICE_MODEL} (${PROFILE})"
+        echo "📦 Architecture: ${ARCH}, Platform: ${PLATFORM}/${TYPE}"
         
-        FORCE=1 make image \
-          PROFILE="$PROFILE" \
-          PACKAGES="$PACKAGES" \
-          FILES="files" \
-          EXTRA_IMAGE_NAME="base"
+        # Determine which image types to build
+        IFS=',' read -ra TYPES_TO_BUILD <<< "${BUILD_TYPES}"
+        echo "🔨 Building image types: ${TYPES_TO_BUILD[*]}"
         
-        # Check if base build was successful
-        if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | grep -q .; then
-          echo "❌ Base firmware build failed"
+        # Step 1: Build base firmware (without TollGate packages)
+        echo "🔨 Building base firmware"
+        
+        # For each type, build the firmware
+        for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+          echo "🔨 Building base firmware with type: ${TYPE_TO_BUILD}"
+          
+          # Additional flags based on type
+          ADDITIONAL_FLAGS=""
+          if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+            ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
+          elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+            ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
+          fi
+          
+          # Build command
+          FORCE=1 make image \
+            PROFILE="$PROFILE" \
+            PACKAGES="$PACKAGES" \
+            FILES="files" \
+            EXTRA_IMAGE_NAME="base-${TYPE_TO_BUILD}" \
+            $ADDITIONAL_FLAGS
+        done
+        
+        # Check if base builds succeeded
+        BASE_BUILD_SUCCESS=0
+        for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+          # Pattern depends on type
+          if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+            PATTERN="*base-${TYPE_TO_BUILD}*kernel.bin"
+          else
+            PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
+            # Special case for factory images that may be .img
+            if [ "$TYPE_TO_BUILD" = "factory" ]; then
+              if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+                PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
+              fi
+            fi
+          fi
+          
+          if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+            echo "✅ Base ${TYPE_TO_BUILD} firmware built successfully"
+            BASE_BUILD_SUCCESS=1
+          else
+            echo "⚠️ Base ${TYPE_TO_BUILD} firmware build not found with pattern: $PATTERN"
+          fi
+        done
+        
+        if [ $BASE_BUILD_SUCCESS -eq 0 ]; then
+          echo "❌ All base firmware builds failed"
           exit 1
-        else
-          echo "✅ Base firmware built successfully"
         fi
         
         # Step 2: Build firmware with TollGate modules if available
         if [ -n "${TOLLGATE_PACKAGES:-}" ]; then
-          echo "🔨 Building firmware with TollGate modules"
-          echo "📦 Adding packages: ${TOLLGATE_PACKAGES}"
+          echo "🔨 Building TollGate firmware with modules: ${TOLLGATE_PACKAGES}"
           
           make clean
           
-          FORCE=1 make image \
-            PROFILE="$PROFILE" \
-            PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
-            FILES="files" \
-            EXTRA_IMAGE_NAME="tollgate-os"
+          # For each type, build the TollGate firmware
+          for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+            echo "🔨 Building TollGate firmware with type: ${TYPE_TO_BUILD}"
+            
+            # Additional flags based on type
+            ADDITIONAL_FLAGS=""
+            if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+              ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
+            elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+              ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
+            fi
+            
+            # Build command
+            FORCE=1 make image \
+              PROFILE="$PROFILE" \
+              PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
+              FILES="files" \
+              EXTRA_IMAGE_NAME="tollgate-os-${TYPE_TO_BUILD}" \
+              $ADDITIONAL_FLAGS
+          done
           
-          # Check if TollGate build was successful
-          if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | grep -q .; then
-            echo "✅ TollGate firmware built successfully"
+          # Check if TollGate builds succeeded
+          TOLLGATE_BUILD_SUCCESS=0
+          for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+            # Pattern depends on type
+            if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+              PATTERN="*tollgate-os-${TYPE_TO_BUILD}*kernel.bin"
+            else
+              PATTERN="*tollgate-os-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
+              # Special case for factory images that may be .img
+              if [ "$TYPE_TO_BUILD" = "factory" ]; then
+                if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+                  PATTERN="*tollgate-os-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
+                fi
+              fi
+            fi
+            
+            if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+              echo "✅ TollGate ${TYPE_TO_BUILD} firmware built successfully"
+              TOLLGATE_BUILD_SUCCESS=1
+            else
+              echo "⚠️ TollGate ${TYPE_TO_BUILD} firmware build not found with pattern: $PATTERN"
+            fi
+          done
+          
+          if [ $TOLLGATE_BUILD_SUCCESS -eq 1 ]; then
             echo "BUILD_TYPE=TOLLGATE" >> $GITHUB_ENV
           else
-            echo "⚠️ TollGate firmware build failed, will use base firmware"
+            echo "⚠️ All TollGate firmware builds failed, using base firmware"
             echo "BUILD_TYPE=BASE" >> $GITHUB_ENV
           fi
         else
@@ -508,39 +605,100 @@ runs:
       id: find-firmware
       shell: bash
       run: |
-        # Find the appropriate firmware file
-        if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
-          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*tollgate-os-sysupgrade.bin" | head -1)
-          if [ -f "$F" ]; then
-            echo "✅ Using TollGate firmware: $(basename "$F")"
+        # Create JSON object to store all firmware paths
+        echo "{" > /tmp/firmware_paths.json
+        FIRST_ENTRY=1
+        
+        # Find the appropriate firmware files for each requested type
+        IFS=',' read -ra TYPES_TO_BUILD <<< "${BUILD_TYPES}"
+        
+        # Primary firmware (first in the list) for main output
+        PRIMARY_FIRMWARE=""
+        PRIMARY_FIRMWARE_NAME=""
+        
+        for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+          echo "🔍 Looking for ${TYPE_TO_BUILD} firmware..."
+          
+          # Pattern depends on build type and image type
+          if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+            PREFIX="tollgate-os"
           else
-            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
-            echo "ℹ️ Falling back to base firmware: $(basename "$F")"
+            PREFIX="base"
           fi
-        else
-          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*base-sysupgrade.bin" | head -1)
-          echo "ℹ️ Using base firmware: $(basename "$F")"
-        fi
+          
+          if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+            PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
+          else
+            PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
+            # Special case for factory images that may be .img
+            if [ "$TYPE_TO_BUILD" = "factory" ] && ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
+            fi
+          fi
+          
+          # Find the firmware file
+          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+          
+          # If not found with PREFIX, try generic pattern
+          if [ ! -f "$F" ]; then
+            if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+              PATTERN="*kernel.bin"
+            else
+              PATTERN="*${TYPE_TO_BUILD}.bin"
+              # Special case for factory images that may be .img
+              if [ "$TYPE_TO_BUILD" = "factory" ] && ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+                PATTERN="*${TYPE_TO_BUILD}.img"
+              fi
+            fi
+            
+            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+          fi
+          
+          if [ -f "$F" ]; then
+            echo "✅ Found ${TYPE_TO_BUILD} firmware: $(basename "$F")"
+            
+            # Calculate hash and size
+            FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
+            FIRMWARE_SIZE=$(stat -c%s "$F")
+            
+            # Add to JSON output
+            if [ "$FIRST_ENTRY" -eq 0 ]; then
+              echo "," >> /tmp/firmware_paths.json
+            fi
+            FIRST_ENTRY=0
+            
+            echo "  \"${TYPE_TO_BUILD}\": {" >> /tmp/firmware_paths.json
+            echo "    \"path\": \"$F\"," >> /tmp/firmware_paths.json
+            echo "    \"name\": \"$(basename "$F")\"," >> /tmp/firmware_paths.json
+            echo "    \"hash\": \"$FIRMWARE_HASH\"," >> /tmp/firmware_paths.json
+            echo "    \"size\": $FIRMWARE_SIZE" >> /tmp/firmware_paths.json
+            echo "  }" >> /tmp/firmware_paths.json
+            
+            # Set primary firmware if not set yet
+            if [ -z "$PRIMARY_FIRMWARE" ]; then
+              PRIMARY_FIRMWARE="$F"
+              PRIMARY_FIRMWARE_NAME="$(basename "$F")"
+              echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+              echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
+            fi
+          else
+            echo "⚠️ ${TYPE_TO_BUILD} firmware not found with pattern: $PATTERN"
+          fi
+        done
         
-        # If still no firmware found, look for any sysupgrade file
-        if [ ! -f "$F" ]; then
-          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "*sysupgrade.bin" | head -1)
-          echo "⚠️ Falling back to generic firmware: $(basename "$F")"
-        fi
+        # Close JSON
+        echo "}" >> /tmp/firmware_paths.json
         
-        if [ ! -f "$F" ]; then
-          echo "❌ No firmware found"
+        # Check if at least one firmware was found
+        if [ -z "$PRIMARY_FIRMWARE" ]; then
+          echo "❌ No firmware files found"
           exit 1
         fi
         
-        # Calculate hash and size for metadata
-        FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
-        FIRMWARE_SIZE=$(stat -c%s "$F")
-        
-        echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
-        echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
-        echo "firmware_path=$F" >> $GITHUB_OUTPUT
-        echo "firmware_name=$(basename "$F")" >> $GITHUB_OUTPUT
+        # Set outputs
+        echo "firmware_path=$PRIMARY_FIRMWARE" >> $GITHUB_OUTPUT
+        echo "firmware_name=$PRIMARY_FIRMWARE_NAME" >> $GITHUB_OUTPUT
+        echo "all_firmware_paths=$(cat /tmp/firmware_paths.json)" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to Blossom
       id: upload
@@ -560,12 +718,14 @@ runs:
         fileHash:     ${{ steps.upload.outputs.hash }}
         originalHash: ${{ env.FIRMWARE_HASH }}
         filename:     ${{ steps.find-firmware.outputs.firmware_name }}
-        content:      "TollGate OS for ${{ inputs.model }} (OpenWRT ${{ inputs.version }})"
+        content:      "TollGate OS for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ inputs.model }}, OpenWRT ${{ inputs.version }})"
         nsec:         ${{ inputs.nsec }}
         size:         ${{ env.FIRMWARE_SIZE }}
         architecture: ${{ env.ARCH }}
         model:        ${{ inputs.model }}
         version:      ${{ inputs.version }}
+        availableTypes: ${{ env.BUILD_TYPES }}
+        allPaths:     ${{ steps.find-firmware.outputs.all_firmware_paths }}
 
     - name: Verify publication
       uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main

@@ -1,0 +1,242 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ramips/mt7621/profiles.json
+# Generated on: Sun Apr 20 17:22:39 CEST 2025
+
+adslr_g7 | ADSLR | G7 | ADSLR G7
+afoundry_ew1200 | AFOUNDRY | EW1200 | AFOUNDRY EW1200
+alfa-network_ax1800rm | ALFA Network | AX1800RM | ALFA Network AX1800RM
+alfa-network_quad-e4g | ALFA Network | Quad-E4G | ALFA Network Quad-E4G
+ampedwireless_ally-00x19k | Amped Wireless | ALLY-00X19K | Amped Wireless ALLY-00X19K
+ampedwireless_ally-r1900k | Amped Wireless | ALLY-R1900K | Amped Wireless ALLY-R1900K
+arcadyan_we420223-99 | Arcadyan | WE420223-99 | Arcadyan WE420223-99
+asiarf_ap7621-001 | AsiaRF | AP7621-001 | AsiaRF AP7621-001
+asiarf_ap7621-nv1 | AsiaRF | AP7621-NV1 | AsiaRF AP7621-NV1
+asus_rp-ac56 | ASUS | RP-AC56 | ASUS RP-AC56
+asus_rp-ac87 | ASUS | RP-AC87 | ASUS RP-AC87
+asus_rt-ac57u-v1 | ASUS | RT-AC57U | ASUS RT-AC57U (v1)
+asus_rt-ac65p | ASUS | RT-AC65P | ASUS RT-AC65P
+asus_rt-ac85p | ASUS | RT-AC85P | ASUS RT-AC85P
+asus_rt-ax53u | ASUS | RT-AX53U | ASUS RT-AX53U
+asus_rt-ax54 | ASUS | RT-AX54 | ASUS RT-AX54
+asus_rt-n56u-b1 | ASUS | RT-N56U | ASUS RT-N56U (B1)
+beeline_smartbox-flash | Beeline | SmartBox Flash | Beeline SmartBox Flash
+beeline_smartbox-giga | Beeline | SmartBox GIGA | Beeline SmartBox GIGA
+beeline_smartbox-pro | Beeline | SmartBox PRO | Beeline SmartBox PRO
+beeline_smartbox-turbo | Beeline | SmartBox TURBO | Beeline SmartBox TURBO
+beeline_smartbox-turbo-plus | Beeline | SmartBox TURBO+ | Beeline SmartBox TURBO+
+belkin_rt1800 | Belkin | RT1800 | Belkin RT1800
+bolt_arion | BOLT | Arion | BOLT Arion
+buffalo_wsr-1166dhp | Buffalo | WSR-1166DHP | Buffalo WSR-1166DHP
+buffalo_wsr-2533dhpl | Buffalo | WSR-2533DHPL | Buffalo WSR-2533DHPL
+buffalo_wsr-600dhp | Buffalo | WSR-600DHP | Buffalo WSR-600DHP
+comfast_cf-e390ax | ComFast | CF-E390AX | ComFast CF-E390AX
+comfast_cf-ew72-v2 | ComFast | CF-EW72 V2 | ComFast CF-EW72 V2
+cudy_m1800 | Cudy | M1800 | Cudy M1800
+cudy_wr1300-v1 | Cudy | WR1300 | Cudy WR1300 (v1)
+cudy_wr1300-v2 | Cudy | WR1300 | Cudy WR1300 (v2)
+cudy_wr1300-v3 | Cudy | WR1300 | Cudy WR1300 (v3)
+cudy_wr2100 | Cudy | WR2100 | Cudy WR2100
+cudy_x6-v1 | Cudy | X6 | Cudy X6 (v1)
+cudy_x6-v2 | Cudy | X6 | Cudy X6 (v2)
+d-team_newifi-d2 | D-Team | Newifi D2 | D-Team Newifi D2
+d-team_pbr-m1 | PandoraBox | PBR-M1 | PandoraBox PBR-M1
+dlink_covr-x1860-a1 | D-Link | COVR-X1860 | D-Link COVR-X1860 (A1)
+dlink_dap-1620-b1 | D-Link | DAP-1620 | D-Link DAP-1620 (B1)
+dlink_dap-x1860-a1 | D-Link | DAP-X1860 | D-Link DAP-X1860 (A1)
+dlink_dir-1935-a1 | D-Link | DIR-1935 | D-Link DIR-1935 (A1)
+dlink_dir-1960-a1 | D-Link | DIR-1960 | D-Link DIR-1960 (A1)
+dlink_dir-2640-a1 | D-Link | DIR-2640 | D-Link DIR-2640 (A1)
+dlink_dir-2660-a1 | D-Link | DIR-2660 | D-Link DIR-2660 (A1)
+dlink_dir-3060-a1 | D-Link | DIR-3060 | D-Link DIR-3060 (A1)
+dlink_dir-853-a1 | D-Link | DIR-853 | D-Link DIR-853 (A1)
+dlink_dir-853-a3 | D-Link | DIR-853 | D-Link DIR-853 (A3)
+dlink_dir-853-r1 | D-Link | DIR-853 | D-Link DIR-853 (R1)
+dlink_dir-860l-b1 | D-Link | DIR-860L | D-Link DIR-860L (B1)
+dlink_dir-867-a1 | D-Link | DIR-867 | D-Link DIR-867 (A1)
+dlink_dir-878-a1 | D-Link | DIR-878 | D-Link DIR-878 (A1)
+dlink_dir-878-r1 | D-Link | DIR-878 | D-Link DIR-878 (R1)
+dlink_dir-882-a1 | D-Link | DIR-882 | D-Link DIR-882 (A1)
+dlink_dir-882-r1 | D-Link | DIR-882 | D-Link DIR-882 (R1)
+dual-q_h721 | Dual-Q | H721 | Dual-Q H721
+edimax_ra21s | Edimax | RA21S | Edimax RA21S
+edimax_re23s | Edimax | RE23S | Edimax RE23S
+edimax_rg21s | Edimax | Gemini AC2600 RG21S | Edimax Gemini AC2600 RG21S
+elecom_wrc-1167ghbk2-s | ELECOM | WRC-1167GHBK2-S | ELECOM WRC-1167GHBK2-S
+elecom_wrc-1167gs2-b | ELECOM | WRC-1167GS2-B | ELECOM WRC-1167GS2-B
+elecom_wrc-1167gst2 | ELECOM | WRC-1167GST2 | ELECOM WRC-1167GST2
+elecom_wrc-1750gs | ELECOM | WRC-1750GS | ELECOM WRC-1750GS
+elecom_wrc-1750gst2 | ELECOM | WRC-1750GST2 | ELECOM WRC-1750GST2
+elecom_wrc-1750gsv | ELECOM | WRC-1750GSV | ELECOM WRC-1750GSV
+elecom_wrc-1900gst | ELECOM | WRC-1900GST | ELECOM WRC-1900GST
+elecom_wrc-2533ghbk-i | ELECOM | WRC-2533GHBK-I | ELECOM WRC-2533GHBK-I
+elecom_wrc-2533ghbk2-t | ELECOM | WRC-2533GHBK2-T | ELECOM WRC-2533GHBK2-T
+elecom_wrc-2533gs2 | ELECOM | WRC-2533GS2 | ELECOM WRC-2533GS2
+elecom_wrc-2533gst | ELECOM | WRC-2533GST | ELECOM WRC-2533GST
+elecom_wrc-2533gst2 | ELECOM | WRC-2533GST2 | ELECOM WRC-2533GST2
+etisalat_s3 | Etisalat | S3 | Etisalat S3
+firefly_firewrt | Firefly | FireWRT | Firefly FireWRT
+gehua_ghl-r-001 | GeHua | GHL-R-001 | GeHua GHL-R-001
+glinet_gl-mt1300 | GL.iNet | GL-MT1300 | GL.iNet GL-MT1300
+gnubee_gb-pc1 | GnuBee | Personal Cloud One | GnuBee Personal Cloud One
+gnubee_gb-pc2 | GnuBee | Personal Cloud Two | GnuBee Personal Cloud Two
+h3c_tx1800-plus | H3C | TX1800 Plus | H3C TX1800 Plus
+h3c_tx1801-plus | H3C | TX1801 Plus | H3C TX1801 Plus
+h3c_tx1806 | H3C | TX1806 | H3C TX1806
+haier_har-20s2u1 | Haier | HAR-20S2U1 | Haier HAR-20S2U1
+hanyang_hyc-g920 | Hanyang | CJ-Hello HYC-G920 | Hanyang CJ-Hello HYC-G920
+hilink_hlk-7621a-evb | HiLink | HLK-7621A evaluation board | HiLink HLK-7621A evaluation board
+hiwifi_hc5962 | HiWiFi | HC5962 | HiWiFi HC5962
+huasifei_ws1208v2 | Huasifei | WS1208V2 | Huasifei WS1208V2
+humax_e10 | HUMAX | E10 | HUMAX E10
+iodata_wn-ax1167gr | I-O DATA | WN-AX1167GR | I-O DATA WN-AX1167GR
+iodata_wn-ax1167gr2 | I-O DATA | WN-AX1167GR2 | I-O DATA WN-AX1167GR2
+iodata_wn-ax2033gr | I-O DATA | WN-AX2033GR | I-O DATA WN-AX2033GR
+iodata_wn-dx1167r | I-O DATA | WN-DX1167R | I-O DATA WN-DX1167R
+iodata_wn-dx1200gr | I-O DATA | WN-DX1200GR | I-O DATA WN-DX1200GR
+iodata_wn-dx2033gr | I-O DATA | WN-DX2033GR | I-O DATA WN-DX2033GR
+iodata_wn-gx300gr | I-O DATA | WN-GX300GR | I-O DATA WN-GX300GR
+iodata_wnpr2600g | I-O DATA | WNPR2600G | I-O DATA WNPR2600G
+iptime_a3002mesh | ipTIME | A3002MESH | ipTIME A3002MESH
+iptime_a3004ns-dual | ipTIME | A3004NS-dual | ipTIME A3004NS-dual
+iptime_a3004t | ipTIME | A3004T | ipTIME A3004T
+iptime_a6004ns-m | ipTIME | A6004NS-M | ipTIME A6004NS-M
+iptime_a6ns-m | ipTIME | A6ns-M | ipTIME A6ns-M
+iptime_a8004t | ipTIME | A8004T | ipTIME A8004T
+iptime_ax2004m | ipTIME | AX2004M | ipTIME AX2004M
+iptime_t5004 | ipTIME | T5004 | ipTIME T5004
+jcg_jhr-ac876m | JCG | JHR-AC876M | JCG JHR-AC876M
+jcg_q20 | JCG | Q20 | JCG Q20
+jcg_y2 | JCG | Y2 | JCG Y2
+keenetic_kn-3010 | Keenetic | KN-3010 | Keenetic KN-3010
+lenovo_newifi-d1 | Lenovo | Newifi D1 | Lenovo Newifi D1
+linksys_e5600 | Linksys | E5600 | Linksys E5600
+linksys_e7350 | Linksys | E7350 | Linksys E7350
+linksys_ea6350-v4 | Linksys | EA6350 | Linksys EA6350 (v4)
+linksys_ea7300-v1 | Linksys | EA7300 | Linksys EA7300 (v1)
+linksys_ea7300-v2 | Linksys | EA7300 | Linksys EA7300 (v2)
+linksys_ea7500-v2 | Linksys | EA7500 | Linksys EA7500 (v2)
+linksys_ea8100-v1 | Linksys | EA8100 | Linksys EA8100 (v1)
+linksys_ea8100-v2 | Linksys | EA8100 | Linksys EA8100 (v2)
+linksys_re6500 | Linksys | RE6500 | Linksys RE6500
+linksys_re7000 | Linksys | RE7000 | Linksys RE7000
+mediatek_ap-mt7621a-v60 | Mediatek | AP-MT7621A-V60 EVB | Mediatek AP-MT7621A-V60 EVB
+mediatek_mt7621-eval-board | MediaTek | MT7621 EVB | MediaTek MT7621 EVB
+meig_slt866 | MeiG | SLT866 | MeiG SLT866
+mercusys_mr70x-v1 | MERCUSYS | MR70X | MERCUSYS MR70X (v1)
+mikrotik_ltap-2hnd | MikroTik | LtAP-2HnD | MikroTik LtAP-2HnD
+mikrotik_routerboard-750gr3 | MikroTik | RouterBOARD 750Gr3 | MikroTik RouterBOARD 750Gr3
+mikrotik_routerboard-760igs | MikroTik | RouterBOARD 760iGS | MikroTik RouterBOARD 760iGS
+mikrotik_routerboard-m11g | MikroTik | RouterBOARD M11G | MikroTik RouterBOARD M11G
+mikrotik_routerboard-m33g | MikroTik | RouterBOARD M33G | MikroTik RouterBOARD M33G
+mqmaker_witi | MQmaker | WiTi | MQmaker WiTi
+mtc_wr1201 | MTC | Wireless Router WR1201 | MTC Wireless Router WR1201
+mts_wg430223 | MTS | WG430223 | MTS WG430223
+netgear_eax12 | NETGEAR | EAX12 | NETGEAR EAX12
+netgear_ex6150 | NETGEAR | EX6150 | NETGEAR EX6150
+netgear_r6220 | NETGEAR | R6220 | NETGEAR R6220
+netgear_r6260 | NETGEAR | R6260 | NETGEAR R6260
+netgear_r6350 | NETGEAR | R6350 | NETGEAR R6350
+netgear_r6700-v2 | NETGEAR | R6700 | NETGEAR R6700 (v2)
+netgear_r6800 | NETGEAR | R6800 | NETGEAR R6800
+netgear_r6850 | NETGEAR | R6850 | NETGEAR R6850
+netgear_r6900-v2 | NETGEAR | R6900 | NETGEAR R6900 (v2)
+netgear_r7200 | NETGEAR | R7200 | NETGEAR R7200
+netgear_r7450 | NETGEAR | R7450 | NETGEAR R7450
+netgear_wac104 | NETGEAR | WAC104 | NETGEAR WAC104
+netgear_wac124 | NETGEAR | WAC124 | NETGEAR WAC124
+netgear_wax202 | NETGEAR | WAX202 | NETGEAR WAX202
+netgear_wndr3700-v5 | NETGEAR | WNDR3700 | NETGEAR WNDR3700 (v5)
+netis_wf2881 | NETIS | WF2881 | NETIS WF2881
+oraybox_x3a | OrayBox | X3A | OrayBox X3A
+phicomm_k2p | Phicomm | K2P | Phicomm K2P
+planex_vr500 | Planex | VR500 | Planex VR500
+raisecom_msg1500-x-00 | RAISECOM | MSG1500 | RAISECOM MSG1500 (X.00)
+renkforce_ws-wn530hp3-a | Renkforce | WS-WN530HP3-A | Renkforce WS-WN530HP3-A
+rostelecom_rt-fe-1a | Rostelecom | RT-FE-1A | Rostelecom RT-FE-1A
+rostelecom_rt-sf-1 | Rostelecom | RT-SF-1 | Rostelecom RT-SF-1
+samknows_whitebox-v8 | SamKnows | Whitebox 8 | SamKnows Whitebox 8
+sercomm_na502 | SERCOMM | NA502 | SERCOMM NA502
+sercomm_na502s | SERCOMM | NA502S | SERCOMM NA502S
+sim_simax1800t | SIM | SIMAX1800T | SIM SIMAX1800T
+snr_snr-cpe-me1 | SNR | SNR-CPE-ME1 | SNR SNR-CPE-ME1
+snr_snr-cpe-me2-lite | SNR | SNR-CPE-ME2-Lite | SNR SNR-CPE-ME2-Lite
+snr_snr-cpe-me2-sfp | SNR | SNR-CPE-ME2-SFP | SNR SNR-CPE-ME2-SFP
+storylink_sap-g3200u3 | STORYLiNK | SAP-G3200U3 | STORYLiNK SAP-G3200U3
+telco-electronics_x1 | Telco Electronics | X1 | Telco Electronics X1
+tenbay_t-mb5eu-v01 | Tenbay | T-MB5EU-V01 | Tenbay T-MB5EU-V01
+thunder_timecloud | Thunder | Timecloud | Thunder Timecloud
+totolink_a7000r | TOTOLINK | A7000R | TOTOLINK A7000R
+totolink_x5000r | TOTOLINK | X5000R | TOTOLINK X5000R
+tozed_zlt-s12-pro | TOZED | ZLT S12 PRO | TOZED ZLT S12 PRO
+tplink_archer-a6-v3 | TP-Link | Archer A6 | TP-Link Archer A6 (V3)
+tplink_archer-ax23-v1 | TP-Link | Archer AX23 | TP-Link Archer AX23 (v1)
+tplink_archer-c6-v3 | TP-Link | Archer C6 | TP-Link Archer C6 (V3)
+tplink_archer-c6u-v1 | TP-Link | Archer C6U | TP-Link Archer C6U (v1)
+tplink_deco-m4r-v4 | TP-Link | Deco M4R | TP-Link Deco M4R (v4)
+tplink_eap235-wall-v1 | TP-Link | EAP235-Wall | TP-Link EAP235-Wall (v1)
+tplink_eap613-v1 | TP-Link | EAP613 | TP-Link EAP613 (v1)
+tplink_eap615-wall-v1 | TP-Link | EAP615-Wall | TP-Link EAP615-Wall (v1)
+tplink_ec330-g5u-v1 | TP-Link | EC330-G5u | TP-Link EC330-G5u (v1)
+tplink_er605-v2 | TP-Link | ER605 | TP-Link ER605 (v2)
+tplink_ex220-v1 | TP-Link | EX220 | TP-Link EX220 (v1)
+tplink_mr600-v2-eu | TP-Link | MR600 | TP-Link MR600 (v2 (EU))
+tplink_re350-v1 | TP-Link | RE350 | TP-Link RE350 (v1)
+tplink_re500-v1 | TP-Link | RE500 | TP-Link RE500 (v1)
+tplink_re650-v1 | TP-Link | RE650 | TP-Link RE650 (v1)
+tplink_re650-v2 | TP-Link | RE650 | TP-Link RE650 (v2)
+tplink_tl-wpa8631p-v3 | TP-Link | TL-WPA8631P | TP-Link TL-WPA8631P (v3)
+ubnt_edgerouter-x | Ubiquiti | EdgeRouter X | Ubiquiti EdgeRouter X
+ubnt_edgerouter-x-sfp | Ubiquiti | EdgeRouter X SFP | Ubiquiti EdgeRouter X SFP
+ubnt_unifi-6-lite | Ubiquiti | UniFi U6 Lite | Ubiquiti UniFi U6 Lite
+ubnt_unifi-flexhd | Ubiquiti | UniFi FlexHD | Ubiquiti UniFi FlexHD
+ubnt_unifi-nanohd | Ubiquiti | UniFi nanoHD | Ubiquiti UniFi nanoHD
+ubnt_usw-flex | Ubiquiti | UniFi Switch Flex | Ubiquiti UniFi Switch Flex
+unielec_u7621-01-16m | UniElec | U7621-01 | UniElec U7621-01 (16M)
+unielec_u7621-06-16m | UniElec | U7621-06 | UniElec U7621-06 (16M)
+unielec_u7621-06-32m | UniElec | U7621-06 | UniElec U7621-06 (32M)
+unielec_u7621-06-64m | UniElec | U7621-06 | UniElec U7621-06 (64M)
+wavlink_wl-wn531a6 | Wavlink | WL-WN531A6 | Wavlink WL-WN531A6
+wavlink_wl-wn533a8 | Wavlink | WL-WN533A8 | Wavlink WL-WN533A8
+wavlink_ws-wn572hp3-4g | Wavlink | WS-WN572HP3 | Wavlink WS-WN572HP3 (4G)
+wevo_11acnas | WeVO | 11AC NAS Router | WeVO 11AC NAS Router
+wevo_w2914ns-v2 | WeVO | W2914NS | WeVO W2914NS (v2)
+wifire_s1500-nbn | WiFire | S1500.NBN | WiFire S1500.NBN
+winstars_ws-wn583a6 | Winstars | WS-WN583A6 | Winstars WS-WN583A6
+xiaomi_mi-router-3-pro | Xiaomi | Mi Router 3 Pro | Xiaomi Mi Router 3 Pro
+xiaomi_mi-router-3g | Xiaomi | Mi Router 3G | Xiaomi Mi Router 3G
+xiaomi_mi-router-3g-v2 | Xiaomi | Mi Router 3G | Xiaomi Mi Router 3G (v2)
+xiaomi_mi-router-4 | Xiaomi | Mi Router 4 | Xiaomi Mi Router 4
+xiaomi_mi-router-4a-gigabit | Xiaomi | Mi Router 4A | Xiaomi Mi Router 4A (Gigabit Edition)
+xiaomi_mi-router-4a-gigabit-v2 | Xiaomi | Mi Router 4A | Xiaomi Mi Router 4A (Gigabit Edition v2)
+xiaomi_mi-router-ac2100 | Xiaomi | Mi Router AC2100 | Xiaomi Mi Router AC2100
+xiaomi_mi-router-cr6606 | Xiaomi | Mi Router CR6606 | Xiaomi Mi Router CR6606
+xiaomi_mi-router-cr6608 | Xiaomi | Mi Router CR6608 | Xiaomi Mi Router CR6608
+xiaomi_mi-router-cr6609 | Xiaomi | Mi Router CR6609 | Xiaomi Mi Router CR6609
+xiaomi_redmi-router-ac2100 | Xiaomi | Redmi Router AC2100 | Xiaomi Redmi Router AC2100
+xiaoyu_xy-c5 | XiaoYu | XY-C5 | XiaoYu XY-C5
+xzwifi_creativebox-v1 | CreativeBox | v1 | CreativeBox v1
+youhua_wr1200js | YouHua | WR1200JS | YouHua WR1200JS
+youku_yk-l2 | Youku | YK-L2 | Youku YK-L2
+yuncore_ax820 | YunCore | AX820 | YunCore AX820
+yuncore_fap640 | YunCore | FAP640 | YunCore FAP640
+yuncore_fap690 | YunCore | FAP690 | YunCore FAP690
+yuncore_g720 | YunCore | G720 | YunCore G720
+z-router_zr-2660 | Z-ROUTER | ZR-2660 | Z-ROUTER ZR-2660
+zbtlink_zbt-we1326 | Zbtlink | ZBT-WE1326 | Zbtlink ZBT-WE1326
+zbtlink_zbt-we3526 | Zbtlink | ZBT-WE3526 | Zbtlink ZBT-WE3526
+zbtlink_zbt-wg1602-16m | Zbtlink | ZBT-WG1602 | Zbtlink ZBT-WG1602 (16M)
+zbtlink_zbt-wg1602-v04-16m | Zbtlink | ZBT-WG1602-V04 | Zbtlink ZBT-WG1602-V04 (16M)
+zbtlink_zbt-wg1602-v04-32m | Zbtlink | ZBT-WG1602-V04 | Zbtlink ZBT-WG1602-V04 (32M)
+zbtlink_zbt-wg1608-16m | Zbtlink | ZBT-WG1608 | Zbtlink ZBT-WG1608 (16M)
+zbtlink_zbt-wg1608-32m | Zbtlink | ZBT-WG1608 | Zbtlink ZBT-WG1608 (32M)
+zbtlink_zbt-wg2626 | Zbtlink | ZBT-WG2626 | Zbtlink ZBT-WG2626
+zbtlink_zbt-wg3526-16m | Zbtlink | ZBT-WG3526 | Zbtlink ZBT-WG3526 (16M)
+zbtlink_zbt-wg3526-32m | Zbtlink | ZBT-WG3526 | Zbtlink ZBT-WG3526 (32M)
+zio_freezio | ZIO | FREEZIO | ZIO FREEZIO
+zyxel_lte3301-plus | ZyXEL | LTE3301-PLUS | ZyXEL LTE3301-PLUS
+zyxel_nr7101 | ZyXEL | NR7101 | ZyXEL NR7101
+zyxel_nwa50ax | ZyXEL | NWA50AX | ZyXEL NWA50AX
+zyxel_nwa55axe | ZyXEL | NWA55AXE | ZyXEL NWA55AXE
+zyxel_wap6805 | ZyXEL | WAP6805 | ZyXEL WAP6805
+zyxel_wsm20 | ZyXEL | WSM20 | ZyXEL WSM20
