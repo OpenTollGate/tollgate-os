@@ -288,7 +288,7 @@ runs:
             IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           else
             IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
-          fi
+          end
           
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
@@ -616,75 +616,236 @@ runs:
         PRIMARY_FIRMWARE=""
         PRIMARY_FIRMWARE_NAME=""
         
-        for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
-          echo "🔍 Looking for ${TYPE_TO_BUILD} firmware..."
-          
-          # Pattern depends on build type and image type
-          if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
-            PREFIX="tollgate-os"
-          else
-            PREFIX="base"
-          fi
-          
-          if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-            PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
-          else
-            PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
-            # Special case for factory images that may be .img
-            if [ "$TYPE_TO_BUILD" = "factory" ] && ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-            fi
-          fi
-          
-          # Find the firmware file
-          F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-          
-          # If not found with PREFIX, try generic pattern
-          if [ ! -f "$F" ]; then
-            if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-              PATTERN="*kernel.bin"
-            else
-              PATTERN="*${TYPE_TO_BUILD}.bin"
-              # Special case for factory images that may be .img
-              if [ "$TYPE_TO_BUILD" = "factory" ] && ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-                PATTERN="*${TYPE_TO_BUILD}.img"
-              fi
-            fi
-            
-            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-          fi
-          
-          if [ -f "$F" ]; then
-            echo "✅ Found ${TYPE_TO_BUILD} firmware: $(basename "$F")"
-            
-            # Calculate hash and size
-            FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
-            FIRMWARE_SIZE=$(stat -c%s "$F")
-            
-            # Add to JSON output
-            if [ "$FIRST_ENTRY" -eq 0 ]; then
-              echo "," >> /tmp/firmware_paths.json
-            fi
-            FIRST_ENTRY=0
-            
-            echo "  \"${TYPE_TO_BUILD}\": {" >> /tmp/firmware_paths.json
-            echo "    \"path\": \"$F\"," >> /tmp/firmware_paths.json
-            echo "    \"name\": \"$(basename "$F")\"," >> /tmp/firmware_paths.json
-            echo "    \"hash\": \"$FIRMWARE_HASH\"," >> /tmp/firmware_paths.json
-            echo "    \"size\": $FIRMWARE_SIZE" >> /tmp/firmware_paths.json
-            echo "  }" >> /tmp/firmware_paths.json
-            
-            # Set primary firmware if not set yet
-            if [ -z "$PRIMARY_FIRMWARE" ]; then
-              PRIMARY_FIRMWARE="$F"
-              PRIMARY_FIRMWARE_NAME="$(basename "$F")"
-              echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
-              echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
-            fi
-          else
-            echo "⚠️ ${TYPE_TO_BUILD} firmware not found with pattern: $PATTERN"
+        # Extract metadata about image types from the profile
+        echo "🔍 Analyzing available image types from profile..."
+        
+        # Find the correct profile path
+        PROFILE_PATH=""
+        for P in $(find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort); do
+          if jq -e --arg model "$PROFILE" '.profiles | has($model)' "$P" > /dev/null 2>&1; then
+            PROFILE_PATH="$P"
+            break
           fi
         done
+        
+        if [ -n "$PROFILE_PATH" ]; then
+          # Extract image info directly from the profile
+          IMAGE_INFO=$(jq -r --arg p "$PROFILE" '.profiles[$p].images' "$PROFILE_PATH")
+          echo "📋 Image information from profile:"
+          echo "$IMAGE_INFO" | jq .
+          
+          # Create a mapping of image types to their expected filenames
+          echo "📝 Creating image type to filename mapping..."
+          
+          for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+            echo "🔍 Looking for ${TYPE_TO_BUILD} firmware..."
+            
+            # Extract the expected filename from the profile
+            EXPECTED_NAME=$(echo "$IMAGE_INFO" | jq -r --arg t "$TYPE_TO_BUILD" '.[] | select(.type == $t) | .name' | head -1)
+            
+            if [ -n "$EXPECTED_NAME" ]; then
+              echo "✅ Found expected filename for ${TYPE_TO_BUILD}: $EXPECTED_NAME"
+              
+              # Extract the base pattern by removing version-specific parts
+              # openwrt-VERSION-PLATFORM-SUBTYPE-PROFILE-FILESYSTEM-TYPE.ext → openwrt-*-PROFILE-*-TYPE.*
+              BASE_PATTERN=$(echo "$EXPECTED_NAME" | sed -E 's/openwrt-[0-9.]+-([^-]+)-([^-]+)-([^-]+)-([^-]+)-([^.]+)\.(.*)/openwrt-*-\3-*-\5\.\6/')
+              echo "🔎 Using search pattern: $BASE_PATTERN"
+              
+              # Look for files matching this pattern in the build output
+              # First, try with the prefix
+              if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+                PREFIX="tollgate-os"
+              else
+                PREFIX="base"
+              fi
+              
+              # Try the prefixed pattern first
+              PREFIXED_PATTERN=$(echo "$BASE_PATTERN" | sed "s/openwrt-/openwrt-*${PREFIX}-/")
+              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PREFIXED_PATTERN" | head -1)
+              
+              # If not found, try the original OpenWrt pattern
+              if [ ! -f "$F" ]; then
+                F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$BASE_PATTERN" | head -1)
+              fi
+              
+              # If still not found, try a more generic pattern
+              if [ ! -f "$F" ]; then
+                if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+                  PATTERN="*${PROFILE}*kernel.bin"
+                elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+                  PATTERN="*${PROFILE}*factory*"
+                else
+                  PATTERN="*${PROFILE}*${TYPE_TO_BUILD}*"
+                fi
+                
+                F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+              fi
+              
+              if [ -f "$F" ]; then
+                echo "✅ Found ${TYPE_TO_BUILD} firmware: $(basename "$F")"
+                
+                # Calculate hash and size
+                FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
+                FIRMWARE_SIZE=$(stat -c%s "$F")
+                
+                # Add to JSON output
+                if [ "$FIRST_ENTRY" -eq 0 ]; then
+                  echo "," >> /tmp/firmware_paths.json
+                fi
+                FIRST_ENTRY=0
+                
+                echo "  \"${TYPE_TO_BUILD}\": {" >> /tmp/firmware_paths.json
+                echo "    \"path\": \"$F\"," >> /tmp/firmware_paths.json
+                echo "    \"name\": \"$(basename "$F")\"," >> /tmp/firmware_paths.json
+                echo "    \"hash\": \"$FIRMWARE_HASH\"," >> /tmp/firmware_paths.json
+                echo "    \"size\": $FIRMWARE_SIZE," >> /tmp/firmware_paths.json
+                echo "    \"expected_name\": \"$EXPECTED_NAME\"" >> /tmp/firmware_paths.json
+                echo "  }" >> /tmp/firmware_paths.json
+                
+                # Set primary firmware if not set yet
+                if [ -z "$PRIMARY_FIRMWARE" ]; then
+                  PRIMARY_FIRMWARE="$F"
+                  PRIMARY_FIRMWARE_NAME="$(basename "$F")"
+                  echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+                  echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
+                  echo "PRIMARY_FIRMWARE_TYPE=${TYPE_TO_BUILD}" >> $GITHUB_ENV
+                fi
+              else
+                echo "⚠️ ${TYPE_TO_BUILD} firmware not found with pattern: $PATTERN"
+              fi
+            else
+              echo "⚠️ Could not find expected filename for ${TYPE_TO_BUILD} in profile data"
+              
+              # Fall back to generic pattern search
+              if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+                PREFIX="tollgate-os"
+              else
+                PREFIX="base"
+              fi
+              
+              # Pattern depends on image type
+              if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+                PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
+              else
+                PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}*"
+              fi
+              
+              # Find the firmware file
+              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+              
+              # If not found with PREFIX, try generic pattern
+              if [ ! -f "$F" ]; then
+                if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+                  PATTERN="*${PROFILE}*kernel.bin"
+                elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+                  PATTERN="*${PROFILE}*factory*"
+                else
+                  PATTERN="*${PROFILE}*${TYPE_TO_BUILD}*"
+                fi
+                
+                F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+              fi
+              
+              if [ -f "$F" ]; then
+                echo "✅ Found ${TYPE_TO_BUILD} firmware via pattern search: $(basename "$F")"
+                
+                # Calculate hash and size
+                FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
+                FIRMWARE_SIZE=$(stat -c%s "$F")
+                
+                # Add to JSON output
+                if [ "$FIRST_ENTRY" -eq 0 ]; then
+                  echo "," >> /tmp/firmware_paths.json
+                fi
+                FIRST_ENTRY=0
+                
+                echo "  \"${TYPE_TO_BUILD}\": {" >> /tmp/firmware_paths.json
+                echo "    \"path\": \"$F\"," >> /tmp/firmware_paths.json
+                echo "    \"name\": \"$(basename "$F")\"," >> /tmp/firmware_paths.json
+                echo "    \"hash\": \"$FIRMWARE_HASH\"," >> /tmp/firmware_paths.json
+                echo "    \"size\": $FIRMWARE_SIZE" >> /tmp/firmware_paths.json
+                echo "  }" >> /tmp/firmware_paths.json
+                
+                # Set primary firmware if not set yet
+                if [ -z "$PRIMARY_FIRMWARE" ]; then
+                  PRIMARY_FIRMWARE="$F"
+                  PRIMARY_FIRMWARE_NAME="$(basename "$F")"
+                  echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+                  echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
+                  echo "PRIMARY_FIRMWARE_TYPE=${TYPE_TO_BUILD}" >> $GITHUB_ENV
+                fi
+              else
+                echo "⚠️ ${TYPE_TO_BUILD} firmware not found with pattern: $PATTERN"
+              fi
+            fi
+          done
+        else
+          echo "⚠️ Could not find profile information for $PROFILE"
+          
+          # Fall back to pattern-based search without profile information
+          for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
+            echo "🔍 Looking for ${TYPE_TO_BUILD} firmware (without profile guidance)..."
+            
+            # Pattern depends on build type and image type
+            if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
+              PREFIX="tollgate-os"
+            else
+              PREFIX="base"
+            fi
+            
+            if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
+            else
+              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}*"
+            fi
+            
+            # Find the firmware file
+            F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+            
+            # If not found with PREFIX, try more generic pattern
+            if [ ! -f "$F" ]; then
+              if [ "$TYPE_TO_BUILD" = "kernel" ]; then
+                PATTERN="*kernel.bin"
+              else
+                PATTERN="*${TYPE_TO_BUILD}*"
+              fi
+              
+              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
+            fi
+            
+            if [ -f "$F" ]; then
+              echo "✅ Found ${TYPE_TO_BUILD} firmware: $(basename "$F")"
+              
+              # Calculate hash and size
+              FIRMWARE_HASH=$(sha256sum "$F" | cut -d' ' -f1)
+              FIRMWARE_SIZE=$(stat -c%s "$F")
+              
+              # Add to JSON output
+              if [ "$FIRST_ENTRY" -eq 0 ]; then
+                echo "," >> /tmp/firmware_paths.json
+              fi
+              FIRST_ENTRY=0
+              
+              echo "  \"${TYPE_TO_BUILD}\": {" >> /tmp/firmware_paths.json
+              echo "    \"path\": \"$F\"," >> /tmp/firmware_paths.json
+              echo "    \"name\": \"$(basename "$F")\"," >> /tmp/firmware_paths.json
+              echo "    \"hash\": \"$FIRMWARE_HASH\"," >> /tmp/firmware_paths.json
+              echo "    \"size\": $FIRMWARE_SIZE" >> /tmp/firmware_paths.json
+              echo "  }" >> /tmp/firmware_paths.json
+              
+              # Set primary firmware if not set yet
+              if [ -z "$PRIMARY_FIRMWARE" ]; then
+                PRIMARY_FIRMWARE="$F"
+                PRIMARY_FIRMWARE_NAME="$(basename "$F")"
+                echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+                echo "FIRMWARE_SIZE=${FIRMWARE_SIZE}" >> $GITHUB_ENV
+                echo "PRIMARY_FIRMWARE_TYPE=${TYPE_TO_BUILD}" >> $GITHUB_ENV
+              fi
+            else
+              echo "⚠️ ${TYPE_TO_BUILD} firmware not found with pattern: $PATTERN"
+            fi
+          done
+        fi
         
         # Close JSON
         echo "}" >> /tmp/firmware_paths.json
