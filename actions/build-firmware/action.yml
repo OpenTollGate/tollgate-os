@@ -76,15 +76,35 @@ runs:
         
         echo "🔍 Searching for profile: $MODEL"
         
-        # Find profile for the model
+        # Debug: List all available profiles.json files
+        echo "📋 Available profiles.json files:"
+        find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort
+        
+        # First, try looking for an exact match in profiles.json files
         for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -type f -name "profiles.json" | sort); do
           # Skip invalid profiles
           if [ ! -s "$PROFILE_PATH" ] || ! jq empty "$PROFILE_PATH" 2>/dev/null; then
+            echo "⚠️ Skipping invalid profile: $PROFILE_PATH"
             continue
           fi
           
-          # Check if this file contains our model
-          if jq -e --arg model "$MODEL" '.profiles[$model]' "$PROFILE_PATH" > /dev/null 2>&1; then
+          # Debug: Check if file exists and is readable
+          echo "🔍 Examining profile: $PROFILE_PATH"
+          
+          # Extract platform and type from path for better debugging
+          REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/}
+          PATH_PARTS=()
+          IFS='/' read -ra PATH_PARTS <<< "$REL_PATH"
+          
+          if [ ${#PATH_PARTS[@]} -ge 3 ]; then
+            PROFILE_VERSION=${PATH_PARTS[0]}
+            PROFILE_PLATFORM=${PATH_PARTS[1]}
+            PROFILE_TYPE=${PATH_PARTS[2]}
+            echo "📍 Checking $PROFILE_PLATFORM/$PROFILE_TYPE for $MODEL"
+          fi
+          
+          # Check if this file contains our model as a direct key
+          if jq -e --arg model "$MODEL" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
             MODEL_FOUND=1
             echo "✅ Found profile in: $PROFILE_PATH"
             
@@ -113,6 +133,7 @@ runs:
               
               echo "📌 Architecture: $ARCH"
               echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
+              echo "📌 Supported devices: $DEVICE_SUPPORTED"
               
               # Set environment variables
               echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
@@ -136,13 +157,81 @@ runs:
           fi
         done
         
+        # If direct key lookup failed, handle specific cases like glinet_gl-ar300m-nand
+        if [ $MODEL_FOUND -eq 0 ]; then
+          echo "⚠️ Direct profile match not found, checking special cases..."
+          
+          # Check specifically for ath79/nand if requested model is glinet_gl-ar300m-nand
+          if [ "$MODEL" = "glinet_gl-ar300m-nand" ]; then
+            SPECIFIC_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ inputs.version }}/ath79/nand/profiles.json"
+            
+            if [ -f "$SPECIFIC_PATH" ]; then
+              echo "🔍 Checking specifically: $SPECIFIC_PATH"
+              
+              if jq -e --arg model "$MODEL" '.profiles[$model]' "$SPECIFIC_PATH" > /dev/null 2>&1; then
+                echo "✅ Found profile for $MODEL in ath79/nand path"
+                MODEL_FOUND=1
+                
+                VERSION="${{ inputs.version }}"
+                PLATFORM="ath79"
+                TYPE="nand"
+                
+                echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
+                
+                # Extract all required build information
+                ARCH=$(jq -r '.arch_packages // "unknown"' "$SPECIFIC_PATH")
+                DEFAULT_PKGS=$(jq -r '.default_packages // [] | join(" ")' "$SPECIFIC_PATH")
+                DEVICE_PKGS=$(jq -r --arg p "$MODEL" '.profiles[$p].device_packages // [] | join(" ")' "$SPECIFIC_PATH")
+                
+                # Device information for metadata
+                DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$SPECIFIC_PATH")
+                DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(" ")' "$SPECIFIC_PATH")
+                DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$SPECIFIC_PATH")
+                DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$SPECIFIC_PATH")
+                
+                echo "📌 Architecture: $ARCH"
+                echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
+                echo "📌 Supported devices: $DEVICE_SUPPORTED"
+                
+                # Set environment variables
+                echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+                echo "TYPE=$TYPE" >> $GITHUB_ENV
+                echo "TARGET_DEVICE=$PLATFORM-$TYPE" >> $GITHUB_ENV
+                echo "PROFILE=$MODEL" >> $GITHUB_ENV
+                echo "ARCH=$ARCH" >> $GITHUB_ENV
+                
+                # Configure packages
+                WIFI_REMOVE="-wpad -wpad-basic -wpad-basic-wolfssl -wpad-mini -wpad-basic-mbedtls -wpad-mesh-openssl -wpad-mesh-wolfssl"
+                DHCP_REMOVE="-odhcpd -odhcpd-ipv6only"
+                WIFI_ADD="wpad-wolfssl"
+                TOLLGATE_ADDED="luci luci-ssl iwinfo $WIFI_ADD"
+                
+                # Final package list
+                PACKAGES="$WIFI_REMOVE $DHCP_REMOVE $TOLLGATE_ADDED $DEVICE_PKGS $DEFAULT_PKGS ${{ inputs.base_packages }}"
+                echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+              else
+                echo "⚠️ Profile $MODEL not found in $SPECIFIC_PATH"
+              fi
+            else
+              echo "⚠️ Special path not found: $SPECIFIC_PATH"
+            fi
+          fi
+        fi
+        
         if [ $MODEL_FOUND -eq 0 ]; then
           echo "❌ ERROR: Could not find router profile for '$MODEL'"
-          echo "❌ Available models:"
+          echo "❌ Available models by platform/type:"
           for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles" -name "profiles.json"); do
             if [ -s "$PROFILE_PATH" ]; then
-              echo "  - $(basename $(dirname $(dirname $PROFILE_PATH)))/$(basename $(dirname $PROFILE_PATH)):"
-              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | sed 's/^/    - /' || echo "    (Invalid JSON)"
+              REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/}
+              PATH_PARTS=()
+              IFS='/' read -ra PATH_PARTS <<< "$REL_PATH"
+              
+              if [ ${#PATH_PARTS[@]} -ge 3 ]; then
+                PROFILE_PATH_INFO="${PATH_PARTS[1]}/${PATH_PARTS[2]}"
+                echo "  - $PROFILE_PATH_INFO:"
+                jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | sed 's/^/    - /' || echo "    (Invalid JSON)"
+              fi
             fi
           done
           exit 1
