@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ramips/mt7621/profiles.json
-# Generated on: Sun Apr 20 17:22:39 CEST 2025
+# Generated on: Sun Apr 20 17:51:07 CEST 2025
 
 adslr_g7 | ADSLR | G7 | ADSLR G7
 afoundry_ew1200 | AFOUNDRY | EW1200 | AFOUNDRY EW1200

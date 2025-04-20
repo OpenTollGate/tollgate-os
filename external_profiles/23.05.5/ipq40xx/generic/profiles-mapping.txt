@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ipq40xx/generic/profiles.json
-# Generated on: Sun Apr 20 17:23:16 CEST 2025
+# Generated on: Sun Apr 20 17:51:40 CEST 2025
 
 8dev_habanero-dvk | 8devices | Habanero DVK | 8devices Habanero DVK
 8dev_jalapeno | 8devices | Jalapeno | 8devices Jalapeno

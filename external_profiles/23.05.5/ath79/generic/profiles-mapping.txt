@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ath79/generic/profiles.json
-# Generated on: Sun Apr 20 17:22:51 CEST 2025
+# Generated on: Sun Apr 20 17:51:17 CEST 2025
 
 8dev_carambola2 | 8devices | Carambola2 | 8devices Carambola2
 8dev_lima | 8devices | Lima | 8devices Lima

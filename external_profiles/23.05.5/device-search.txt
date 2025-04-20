@@ -1,6 +1,6 @@
 # OpenWrt Device Search Helper
 # Version: 23.05.5
-# Generated: Sun Apr 20 17:23:19 CEST 2025
+# Generated: Sun Apr 20 17:51:44 CEST 2025
 # Format: device_id | platform/target | vendor | model
 
 8dev_habanero-dvk | ipq40xx/generic | 8devices | Habanero DVK

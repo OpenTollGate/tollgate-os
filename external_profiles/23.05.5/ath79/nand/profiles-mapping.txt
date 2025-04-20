@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ath79/nand/profiles.json
-# Generated on: Sun Apr 20 17:23:12 CEST 2025
+# Generated on: Sun Apr 20 17:51:37 CEST 2025
 
 8dev_rambutan | 8devices | Rambutan | 8devices Rambutan
 aerohive_hiveap-121 | Aerohive | HiveAP 121 | Aerohive HiveAP 121

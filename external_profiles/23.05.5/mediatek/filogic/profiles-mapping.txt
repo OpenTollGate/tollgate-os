@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/mediatek/filogic/profiles.json
-# Generated on: Sun Apr 20 17:23:14 CEST 2025
+# Generated on: Sun Apr 20 17:51:38 CEST 2025
 
 acelink_ew-7886cax | Acelink | EW-7886CAX | Acelink EW-7886CAX
 acer_predator-w6 | Acer | Predator W6 | Acer Predator W6

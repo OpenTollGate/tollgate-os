@@ -1,7 +1,7 @@
 # Device ID to Name mapping
 # Format: device_id | vendor | model | full_name
 # Generated from: /Users/macbook/src/tollgate-os/external_profiles/23.05.5/ipq806x/generic/profiles.json
-# Generated on: Sun Apr 20 17:23:18 CEST 2025
+# Generated on: Sun Apr 20 17:51:42 CEST 2025
 
 arris_tr4400-v2 | Arris | TR4400 | Arris TR4400 (v2)
 askey_rt4230w-rev6 | Askey | RT4230W | Askey RT4230W (REV6)
