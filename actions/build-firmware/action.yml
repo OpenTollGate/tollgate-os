@@ -221,9 +221,7 @@ runs:
         # Extract device information once we've found the profile
         if [ $MODEL_FOUND -eq 1 ]; then
           # Make sure we use the correct platform and type determined above
-          if [ -n "${DETECTED_PLATFORM}" ] && [ -n "${DETECTED_TYPE}" ]; then
-            PLATFORM="${DETECTED_PLATFORM}"
-            TYPE="${DETECTED_TYPE}"
+          if [ -n "${PLATFORM}" ] && [ -n "${TYPE}" ]; then
             echo "👉 Using platform/type: $PLATFORM/$TYPE"
           elif [ -z "$PLATFORM" ] || [ -z "$TYPE" ]; then
             echo "⚠️ Warning: Platform or Type is empty, using defaults"
