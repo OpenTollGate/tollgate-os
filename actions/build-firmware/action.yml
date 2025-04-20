@@ -68,12 +68,12 @@ runs:
 
     - name: Setup Build Caching
       id: cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           /tmp/openwrt-build/dl
           /tmp/openwrt-build/imagebuilder
-        key: openwrt-${{ inputs.version }}-${{ inputs.model }}-${{ hashFiles('tollgate-image-builder/files/**') }}
+        key: openwrt-${{ inputs.version }}-${{ inputs.model }}-${{ hashFiles('files/**') }}
         restore-keys: |
           openwrt-${{ inputs.version }}-${{ inputs.model }}-
           openwrt-${{ inputs.version }}-
