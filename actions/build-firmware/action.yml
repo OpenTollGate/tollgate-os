@@ -1,5 +1,11 @@
-name: 'Build OpenWRT Image'
-description: 'Builds an OpenWRT firmware image with TollGate packages'
+name: 'Build TollGate OpenWrt Image'
+description: >
+  Builds an OpenWRT firmware image with TollGate packages.
+  This action follows the standard OpenWrt build process:
+  1. Identifies the target device profile
+  2. Downloads the appropriate OpenWrt ImageBuilder
+  3. Adds TollGate packages
+  4. Creates a flashable firmware image
 author: 'c03rad0r'
 
 branding:
@@ -185,7 +191,7 @@ runs:
                 
                 # Device information for metadata
                 DEVICE_IMAGE_PREFIX=$(jq -r --arg p "$MODEL" '.profiles[$p].image_prefix // "unknown"' "$SPECIFIC_PATH")
-                DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(" ")' "$SPECIFIC_PATH")
+                DEVICE_SUPPORTED=$(jq -r --arg p "$MODEL" '.profiles[$p].supported_devices // [] | join(", ")' "$SPECIFIC_PATH")
                 DEVICE_VENDOR=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].vendor // "unknown"' "$SPECIFIC_PATH")
                 DEVICE_MODEL=$(jq -r --arg p "$MODEL" '.profiles[$p].titles[0].model // "unknown"' "$SPECIFIC_PATH")
                 
