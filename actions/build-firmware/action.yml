@@ -151,52 +151,90 @@ runs:
     - name: Setup ImageBuilder
       shell: bash
       run: |
-        # Determine the ImageBuilder URL based on version and platform
+        # Set up base variables for OpenWrt downloads
         VERSION="${{ inputs.version }}"
         BASE_URL="https://downloads.openwrt.org"
-        ARCHIVE_EXT="tar.xz"
         
+        # Determine if we're using snapshot or release builds
         if [ "$VERSION" = "snapshot" ]; then
-          # Snapshot builds have a different naming convention and use zst compression
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
-          DOWNLOAD_URL="${BASE_URL}/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
-          ARCHIVE_EXT="tar.zst"
+          RELEASE_PATH="snapshots"
+          DEFAULT_ARCHIVE_EXT="tar.zst"
+          # Snapshots use simplified naming
+          DEFAULT_IB_NAME_FORMAT="openwrt-imagebuilder-%s-%s.Linux-x86_64"
+          IB_NAME=$(printf "$DEFAULT_IB_NAME_FORMAT" "${PLATFORM}" "${TYPE}")
         else
-          # Regular release builds
-          # Handle special case for ath79/nand
-          if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
-            TARGET_SUFFIX="ath79-nand"
-          else
-            TARGET_SUFFIX="${TARGET_DEVICE}"
-          fi
-          
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${VERSION}-${TARGET_SUFFIX}.Linux-x86_64"
-          DOWNLOAD_URL="${BASE_URL}/releases/${VERSION}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          RELEASE_PATH="releases/$VERSION"
+          DEFAULT_ARCHIVE_EXT="tar.xz"
+          # Releases include version in name
+          DEFAULT_IB_NAME_FORMAT="openwrt-imagebuilder-%s-%s-%s.Linux-x86_64"
+          IB_NAME=$(printf "$DEFAULT_IB_NAME_FORMAT" "$VERSION" "${PLATFORM}" "${TYPE}")
         fi
         
-        echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
+        # Build the target directory URL
+        TARGET_URL="${BASE_URL}/${RELEASE_PATH}/targets/${PLATFORM}/${TYPE}"
+        
+        echo "🔍 Looking for ImageBuilder in: ${TARGET_URL}"
+        
+        # Attempt to fetch directory listing to find the exact ImageBuilder filename
+        # This is more robust than hardcoding naming conventions
+        LISTING=$(curl -s "${TARGET_URL}/")
+        
+        # Look for the ImageBuilder archive in the directory listing
+        if echo "$LISTING" | grep -q "ImageBuilder.*\.tar\.${DEFAULT_ARCHIVE_EXT##*.}"; then
+          # Extract the full ImageBuilder filename from the listing
+          IB_ARCHIVE=$(echo "$LISTING" | grep -o "openwrt-imagebuilder[^\"]*\.tar\.${DEFAULT_ARCHIVE_EXT##*.}" | head -1)
+          
+          if [ -n "$IB_ARCHIVE" ]; then
+            echo "✅ Found ImageBuilder archive: $IB_ARCHIVE"
+            DOWNLOAD_URL="${TARGET_URL}/${IB_ARCHIVE}"
+            IB_NAME="${IB_ARCHIVE%.*.*}" # Remove the .tar.xz or .tar.zst extension
+          else
+            # Fallback to the default naming pattern if we couldn't extract from listing
+            echo "⚠️ Could not find ImageBuilder in directory listing, trying default name"
+            DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
+          fi
+        else
+          # Fallback to the default naming pattern if we couldn't parse the listing
+          echo "⚠️ Could not parse directory listing, trying default name"
+          DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
+        fi
+        
+        echo "IMAGEBUILDER_NAME=${IB_NAME}" >> $GITHUB_ENV
         
         # Download and extract ImageBuilder
         cd $BUILDDIR
         echo "⬇️ Downloading ImageBuilder from $DOWNLOAD_URL"
         
-        # Verify the URL exists before downloading
+        # Check if the URL exists
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
           curl -L -C - -O "$DOWNLOAD_URL"
           
-          # Extract based on archive type
-          if [ "$ARCHIVE_EXT" = "tar.zst" ]; then
-            tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+          # Determine archive type and extract accordingly
+          ARCHIVE_FILE=$(basename "$DOWNLOAD_URL")
+          
+          if [[ "$ARCHIVE_FILE" == *.tar.zst ]]; then
+            echo "📦 Extracting zstd compressed archive..."
+            tar --zstd -xf "$ARCHIVE_FILE"
+          elif [[ "$ARCHIVE_FILE" == *.tar.xz ]]; then
+            echo "📦 Extracting xz compressed archive..."
+            tar xfJ "$ARCHIVE_FILE"
           else
-            tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+            echo "❌ Unknown archive format: $ARCHIVE_FILE"
+            exit 1
           fi
+          
           echo "✅ ImageBuilder extracted successfully"
+          
+          # Set the build directory to the extracted ImageBuilder
+          echo "BUILDDIR=$BUILDDIR/${IB_NAME}" >> $GITHUB_ENV
         else
-          echo "❌ Error: URL $DOWNLOAD_URL does not exist"
+          echo "❌ Error: ImageBuilder not found at $DOWNLOAD_URL"
+          echo "   Please check if the platform/type combination is supported for version $VERSION"
+          # List directories for debugging
+          echo "Available targets in $RELEASE_PATH:"
+          curl -s "${BASE_URL}/${RELEASE_PATH}/targets/" | grep -o 'href="[^"]*/"' | cut -d'"' -f2
           exit 1
         fi
-        
-        echo "BUILDDIR=$BUILDDIR/${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
 
     - name: Setup Build Environment
       shell: bash
@@ -226,7 +264,7 @@ runs:
       id: packages
       shell: bash
       run: |
-        # Setup local packages
+        # Setup local packages directory
         PACKAGES_DIR="${BUILDDIR}/packages/local"
         mkdir -p "${PACKAGES_DIR}"
         DOWNLOADED_PACKAGES=""
@@ -234,47 +272,77 @@ runs:
         # Check if release.json exists
         if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
           echo "📦 Processing TollGate modules from release.json"
+          echo "🔍 Looking for packages for architecture: ${ARCH}"
           
-          # Extract package URLs - Fixed JQ command with proper quoting
-          jq -r --arg arch "$ARCH" '.modules[] | .name + "|" + (.versions[0].architectures[$arch].url // "")' \
-            "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" > "${BUILDDIR}/package_urls.txt"
-          
-          # Download each package
-          while IFS='|' read -r MODULE_NAME PACKAGE_URL; do
+          # Process each module in the release.json file
+          module_count=$(jq '.modules | length' "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json")
+          for ((i=0; i<$module_count; i++)); do
+            # Extract module information
+            MODULE_NAME=$(jq -r ".modules[$i].name" "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json")
+            echo "📦 Processing module: ${MODULE_NAME}"
+            
+            # Try to extract URL for this architecture
+            PACKAGE_URL=$(jq -r --arg arch "$ARCH" ".modules[$i].versions[0].architectures[\$arch].url // \"\"" \
+              "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json")
+            
             # Skip packages without valid URLs
             if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
               continue
             fi
             
+            # Determine package filename - try to extract from URL or use standard format
+            if [[ "$PACKAGE_URL" =~ /([^/]+\.ipk)$ ]]; then
+              # Extract filename from URL
+              PACKAGE_FILENAME="${BASH_REMATCH[1]}"
+              echo "📄 Using filename from URL: ${PACKAGE_FILENAME}"
+            else
+              # Use standard naming convention
+              PACKAGE_FILENAME="tollgate-module-${MODULE_NAME}-go_${ARCH}.ipk"
+              echo "📄 Using standard filename: ${PACKAGE_FILENAME}"
+            fi
+            
             # Download the package
-            PACKAGE_FILENAME="tollgate-module-${MODULE_NAME}-go_${ARCH}.ipk"
             echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
             
             if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
               echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-              DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+              
+              # Extract package name without version and architecture
+              PKG_BASE_NAME="tollgate-module-${MODULE_NAME}-go"
+              DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} ${PKG_BASE_NAME}"
             else
               echo "❌ Failed to download ${PACKAGE_FILENAME}"
             fi
-          done < "${BUILDDIR}/package_urls.txt"
+          done
           
-          # Create package index
+          # Create package index if packages were downloaded
           if [ -n "${DOWNLOADED_PACKAGES}" ]; then
             echo "📦 Adding TollGate packages to build: ${DOWNLOADED_PACKAGES}"
             echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
             
             echo "📑 Creating package index"
-            touch "${PACKAGES_DIR}/Packages"
-            for PKG in "${PACKAGES_DIR}"/*.ipk; do
-              if [ -f "$PKG" ]; then
-                FILENAME=$(basename "$PKG")
-                PKG_NAME=$(echo "$FILENAME" | sed 's/_.*//g')
-                echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
-                echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
-                echo "" >> "${PACKAGES_DIR}/Packages"
-              fi
-            done
+            # Generate proper package index using opkg-make-index if available
+            if command -v opkg-make-index >/dev/null 2>&1; then
+              echo "📑 Using opkg-make-index for package indexing"
+              opkg-make-index -p "${PACKAGES_DIR}/Packages" "${PACKAGES_DIR}"
+            else
+              echo "📑 Creating basic package index"
+              touch "${PACKAGES_DIR}/Packages"
+              # Create a minimal package index with just enough information
+              for PKG in "${PACKAGES_DIR}"/*.ipk; do
+                if [ -f "$PKG" ]; then
+                  FILENAME=$(basename "$PKG")
+                  # Extract package name (everything before first underscore)
+                  PKG_NAME=$(echo "$FILENAME" | sed 's/_.*//g')
+                  echo "Package: $PKG_NAME" >> "${PACKAGES_DIR}/Packages"
+                  echo "Filename: $FILENAME" >> "${PACKAGES_DIR}/Packages"
+                  echo "" >> "${PACKAGES_DIR}/Packages"
+                fi
+              done
+            fi
+            
+            # Compress the package index
             gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
           else
             echo "⚠️ No TollGate packages were downloaded successfully"
