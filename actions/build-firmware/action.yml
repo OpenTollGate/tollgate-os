@@ -224,8 +224,8 @@ runs:
         if [ -f "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" ]; then
           echo "📦 Processing TollGate modules from release.json"
           
-          # Extract package URLs
-          jq -r --arg arch "${ARCH}" '.modules[] | "\(.name)|\(.versions[0].architectures[$arch].url // \"\")"' \
+          # Extract package URLs - Fixed JQ command with proper quoting
+          jq -r --arg arch "$ARCH" '.modules[] | .name + "|" + (.versions[0].architectures[$arch].url // "")' \
             "${GITHUB_WORKSPACE}/files/etc/tollgate/release.json" > "${BUILDDIR}/package_urls.txt"
           
           # Download each package
