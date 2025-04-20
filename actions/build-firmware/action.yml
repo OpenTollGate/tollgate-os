@@ -100,66 +100,39 @@ runs:
         MODEL_FOUND=0
         PLATFORM=""
         TYPE=""
-        DEVICE_SEARCH_FILE="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/device-search.txt"
         
         echo "🔍 Searching for profile: $MODEL"
         
-        # First, try direct lookup in device-search.txt if it exists
-        if [ -f "$DEVICE_SEARCH_FILE" ]; then
-          echo "📋 Using device search helper file"
-          LOOKUP=$(grep -i "^$MODEL |" "$DEVICE_SEARCH_FILE" | head -1)
+        # Skip device-search.txt and search all profiles.json files directly
+        echo "🔍 Searching through all profiles.json files..."
+        
+        for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -type f -name "profiles.json" | sort); do
+          # Skip invalid profiles
+          if [ ! -s "$PROFILE_PATH" ] || ! jq empty "$PROFILE_PATH" 2>/dev/null; then
+            continue
+          fi
           
-          if [ -n "$LOOKUP" ]; then
-            # Extract platform/target from the lookup result
-            MODEL=$(echo "$LOOKUP" | cut -d'|' -f1 | xargs)
-            PLATFORM_TYPE=$(echo "$LOOKUP" | cut -d'|' -f2 | xargs)
-            PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
-            TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
+          # Check if this file contains our model (exact match)
+          if jq -e --arg model "$MODEL" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
+            MODEL_FOUND=1
+            echo "✅ Found exact profile match in: $PROFILE_PATH"
             
-            # Debug output to verify platform/type
-            echo "✅ Found exact match for $MODEL in $PLATFORM/$TYPE"
+            # Extract path components: external_profiles/VERSION/PLATFORM/TYPE/profiles.json
+            REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
+            PLATFORM=$(echo "$REL_PATH" | cut -d'/' -f1)
+            TYPE=$(echo "$REL_PATH" | cut -d'/' -f2)
+            
             echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
             echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
             
-            PROFILE_PATH="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/profiles.json"
-            # Check if the profile file exists
-            if [ ! -f "$PROFILE_PATH" ]; then
-              echo "⚠️ Warning: Profiles file not found at expected location: $PROFILE_PATH"
-            else
-              echo "✅ Found profiles file at: $PROFILE_PATH"
-            fi
-            MODEL_FOUND=1
-          else
-            # If not found by exact ID, try partial match with grep
-            echo "🔍 No exact match found, trying fuzzy search..."
-            LOOKUP=$(grep -i "$MODEL" "$DEVICE_SEARCH_FILE" | head -1)
-            
-            if [ -n "$LOOKUP" ]; then
-              # Extract platform/target from the lookup result
-              MODEL=$(echo "$LOOKUP" | cut -d'|' -f1 | xargs)
-              PLATFORM_TYPE=$(echo "$LOOKUP" | cut -d'|' -f2 | xargs)
-              PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
-              TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
-              
-              echo "✅ Found fuzzy match: $MODEL in $PLATFORM/$TYPE"
-              echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
-              echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
-              
-              PROFILE_PATH="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/profiles.json"
-              # Check if the profile file exists
-              if [ ! -f "$PROFILE_PATH" ]; then
-                echo "⚠️ Warning: Profiles file not found at expected location: $PROFILE_PATH"
-              else
-                echo "✅ Found profiles file at: $PROFILE_PATH"
-              fi
-              MODEL_FOUND=1
-            fi
+            echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
+            break
           fi
-        fi
+        done
         
-        # If not found via device-search.txt, search all profiles.json files
+        # If not found by exact match, try searching by device name/title
         if [ $MODEL_FOUND -eq 0 ]; then
-          echo "🔍 Searching through all profiles.json files..."
+          echo "🔍 Searching by device name/title..."
           
           for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -type f -name "profiles.json" | sort); do
             # Skip invalid profiles
@@ -167,12 +140,15 @@ runs:
               continue
             fi
             
-            # Check if this file contains our model
-            if jq -e --arg model "$MODEL" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
+            # Use jq to find profiles with matching vendor/model in titles
+            MATCHING_ID=$(jq -r --arg search "$MODEL" '.profiles | to_entries[] | select(.value.titles[0].vendor + " " + .value.titles[0].model | ascii_downcase | contains($search | ascii_downcase)) | .key' "$PROFILE_PATH" | head -1)
+            
+            if [ -n "$MATCHING_ID" ]; then
               MODEL_FOUND=1
-              echo "✅ Found profile in: $PROFILE_PATH"
+              MODEL="$MATCHING_ID"
+              echo "✅ Found profile by name: $MODEL in $PROFILE_PATH"
               
-              # Extract path components: external_profiles/VERSION/PLATFORM/TYPE/profiles.json
+              # Extract path components
               REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
               PLATFORM=$(echo "$REL_PATH" | cut -d'/' -f1)
               TYPE=$(echo "$REL_PATH" | cut -d'/' -f2)
@@ -184,38 +160,6 @@ runs:
               break
             fi
           done
-          
-          # If still not found, try searching for matching titles (vendor/model)
-          if [ $MODEL_FOUND -eq 0 ]; then
-            echo "🔍 Searching by device name/title..."
-            
-            for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -type f -name "profiles.json" | sort); do
-              # Skip invalid profiles
-              if [ ! -s "$PROFILE_PATH" ] || ! jq empty "$PROFILE_PATH" 2>/dev/null; then
-                continue
-              fi
-              
-              # Use jq to find profiles with matching vendor/model in titles
-              MATCHING_ID=$(jq -r --arg search "$MODEL" '.profiles | to_entries[] | select(.value.titles[0].vendor + " " + .value.titles[0].model | ascii_downcase | contains($search | ascii_downcase)) | .key' "$PROFILE_PATH" | head -1)
-              
-              if [ -n "$MATCHING_ID" ]; then
-                MODEL_FOUND=1
-                MODEL="$MATCHING_ID"
-                echo "✅ Found profile by name: $MODEL in $PROFILE_PATH"
-                
-                # Extract path components
-                REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
-                PLATFORM=$(echo "$REL_PATH" | cut -d'/' -f1)
-                TYPE=$(echo "$REL_PATH" | cut -d'/' -f2)
-                
-                echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
-                echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
-                
-                echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
-                break
-              fi
-            done
-          fi
         fi
         
         # Extract device information once we've found the profile
@@ -287,23 +231,18 @@ runs:
           echo "❌ Available models by platform/type:"
           
           # Show available models to help debugging
-          if [ -f "$DEVICE_SEARCH_FILE" ]; then
-            echo "📋 Top matches from device search:"
-            grep -i "$MODEL" "$DEVICE_SEARCH_FILE" | head -10
-          else
-            for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -name "profiles.json"); do
-              if [ -s "$PROFILE_PATH" ]; then
-                REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
-                echo "  - $REL_PATH:"
-                jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | head -10 | sed 's/^/    - /' || echo "    (Invalid JSON)"
-                TOTAL_MODELS=$(jq -r '.profiles | keys | length' "$PROFILE_PATH" 2>/dev/null || echo 0)
-                if [ "$TOTAL_MODELS" -gt 10 ]; then
-                  REMAINING=$((TOTAL_MODELS - 10))
-                  echo "      ... and $REMAINING more"
-                fi
+          for PROFILE_PATH in $(find "${GITHUB_WORKSPACE}/external_profiles/${VERSION}" -name "profiles.json"); do
+            if [ -s "$PROFILE_PATH" ]; then
+              REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
+              echo "  - $REL_PATH:"
+              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | head -10 | sed 's/^/    - /' || echo "    (Invalid JSON)"
+              TOTAL_MODELS=$(jq -r '.profiles | keys | length' "$PROFILE_PATH" 2>/dev/null || echo 0)
+              if [ "$TOTAL_MODELS" -gt 10 ]; then
+                REMAINING=$((TOTAL_MODELS - 10))
+                echo "      ... and $REMAINING more"
               fi
-            done
-          fi
+            fi
+          done
           
           exit 1
         fi
