@@ -86,6 +86,8 @@ runs:
         MODEL="${{ inputs.model }}"
         VERSION="${{ inputs.version }}"
         MODEL_FOUND=0
+        PLATFORM=""
+        TYPE=""
         DEVICE_SEARCH_FILE="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/device-search.txt"
         
         echo "🔍 Searching for profile: $MODEL"
@@ -102,8 +104,18 @@ runs:
             PLATFORM=$(echo "$PLATFORM_TYPE" | cut -d'/' -f1)
             TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
             
+            # Debug output to verify platform/type
             echo "✅ Found exact match for $MODEL in $PLATFORM/$TYPE"
+            echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
+            echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
+            
             PROFILE_PATH="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/profiles.json"
+            # Check if the profile file exists
+            if [ ! -f "$PROFILE_PATH" ]; then
+              echo "⚠️ Warning: Profiles file not found at expected location: $PROFILE_PATH"
+            else
+              echo "✅ Found profiles file at: $PROFILE_PATH"
+            fi
             MODEL_FOUND=1
           else
             # If not found by exact ID, try partial match with grep
@@ -118,7 +130,16 @@ runs:
               TYPE=$(echo "$PLATFORM_TYPE" | cut -d'/' -f2)
               
               echo "✅ Found fuzzy match: $MODEL in $PLATFORM/$TYPE"
+              echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
+              echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
+              
               PROFILE_PATH="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/profiles.json"
+              # Check if the profile file exists
+              if [ ! -f "$PROFILE_PATH" ]; then
+                echo "⚠️ Warning: Profiles file not found at expected location: $PROFILE_PATH"
+              else
+                echo "✅ Found profiles file at: $PROFILE_PATH"
+              fi
               MODEL_FOUND=1
             fi
           fi
@@ -143,6 +164,9 @@ runs:
               REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
               PLATFORM=$(echo "$REL_PATH" | cut -d'/' -f1)
               TYPE=$(echo "$REL_PATH" | cut -d'/' -f2)
+              
+              echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
+              echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
               
               echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
               break
@@ -172,6 +196,9 @@ runs:
                 PLATFORM=$(echo "$REL_PATH" | cut -d'/' -f1)
                 TYPE=$(echo "$REL_PATH" | cut -d'/' -f2)
                 
+                echo "DETECTED_PLATFORM=$PLATFORM" >> $GITHUB_ENV
+                echo "DETECTED_TYPE=$TYPE" >> $GITHUB_ENV
+                
                 echo "📌 Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
                 break
               fi
@@ -181,6 +208,27 @@ runs:
         
         # Extract device information once we've found the profile
         if [ $MODEL_FOUND -eq 1 ]; then
+          # Make sure we use the correct platform and type determined above
+          if [ -n "${DETECTED_PLATFORM}" ] && [ -n "${DETECTED_TYPE}" ]; then
+            PLATFORM="${DETECTED_PLATFORM}"
+            TYPE="${DETECTED_TYPE}"
+            echo "👉 Using platform/type: $PLATFORM/$TYPE"
+          elif [ -z "$PLATFORM" ] || [ -z "$TYPE" ]; then
+            echo "⚠️ Warning: Platform or Type is empty, using defaults"
+            PLATFORM="${PLATFORM:-unknown}"
+            TYPE="${TYPE:-unknown}"
+          fi
+          
+          PROFILE_PATH="${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/profiles.json"
+          echo "📋 Using profile path: $PROFILE_PATH"
+          
+          # Double-check if the file exists
+          if [ ! -f "$PROFILE_PATH" ]; then
+            echo "❌ ERROR: Profile file not found at: $PROFILE_PATH"
+            ls -la "${GITHUB_WORKSPACE}/external_profiles/${VERSION}/${PLATFORM}/${TYPE}/" || echo "Directory doesn't exist"
+            exit 1
+          fi
+          
           # Extract all required build information from the profile
           ARCH=$(jq -r '.arch_packages // "unknown"' "$PROFILE_PATH")
           DEFAULT_PKGS=$(jq -r '.default_packages // [] | join(" ")' "$PROFILE_PATH")
