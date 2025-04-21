@@ -586,18 +586,12 @@ runs:
         # For each type, build the firmware
         for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
           echo "🔨 Building base firmware with type: ${TYPE_TO_BUILD}"
-          
-          # Additional flags based on type
           ADDITIONAL_FLAGS=""
           if [ "$TYPE_TO_BUILD" = "kernel" ]; then
             ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
           elif [ "$TYPE_TO_BUILD" = "factory" ]; then
-            if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-              PATTERN="*${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-            fi
+            ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
           fi
-          
-          # Build command (no EXTRA_IMAGE_NAME)
           FORCE=1 make image \
             PROFILE="$PROFILE" \
             PACKAGES="$PACKAGES" \
@@ -608,19 +602,14 @@ runs:
         # Check if base builds succeeded
         BASE_BUILD_SUCCESS=0
         for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
-          # Pattern depends on type
+          # Standard OpenWrt pattern
           if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-            PATTERN="*base-${TYPE_TO_BUILD}*kernel.bin"
+            PATTERN="openwrt-*-$PROFILE-*-kernel.bin"
+          elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+            PATTERN="openwrt-*-$PROFILE-*-factory.*"
           else
-            PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
-            # Special case for factory images that may be .img
-            if [ "$TYPE_TO_BUILD" = "factory" ]; then
-              if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-                PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-              fi
-            fi
+            PATTERN="openwrt-*-$PROFILE-*-sysupgrade.bin"
           fi
-          
           if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
             echo "✅ Base ${TYPE_TO_BUILD} firmware built successfully"
             BASE_BUILD_SUCCESS=1
@@ -643,16 +632,12 @@ runs:
           # For each type, build the TollGate firmware
           for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
             echo "🔨 Building TollGate firmware with type: ${TYPE_TO_BUILD}"
-            
-            # Additional flags based on type
             ADDITIONAL_FLAGS=""
             if [ "$TYPE_TO_BUILD" = "kernel" ]; then
               ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
             elif [ "$TYPE_TO_BUILD" = "factory" ]; then
               ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
             fi
-            
-            # Build command (no EXTRA_IMAGE_NAME)
             FORCE=1 make image \
               PROFILE="$PROFILE" \
               PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
@@ -663,19 +648,13 @@ runs:
           # Check if TollGate builds succeeded
           TOLLGATE_BUILD_SUCCESS=0
           for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
-            # Pattern depends on type
             if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-              PATTERN="*tollgate-os-${TYPE_TO_BUILD}*kernel.bin"
+              PATTERN="openwrt-*-$PROFILE-*-kernel.bin"
+            elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+              PATTERN="openwrt-*-$PROFILE-*-factory.*"
             else
-              PATTERN="*tollgate-os-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.bin"
-              # Special case for factory images that may be .img
-              if [ "$TYPE_TO_BUILD" = "factory" ]; then
-                if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-                  PATTERN="*tollgate-os-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-                fi
-              fi
+              PATTERN="openwrt-*-$PROFILE-*-sysupgrade.bin"
             fi
-            
             if find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
               echo "✅ TollGate ${TYPE_TO_BUILD} firmware built successfully"
               TOLLGATE_BUILD_SUCCESS=1
@@ -746,21 +725,7 @@ runs:
               echo "🔎 Using search pattern: $BASE_PATTERN"
               
               # Look for files matching this pattern in the build output
-              # First, try with the prefix
-              if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
-                PREFIX="tollgate-os"
-              else
-                PREFIX="base"
-              fi
-              
-              # Try the prefixed pattern first
-              PREFIXED_PATTERN=$(echo "$BASE_PATTERN" | sed "s/openwrt-/openwrt-*${PREFIX}-/")
-              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PREFIXED_PATTERN" | head -1)
-              
-              # If not found, try the original OpenWrt pattern
-              if [ ! -f "$F" ]; then
-                F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$BASE_PATTERN" | head -1)
-              fi
+              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$BASE_PATTERN" | head -1)
               
               # If still not found, try a more generic pattern
               if [ ! -f "$F" ]; then
@@ -811,34 +776,16 @@ runs:
               echo "⚠️ Could not find expected filename for ${TYPE_TO_BUILD} in profile data"
               
               # Fall back to generic pattern search
-              if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
-                PREFIX="tollgate-os"
-              else
-                PREFIX="base"
-              fi
-              
-              # Pattern depends on image type
               if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-                PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
+                PATTERN="*${PROFILE}*kernel.bin"
+              elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+                PATTERN="*${PROFILE}*factory*"
               else
-                PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}*"
+                PATTERN="*${PROFILE}*${TYPE_TO_BUILD}*"
               fi
               
               # Find the firmware file
               F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-              
-              # If not found with PREFIX, try generic pattern
-              if [ ! -f "$F" ]; then
-                if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-                  PATTERN="*${PROFILE}*kernel.bin"
-                elif [ "$TYPE_TO_BUILD" = "factory" ]; then
-                  PATTERN="*${PROFILE}*factory*"
-                else
-                  PATTERN="*${PROFILE}*${TYPE_TO_BUILD}*"
-                fi
-                
-                F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-              fi
               
               if [ -f "$F" ]; then
                 echo "✅ Found ${TYPE_TO_BUILD} firmware via pattern search: $(basename "$F")"
@@ -848,7 +795,7 @@ runs:
                 FIRMWARE_SIZE=$(stat -c%s "$F")
                 
                 # Add to JSON output
-                if [ "$FIRST_ENTRY" -eq 0]; then
+                if [ "$FIRST_ENTRY" -eq 0 ]; then
                   echo "," >> /tmp/firmware_paths.json
                 fi
                 FIRST_ENTRY=0
@@ -880,32 +827,17 @@ runs:
           for TYPE_TO_BUILD in "${TYPES_TO_BUILD[@]}"; do
             echo "🔍 Looking for ${TYPE_TO_BUILD} firmware (without profile guidance)..."
             
-            # Pattern depends on build type and image type
-            if [ "${BUILD_TYPE}" = "TOLLGATE" ]; then
-              PREFIX="tollgate-os"
-            else
-              PREFIX="base"
-            fi
-            
+            # Pattern depends on image type
             if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*kernel.bin"
+              PATTERN="*${PROFILE}*kernel.bin"
+            elif [ "$TYPE_TO_BUILD" = "factory" ]; then
+              PATTERN="*${PROFILE}*factory*"
             else
-              PATTERN="*${PREFIX}-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}*"
+              PATTERN="*${PROFILE}*${TYPE_TO_BUILD}*"
             fi
             
             # Find the firmware file
             F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-            
-            # If not found with PREFIX, try more generic pattern
-            if [ ! -f "$F" ]; then
-              if [ "$TYPE_TO_BUILD" = "kernel" ]; then
-                PATTERN="*kernel.bin"
-              else
-                PATTERN="*${TYPE_TO_BUILD}*"
-              fi
-              
-              F=$(find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | head -1)
-            fi
             
             if [ -f "$F" ]; then
               echo "✅ Found ${TYPE_TO_BUILD} firmware: $(basename "$F")"
@@ -976,6 +908,7 @@ runs:
         retention-days: 5
 
     - name: Upload firmware to Blossom
+      if: steps.find-firmware.outputs.firmware_path != ''
       id: upload
       uses: c03rad0r/cli-blossom-uploader-go@main
       with:
