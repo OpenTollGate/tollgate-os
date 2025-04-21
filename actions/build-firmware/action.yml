@@ -40,6 +40,14 @@ inputs:
   nsec:
     description: 'Nostr secret key for event signing'
     required: true
+  cache-key-prefix:
+    description: 'Prefix for the Docker image cache key'
+    required: false
+    default: 'openwrt-builder'
+  enable-cache:
+    description: 'Enable Docker layer caching'
+    required: false
+    default: 'true'
 
 outputs:
   firmware_path:
@@ -48,6 +56,9 @@ outputs:
   firmware_name:
     description: 'Name of the built firmware file'
     value: ${{ steps.find-firmware.outputs.firmware_name }}
+  cache-hit:
+    description: 'Whether the Docker image was restored from cache'
+    value: ${{ steps.cache-docker.outputs.cache-hit }}
 
 runs:
   using: "composite"
@@ -154,6 +165,10 @@ runs:
         # Common settings for all models
         echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
+        
+        # Set cache variables for Docker layer caching
+        CACHE_KEY="${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${PLATFORM}-${TYPE}"
+        echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
 
     - name: Setup Build Directory
       shell: bash
@@ -176,21 +191,76 @@ runs:
         
         echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
         echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+        
+        # Create Docker context directory
+        DOCKER_CONTEXT="${BUILDDIR}/docker-context"
+        mkdir -p "${DOCKER_CONTEXT}"
+        echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
-    - name: Download and Extract ImageBuilder
+    # Try to restore the Docker image from cache
+    - name: Check for Docker cache
+      id: cache-docker
+      if: inputs.enable-cache == 'true'
+      uses: actions/cache/restore@v3
+      with:
+        path: ${{ env.DOCKER_CONTEXT }}
+        key: ${{ env.CACHE_KEY }}
+        restore-keys: |
+          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
+
+    - name: Download and Extract ImageBuilder (If cache miss)
       shell: bash
+      if: steps.cache-docker.outputs.cache-hit != 'true'
       run: |
         cd $BUILDDIR
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+          echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }})"
           curl -L -C - -O "$DOWNLOAD_URL"
+          
+          echo "📦 Extracting OpenWRT ImageBuilder"
           if [ "${{ inputs.version }}" = "snapshot" ]; then
-            tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+            tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
           else
-            tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+            tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
           fi
+          
+          # Create a marker file to indicate this was a fresh setup
+          echo "Cache miss: Setting up fresh Docker environment for ${{ env.PLATFORM }}/${{ env.TYPE }}" > "${DOCKER_CONTEXT}/cache-status.txt"
         else
           echo "Error: URL $DOWNLOAD_URL does not exist"
           exit 1
+        fi
+    
+    - name: Use cached ImageBuilder
+      shell: bash
+      if: steps.cache-docker.outputs.cache-hit == 'true'
+      run: |
+        echo "✅ Using cached OpenWRT ImageBuilder environment for ${{ env.PLATFORM }}/${{ env.TYPE }}"
+        echo "Cache hit: Using cached Docker environment from $(cat ${DOCKER_CONTEXT}/cache-status.txt 2>/dev/null || echo 'previous run')" > "${DOCKER_CONTEXT}/cache-status.txt"
+        
+        # Verify the cache contents
+        if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+          echo "✅ Cached ImageBuilder found and valid"
+        else
+          echo "⚠️ Cached ImageBuilder appears to be invalid or incomplete"
+          echo "Available files in cache:"
+          ls -la "${DOCKER_CONTEXT}/"
+          
+          # Force download if cache is invalid
+          cd $BUILDDIR
+          if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+            echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
+            curl -L -C - -O "$DOWNLOAD_URL"
+            
+            if [ "${{ inputs.version }}" = "snapshot" ]; then
+              tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+            else
+              tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+            fi
+          else
+            echo "Error: URL $DOWNLOAD_URL does not exist"
+            exit 1
+          fi
         fi
 
     - name: Check Available Profiles
@@ -351,7 +421,7 @@ runs:
       id: build-all
       run: |
         COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
         
         echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
         
@@ -362,24 +432,24 @@ runs:
             PROFILE="${PROFILE}" \
             ${DEVICE_EXTRA} \
             PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         else
           # Original command
           sudo make -j$(nproc) image V=s \
             PROFILE="${PROFILE}" \
             PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         fi
         
         # Check if build succeeded
-        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+        if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
           echo "✅ Build with ALL packages succeeded!"
           exit 0
         else
           echo "❌ Build with ALL packages failed, will try with fewer packages"
           # Show logs or errors
-          cat ${BUILDDIR/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          cat ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
           exit 1
         fi
 
@@ -389,7 +459,7 @@ runs:
       continue-on-error: true
       id: build-essential
       run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
         sudo make clean
         
         COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
@@ -403,16 +473,16 @@ runs:
             PROFILE="${PROFILE}" \
             ${DEVICE_EXTRA} \
             PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         else
           sudo make -j$(nproc) image V=s \
             PROFILE="${PROFILE}" \
             PACKAGES="${COMBINED_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         fi
         
         # Check if build succeeded
-        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+        if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
           echo "✅ Build with ESSENTIAL packages succeeded!"
           exit 0
@@ -426,7 +496,7 @@ runs:
       if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
       id: build-basic
       run: |
-        cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+        cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
         sudo make clean
         
         BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
@@ -440,16 +510,16 @@ runs:
             PROFILE="${PROFILE}" \
             ${DEVICE_EXTRA} \
             PACKAGES="${BASIC_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         else
           sudo make -j$(nproc) image V=s \
             PROFILE="${PROFILE}" \
             PACKAGES="${BASIC_PACKAGE_LIST}" \
-            FILES="${BUILDDIR}/${IMAGEBUILDER_NAME}/files"
+            FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
         fi
         
         # Check if build succeeded
-        if find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+        if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
           echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
           echo "✅ Basic build succeeded!"
         else
@@ -462,11 +532,11 @@ runs:
       shell: bash
       run: |
         # Look for any sysupgrade.bin file
-        FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+        FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
         
         if [ -z "$FIRMWARE_PATH" ]; then
           # Try to find any .bin file as fallback
-          FIRMWARE_PATH=$(find ${BUILDDIR}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+          FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
         fi
         
         if [ -f "$FIRMWARE_PATH" ]; then
@@ -482,6 +552,15 @@ runs:
           echo "❌ Error: No firmware file found!"
           exit 1
         fi
+
+    # Save the Docker image to cache (only if we built it from scratch)
+    - name: Save Docker image to cache
+      id: save-cache
+      uses: actions/cache/save@v3
+      if: inputs.enable-cache == 'true' && steps.cache-docker.outputs.cache-hit != 'true'
+      with:
+        path: ${{ env.DOCKER_CONTEXT }}
+        key: ${{ env.CACHE_KEY }}
 
     - name: Upload Firmware to Blossom
       id: upload_firmware

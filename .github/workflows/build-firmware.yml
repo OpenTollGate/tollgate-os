@@ -111,7 +111,7 @@ jobs:
           
           # GL.iNet models
           'glinet_gl-mt3000',
-          # 'glinet_gl-mt6000',
+          'glinet_gl-mt6000',
           'glinet_gl-ar300m-nand',
           # 'glinet_gl-ar300m-nor',
           # 'glinet_gl-ar300m16',
@@ -162,6 +162,16 @@ jobs:
           target: ${{ steps.lookup-router.outputs.target }}
           version: ${{ needs.check-versions.outputs.openwrt_version }}
       
+      # Report on router profile source (cache or download)
+      - name: Router Profile Status
+        run: |
+          if [ "${{ steps.fetch-profile.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ Using cached router profile for ${{ steps.lookup-router.outputs.target }}"
+          else
+            echo "📥 Downloaded router profile for ${{ steps.lookup-router.outputs.target }}"
+          fi
+          echo "📊 Found ${{ steps.fetch-profile.outputs.device-count }} device profiles"
+      
       # Build the firmware for this router model
       - name: Build OpenWRT Image
         id: build-openwrt-image
@@ -174,6 +184,18 @@ jobs:
           files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
+          enable-cache: 'true'
+      
+      # Report on Docker image cache status
+      - name: Docker Build Environment Status
+        run: |
+          if [ "${{ steps.build-openwrt-image.outputs.cache-hit }}" == "true" ]; then
+            echo "🚀 Used cached Docker build environment for ${{ steps.lookup-router.outputs.target }}"
+            echo "⚡ Build time reduction achieved through Docker layer caching"
+          else
+            echo "🔨 Set up fresh Docker build environment for ${{ steps.lookup-router.outputs.target }}"
+            echo "♻️ This environment will be cached for future builds"
+          fi
       
       # Upload the built firmware as an artifact
       - name: Upload Firmware Artifact
