@@ -286,7 +286,7 @@ runs:
             IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           else
             IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
-          end
+          fi
           
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
