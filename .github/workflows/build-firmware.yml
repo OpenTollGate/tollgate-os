@@ -23,6 +23,9 @@ jobs:
     strategy:
       matrix:
         device:
+          - id: dlink_covr-x1860-a1
+            name: D-Link COVR-X1860
+            platform: ramips/mt7621
           - id: glinet_gl-mt3000
             name: GL.iNet GL-MT3000
             platform: mediatek/filogic
