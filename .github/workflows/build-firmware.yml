@@ -47,8 +47,9 @@ jobs:
           mkdir -p external_profiles/23.05.5
           
           echo "Fetching profiles for required platforms..."
-          bash ./download_profiles.sh 23.05.5 mediatek/filogic
-          bash ./download_profiles.sh 23.05.5 ath79/nand
+          # The following lines are removed because profiles are already present in the repo:
+          # bash ./download_profiles.sh 23.05.5 mediatek/filogic
+          # bash ./download_profiles.sh 23.05.5 ath79/nand
           
           # Generate device search helper file
           echo "Generating device search file..."
