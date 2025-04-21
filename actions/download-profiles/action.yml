@@ -2,9 +2,9 @@ name: 'Download OpenWRT Profiles'
 description: 'Download OpenWRT profiles for different router platforms and architectures'
 inputs:
   version:
-    description: 'OpenWRT version to download profiles for'
+    description: 'OpenWRT version to download profiles for, or "latest" for latest supported version'
     required: false
-    default: '23.05.5'
+    default: 'latest'
   platform:
     description: 'Specific platform/target to download (format: platform/target, e.g. ramips/mt7621)'
     required: false
@@ -13,6 +13,14 @@ inputs:
     description: 'Directory to store downloaded profiles'
     required: false
     default: 'external_profiles'
+  force-download:
+    description: 'Force download even if profiles already exist'
+    required: false
+    default: 'false'
+  min-eol-date:
+    description: 'Minimum end-of-life date to consider a version supported (YYYY-MM-DD format)'
+    required: false
+    default: '2025-08-04'
 
 runs:
   using: 'composite'
@@ -27,15 +35,26 @@ runs:
         fi
 
     - name: Download profiles
+      id: download
       shell: bash
       run: |
         # Run the download script with provided inputs
         "${{ github.action_path }}/download_profiles.sh" \
           "${{ inputs.version }}" \
           "${{ inputs.platform }}" \
-          "${{ inputs.output-dir }}"
+          "${{ inputs.output-dir }}" \
+          "${{ inputs.force-download }}"
       
 outputs:
   profile-count:
-    description: 'Number of device profiles successfully downloaded'
-    value: ${{ steps.count-profiles.outputs.count }}
+    description: 'Total number of device profiles'
+    value: ${{ steps.download.outputs.count }}
+  skipped-count:
+    description: 'Number of profiles skipped (already exist)'
+    value: ${{ steps.download.outputs.skipped }}
+  downloaded-count:
+    description: 'Number of profiles downloaded'
+    value: ${{ steps.download.outputs.downloaded }}
+  version:
+    description: 'The OpenWRT version that was processed'
+    value: ${{ steps.download.outputs.version }}
