@@ -230,36 +230,101 @@ jobs:
           echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
           echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
           
-          # Set architecture based on platform/target
-          case "${PLATFORM}_${TYPE}" in
-            "ath79_generic"|"ath79_nand")
-              echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            "mediatek_filogic")
-              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            "ipq40xx_generic")
-              echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            "ipq806x_generic")
-              echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            "x86_64")
-              echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            "bcm27xx_bcm2711")
-              echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-              ;;
-            *)
-              echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
-              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
-              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+          # Set package defaults
+          echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+          
+          # Extract architecture from profiles.json
+          PROFILES_JSON_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ needs.check-versions.outputs.openwrt_version }}/${PLATFORM}/${TYPE}/profiles.json"
+          
+          if [ -f "${PROFILES_JSON_PATH}" ]; then
+            echo "🔍 Extracting architecture from profiles.json: ${PROFILES_JSON_PATH}"
+            
+            # Extract arch_packages from profiles.json
+            ARCH_PACKAGES=$(jq -r '.arch_packages' "${PROFILES_JSON_PATH}")
+            
+            # Map architecture names to proper format for package downloads
+            case "${ARCH_PACKAGES}" in
+              "mipsel_24kc")
+                echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+                ;;
+              "x86_64")
+                echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+                ;;
+              "aarch64_cortex-a53")
+                echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                ;;
+              "arm_cortex-a7_neon-vfpv4")
+                echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+                ;;
+              "arm_cortex-a15_neon-vfpv4")
+                echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+                ;;
+              "aarch64_cortex-a72")
+                echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+                ;;
+              *)
+                echo "⚠️ Unknown architecture in profiles.json: ${ARCH_PACKAGES}, using default mapping"
+                # Fall back to the legacy mapping for unknown architectures
+                case "${PLATFORM}_${TYPE}" in
+                  "ath79_generic"|"ath79_nand")
+                    echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+                    ;;
+                  "mediatek_filogic")
+                    echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                    ;;
+                  "ipq40xx_generic")
+                    echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+                    ;;
+                  "ipq806x_generic")
+                    echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+                    ;;
+                  "x86_64")
+                    echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+                    ;;
+                  "bcm27xx_bcm2711")
+                    echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+                    ;;
+                  *)
+                    echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
+                    echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                    ;;
+                esac
+                ;;
+            esac
+            echo "✅ Set BLOSSOM_ARCH=${BLOSSOM_ARCH} based on profiles.json"
+          else
+            echo "⚠️ profiles.json not found at ${PROFILES_JSON_PATH}, using legacy mapping"
+            # Fall back to the legacy mapping when profiles.json is not available
+            case "${PLATFORM}_${TYPE}" in
+              "ath79_generic"|"ath79_nand")
+                echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+                ;;
+              "mediatek_filogic")
+                echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                ;;
+              "ipq40xx_generic")
+                echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+                ;;
+              "ipq806x_generic")
+                echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+                ;;
+              "x86_64")
+                echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+                ;;
+              "bcm27xx_bcm2711")
+                echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+                ;;
+              *)
+                echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
+                echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                ;;
+            esac
+          fi
+          
+          # Special case for uboot-envtools
+          case "${{ matrix.model }}" in
+            "glinet_gl-mt3000"|"glinet_gl-mt6000"|*"gl-ar300m"*)
+              echo "EXTRA_PACKAGES=uboot-envtools ${EXTRA_PACKAGES}" >> $GITHUB_ENV
               ;;
           esac
           
