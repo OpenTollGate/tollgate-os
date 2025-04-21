@@ -1,0 +1,41 @@
+name: 'Download OpenWRT Profiles'
+description: 'Download OpenWRT profiles for different router platforms and architectures'
+inputs:
+  version:
+    description: 'OpenWRT version to download profiles for'
+    required: false
+    default: '23.05.5'
+  platform:
+    description: 'Specific platform/target to download (format: platform/target, e.g. ramips/mt7621)'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Directory to store downloaded profiles'
+    required: false
+    default: 'external_profiles'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up environment
+      shell: bash
+      run: |
+        # Make sure jq is installed
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq is required but not installed"
+          exit 1
+        fi
+
+    - name: Download profiles
+      shell: bash
+      run: |
+        # Run the download script with provided inputs
+        "${{ github.action_path }}/download_profiles.sh" \
+          "${{ inputs.version }}" \
+          "${{ inputs.platform }}" \
+          "${{ inputs.output-dir }}"
+      
+outputs:
+  profile-count:
+    description: 'Number of device profiles successfully downloaded'
+    value: ${{ steps.count-profiles.outputs.count }}
