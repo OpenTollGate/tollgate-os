@@ -616,7 +616,7 @@ runs:
             if [ "$TYPE_TO_BUILD" = "factory" ]; then
               if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
                 PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-              fi
+              end
             fi
           fi
           
@@ -953,7 +953,19 @@ runs:
         # Set outputs
         echo "firmware_path=$PRIMARY_FIRMWARE" >> $GITHUB_OUTPUT
         echo "firmware_name=$PRIMARY_FIRMWARE_NAME" >> $GITHUB_OUTPUT
-        echo "all_firmware_paths=$(cat /tmp/firmware_paths.json)" >> $GITHUB_OUTPUT
+        echo "all_firmware_paths=$(jq -c . /tmp/firmware_paths.json)" >> $GITHUB_OUTPUT
+
+    - name: Upload all firmware files to GitHub Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-firmware-all-${{ inputs.model }}
+        path: |
+          ${{ steps.find-firmware.outputs.firmware_path }}
+          ${{ fromJson(steps.find-firmware.outputs.all_firmware_paths).sysupgrade.path || '' }}
+          ${{ fromJson(steps.find-firmware.outputs.all_firmware_paths).factory.path || '' }}
+          ${{ fromJson(steps.find-firmware.outputs.all_firmware_paths).kernel.path || '' }}
+        if-no-files-found: warn
+        retention-days: 5
 
     - name: Upload to GitHub Artifacts
       uses: actions/upload-artifact@v4
