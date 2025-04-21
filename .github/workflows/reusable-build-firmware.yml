@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-22.04
     name: Build firmware for ${{ inputs.device_name || inputs.device_id }}
     outputs:
-      success: ${{ steps.build-status.outputs.success }}
+      success: ${{ steps.build-success.outputs.success }}
       firmware_path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
       
     steps:
@@ -294,8 +294,8 @@ jobs:
         run: echo "success=true" >> $GITHUB_OUTPUT
         
       # Set the job output to capture build success
-      - name: Set job outputs
-        id: build-status
+      - name: Set final build status
+        id: build-final-status
         if: always()
         run: |
           if [ -f "firmware_files/*" ]; then

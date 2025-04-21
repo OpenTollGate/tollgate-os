@@ -36,7 +36,7 @@ jobs:
   build_other_devices:
     name: Build other devices
     needs: canary_build
-    if: ${{ needs.canary_build.outputs.build_success == 'true' }}
+    if: ${{ needs.canary_build.result == 'success' }}
     strategy:
       matrix:
         device:
