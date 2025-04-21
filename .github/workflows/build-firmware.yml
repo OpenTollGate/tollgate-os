@@ -157,10 +157,24 @@ jobs:
         with:
           python-version: '3.x'
 
+      # Cache apt packages
+      - name: Cache APT packages
+        id: apt-cache
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/workflows/build-firmware.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       # Install system dependencies
       - name: Install System Dependencies
         run: |
           sudo apt-get update
+          # Use the cache if available
+          if [ "${{ steps.apt-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ Using cached APT packages"
+          fi
           sudo apt-get install -y \
             gawk \
             build-essential \
@@ -230,17 +244,30 @@ jobs:
           echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
           echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
           
-          # Set package defaults
-          echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+          # Set default packages (will be overridden from profiles.json if available)
+          DEFAULT_PACKAGES="kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl"
           
-          # Extract architecture from profiles.json
+          # Extract architecture and device-specific packages from profiles.json
           PROFILES_JSON_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ needs.check-versions.outputs.openwrt_version }}/${PLATFORM}/${TYPE}/profiles.json"
           
           if [ -f "${PROFILES_JSON_PATH}" ]; then
-            echo "🔍 Extracting architecture from profiles.json: ${PROFILES_JSON_PATH}"
+            echo "🔍 Extracting information from profiles.json: ${PROFILES_JSON_PATH}"
             
             # Extract arch_packages from profiles.json
             ARCH_PACKAGES=$(jq -r '.arch_packages' "${PROFILES_JSON_PATH}")
+            
+            # Extract device-specific packages for this router model
+            if jq -e --arg profile "${{ matrix.model }}" '.profiles[$profile]' "${PROFILES_JSON_PATH}" > /dev/null; then
+              echo "✅ Found profile ${{ matrix.model }} in profiles.json"
+              
+              # Extract device_packages array (this returns packages with + or - prefixes)
+              DEVICE_PACKAGES=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].device_packages | join(" ")' "${PROFILES_JSON_PATH}")
+              echo "📦 Device-specific packages from profiles.json: ${DEVICE_PACKAGES}"
+              echo "EXTRA_PACKAGES=${DEVICE_PACKAGES}" >> $GITHUB_ENV
+            else
+              echo "⚠️ Profile ${{ matrix.model }} not found in profiles.json, using default packages"
+              echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
+            fi
             
             # Map architecture names to proper format for package downloads
             case "${ARCH_PACKAGES}" in
@@ -295,6 +322,8 @@ jobs:
           else
             echo "⚠️ profiles.json not found at ${PROFILES_JSON_PATH}, using legacy mapping"
             # Fall back to the legacy mapping when profiles.json is not available
+            echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
+            
             case "${PLATFORM}_${TYPE}" in
               "ath79_generic"|"ath79_nand")
                 echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
@@ -321,12 +350,13 @@ jobs:
             esac
           fi
           
-          # Special case for uboot-envtools
-          case "${{ matrix.model }}" in
-            "glinet_gl-mt3000"|"glinet_gl-mt6000"|*"gl-ar300m"*)
+          # Special case for uboot-envtools - check if it's already included in device packages
+          if [[ "${{ matrix.model }}" == "glinet_gl-mt3000" || "${{ matrix.model }}" == "glinet_gl-mt6000" || "${{ matrix.model }}" == *"gl-ar300m"* ]]; then
+            if ! echo "${EXTRA_PACKAGES}" | grep -q "uboot-envtools"; then
+              echo "👉 Adding uboot-envtools for ${{ matrix.model }}"
               echo "EXTRA_PACKAGES=uboot-envtools ${EXTRA_PACKAGES}" >> $GITHUB_ENV
-              ;;
-          esac
+            fi
+          fi
           
           # Common settings for all models
           echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
