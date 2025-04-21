@@ -341,18 +341,44 @@ jobs:
         run: |
           mkdir -p $BUILDDIR
           
+          # Define the imagebuilder name
+          if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-ath79-nand.Linux-x86_64"
+          else
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${TARGET_DEVICE}.Linux-x86_64"
+          fi
+          
+          # For snapshots, always use tar.zst
           if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
             IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
             DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
             echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
-          elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
-            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-ath79-nand.Linux-x86_64"
-            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-            echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
           else
-            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${TARGET_DEVICE}.Linux-x86_64"
-            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-            echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+            # Try tar.zst first (used in newer OpenWRT versions like 24.x)
+            DOWNLOAD_URL_ZST="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+            
+            # Check if the .tar.zst version exists
+            if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL_ZST"; then
+              echo "✅ Found .tar.zst image builder for version ${{ needs.check-versions.outputs.openwrt_version }}"
+              DOWNLOAD_URL="$DOWNLOAD_URL_ZST"
+              echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+            else
+              # Fall back to .tar.xz (used in older OpenWRT versions like 23.x)
+              DOWNLOAD_URL_XZ="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+              
+              # Check if the .tar.xz version exists
+              if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL_XZ"; then
+                echo "✅ Found .tar.xz image builder for version ${{ needs.check-versions.outputs.openwrt_version }}"
+                DOWNLOAD_URL="$DOWNLOAD_URL_XZ"
+                echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+              else
+                echo "❌ Error: Neither .tar.zst nor .tar.xz image builder found for version ${{ needs.check-versions.outputs.openwrt_version }}"
+                echo "Attempted URLs:"
+                echo "- $DOWNLOAD_URL_ZST"
+                echo "- $DOWNLOAD_URL_XZ"
+                exit 1
+              fi
+            fi
           fi
           
           echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
