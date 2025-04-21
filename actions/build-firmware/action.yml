@@ -286,7 +286,7 @@ runs:
             IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           else
             IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
-          fi
+          end
           
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
@@ -469,6 +469,130 @@ runs:
           touch "${PACKAGES_DIR}/Packages"
           gzip -9c "${PACKAGES_DIR}/Packages" > "${PACKAGES_DIR}/Packages.gz"
         fi
+
+    - name: Fix Package Conflicts
+      id: fix-conflicts
+      shell: bash
+      run: |
+        echo "🔧 Checking TollGate packages for potential conflicts..."
+        PACKAGES_DIR="${BUILDDIR}/packages/local"
+        
+        # Create a temporary directory for package fixing
+        TEMP_DIR=$(mktemp -d)
+        echo "📁 Created temporary workspace at ${TEMP_DIR}"
+        
+        # Check if any packages exist
+        if [ -z "$(find "${PACKAGES_DIR}" -name "*.ipk" 2>/dev/null)" ]; then
+          echo "ℹ️ No packages found to check for conflicts"
+          exit 0
+        fi
+        
+        # Function to fix a single package
+        fix_package() {
+          local PACKAGE_FILE="$1"
+          local PACKAGE_NAME=$(basename "$PACKAGE_FILE")
+          
+          echo "🔍 Examining package: ${PACKAGE_NAME}"
+          cd "$TEMP_DIR"
+          
+          # Clean any previous extractions
+          rm -rf control.tar.gz data.tar.gz debian-binary data control
+          
+          # Extract the package
+          echo "📦 Extracting package..."
+          ar x "$PACKAGE_FILE" 2>/dev/null || tar -xzf "$PACKAGE_FILE"
+          
+          # Check if extraction was successful
+          if [ ! -f "data.tar.gz" ]; then
+            echo "⚠️ Failed to extract ${PACKAGE_NAME}, skipping"
+            return 1
+          fi
+          
+          # Extract the data archive
+          mkdir -p data
+          tar -xzf data.tar.gz -C data
+          
+          # Check for conflicting banner file
+          if [ -f "./data/etc/banner" ]; then
+            echo "🚨 Found conflicting banner in ${PACKAGE_NAME}"
+            
+            # Rename the banner file instead of removing it
+            echo "🔄 Renaming /etc/banner to /etc/banner.tollgate"
+            mkdir -p "./data/etc"
+            mv "./data/etc/banner" "./data/etc/banner.tollgate"
+            
+            # Rebuild the data archive
+            echo "🔧 Rebuilding data archive..."
+            cd data
+            tar -czf "../data.tar.gz" ./*
+            cd ..
+            
+            # Rebuild the package
+            echo "🔧 Rebuilding package..."
+            local FIXED_PACKAGE="${PACKAGE_FILE%.ipk}-fixed.ipk"
+            
+            # Determine if we have an ar or tar format
+            if [ -f "debian-binary" ]; then
+              # AR format
+              ar r "$FIXED_PACKAGE" debian-binary control.tar.gz data.tar.gz
+            else
+              # TAR format
+              tar -czf "$FIXED_PACKAGE" ./control.tar.gz ./data.tar.gz ./debian-binary
+            fi
+            
+            # Check if rebuild was successful
+            if [ -f "$FIXED_PACKAGE" ]; then
+              echo "✅ Successfully fixed package: $(basename "$FIXED_PACKAGE")"
+              cp "$FIXED_PACKAGE" "$PACKAGE_FILE"
+              echo "✅ Replaced original package with fixed version"
+              return 0
+            else
+              echo "❌ Failed to rebuild package"
+              return 1
+            fi
+          else
+            echo "✅ No conflict found in ${PACKAGE_NAME}"
+            return 0
+          fi
+        }
+        
+        # Find and fix all packages with conflicts
+        FIXED_COUNT=0
+        for PACKAGE in $(find "${PACKAGES_DIR}" -name "*.ipk"); do
+          if fix_package "$PACKAGE"; then
+            FIXED_COUNT=$((FIXED_COUNT + 1))
+          fi
+        done
+        
+        # Regenerate the package index
+        if [ $FIXED_COUNT -gt 0 ]; then
+          echo "📦 Fixed ${FIXED_COUNT} packages with conflicts"
+          echo "📑 Regenerating package index..."
+          
+          cd "${PACKAGES_DIR}"
+          rm -f Packages Packages.gz
+          
+          # Create a new package index
+          for PKG in ./*.ipk; do
+            if [ -f "$PKG" ]; then
+              FILENAME=$(basename "$PKG")
+              PKG_NAME=$(echo "$FILENAME" | sed 's/_.*//g')
+              echo "Package: $PKG_NAME" >> Packages
+              echo "Filename: $FILENAME" >> Packages
+              echo "Size: $(stat -c%s "$PKG")" >> Packages
+              echo "" >> Packages
+            fi
+          done
+          
+          # Compress the package index
+          gzip -9c Packages > Packages.gz
+          echo "✅ Package index regenerated"
+        else
+          echo "ℹ️ No packages needed fixing"
+        fi
+        
+        # Clean up
+        rm -rf "$TEMP_DIR"
 
     - name: Build Firmware
       id: build
