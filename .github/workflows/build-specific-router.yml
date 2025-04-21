@@ -1,0 +1,122 @@
+name: Build Firmware for Specific Router
+
+on:
+  workflow_dispatch:
+    inputs:
+      router_id:
+        description: 'Router ID (e.g., glinet_gl-mt3000)'
+        required: true
+      version:
+        description: 'OpenWRT version (or leave empty for latest supported)'
+        required: false
+        default: ''
+
+jobs:
+  prepare-router-info:
+    runs-on: ubuntu-latest
+    outputs:
+      router-found: ${{ steps.lookup-router.outputs.found }}
+      router-target: ${{ steps.lookup-router.outputs.target }}
+      router-vendor: ${{ steps.lookup-router.outputs.vendor }}
+      router-model: ${{ steps.lookup-router.outputs.model }}
+      router-full-name: ${{ steps.lookup-router.outputs.full-name }}
+      openwrt-version: ${{ steps.get-version.outputs.version }}
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+      
+      - name: Check supported OpenWRT versions
+        id: check-versions
+        uses: ./actions/check-openwrt-versions
+      
+      - name: Determine OpenWRT version to use
+        id: get-version
+        run: |
+          # Use provided version or latest supported
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using specified OpenWRT version: $VERSION"
+          else
+            VERSION="${{ steps.check-versions.outputs.latest-version }}"
+            echo "Using latest supported OpenWRT version: $VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Fetch OpenWRT overview
+        id: fetch-overview
+        uses: ./actions/fetch-overview-json
+        with:
+          version: ${{ steps.get-version.outputs.version }}
+      
+      - name: Lookup router details
+        id: lookup-router
+        uses: ./actions/lookup-router-target
+        with:
+          router-id: ${{ github.event.inputs.router_id }}
+          version: ${{ steps.get-version.outputs.version }}
+  
+  build-firmware:
+    needs: prepare-router-info
+    if: ${{ needs.prepare-router-info.outputs.router-found == 'true' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+      
+      - name: Fetch router profile
+        id: fetch-profile
+        uses: ./actions/fetch-router-profile
+        with:
+          target: ${{ needs.prepare-router-info.outputs.router-target }}
+          version: ${{ needs.prepare-router-info.outputs.openwrt-version }}
+      
+      - name: Display router information
+        run: |
+          echo "🔍 Building firmware for:"
+          echo "  • Router: ${{ needs.prepare-router-info.outputs.router-full-name }}"
+          echo "  • ID: ${{ github.event.inputs.router_id }}"
+          echo "  • Target: ${{ needs.prepare-router-info.outputs.router-target }}"
+          echo "  • OpenWRT Version: ${{ needs.prepare-router-info.outputs.openwrt-version }}"
+      
+      # This is where you would call your build-firmware action with the router ID
+      - name: Build firmware
+        run: |
+          echo "👷 Building firmware for ${{ github.event.inputs.router_id }}..."
+          echo "⚙️ This would call the build-firmware action with:"
+          echo "  • ROUTER_ID: ${{ github.event.inputs.router_id }}"
+          echo "  • VERSION: ${{ needs.prepare-router-info.outputs.openwrt-version }}"
+          echo "  • TARGET: ${{ needs.prepare-router-info.outputs.router-target }}"
+          
+          # Example of how you could prepare the environment for the build
+          # (uncomment and modify when ready to integrate with actual build process)
+          # ./actions/build-firmware/action.yml with:
+          #   router-id: ${{ github.event.inputs.router_id }}
+          #   version: ${{ needs.prepare-router-info.outputs.openwrt-version }}
+          
+          # For demonstration purposes
+          echo "✅ Firmware build process would start here"
+  
+  router-not-found:
+    needs: prepare-router-info
+    if: ${{ needs.prepare-router-info.outputs.router-found != 'true' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Report router not found
+        run: |
+          echo "❌ Router ID '${{ github.event.inputs.router_id }}' not found in OpenWRT ${{ needs.prepare-router-info.outputs.openwrt-version }}"
+          echo "Please check the ID and try again."

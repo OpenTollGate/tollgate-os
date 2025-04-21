@@ -1,0 +1,103 @@
+name: 'Fetch OpenWRT Overview JSON'
+description: 'Download and cache the OpenWRT overview.json file for a specified version'
+
+inputs:
+  version:
+    description: 'OpenWRT version to download overview for'
+    required: true
+  output-dir:
+    description: 'Directory to store overview JSON files'
+    required: false
+    default: 'external_profiles'
+  force-download:
+    description: 'Force download even if overview file already exists'
+    required: false
+    default: 'false'
+
+outputs:
+  overview-path:
+    description: 'Path to the downloaded overview.json file'
+    value: ${{ steps.fetch.outputs.overview_path }}
+  target-count:
+    description: 'Number of unique targets in the overview file'
+    value: ${{ steps.fetch.outputs.target_count }}
+  profile-count:
+    description: 'Number of device profiles in the overview file'
+    value: ${{ steps.fetch.outputs.profile_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch overview.json
+      id: fetch
+      shell: bash
+      run: |
+        WORKSPACE_DIR="${GITHUB_WORKSPACE}"
+        VERSION="${{ inputs.version }}"
+        OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
+        FORCE_DOWNLOAD="${{ inputs.force-download }}"
+        
+        # Create version directory
+        VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
+        mkdir -p "$VERSION_DIR"
+        
+        # Path to overview file
+        OVERVIEW_FILE="${VERSION_DIR}/overview.json"
+        
+        # Check if we need to download or can use cache
+        if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
+          echo "✅ Using existing overview.json for OpenWRT $VERSION"
+        else
+          echo "🔍 Downloading overview.json for OpenWRT $VERSION..."
+          
+          # URL for the overview file
+          URL="https://downloads.openwrt.org/releases/${VERSION}/.overview.json"
+          
+          # Try to download with retries
+          MAX_RETRIES=3
+          SUCCESS=false
+          
+          for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+            echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
+            
+            if curl -s -f -o "$OVERVIEW_FILE" "$URL"; then
+              if [ -s "$OVERVIEW_FILE" ] && grep -q "\"profiles\":" "$OVERVIEW_FILE" 2>/dev/null; then
+                SUCCESS=true
+                break
+              else
+                echo "⚠️ Downloaded file is invalid. Retrying..."
+                rm -f "$OVERVIEW_FILE"
+              fi
+            else
+              echo "⚠️ Download attempt $ATTEMPT failed"
+            fi
+            
+            if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+              sleep 3
+            fi
+          done
+          
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Failed to download overview.json for OpenWRT $VERSION after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
+          echo "✅ Downloaded overview.json for OpenWRT $VERSION"
+        fi
+        
+        # Validate and extract stats from overview file
+        if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ]; then
+          # Count unique targets and profiles
+          TARGET_COUNT=$(jq '.profiles | map(.target) | unique | length' "$OVERVIEW_FILE")
+          PROFILE_COUNT=$(jq '.profiles | length' "$OVERVIEW_FILE")
+          
+          echo "📊 OpenWRT $VERSION has $PROFILE_COUNT device profiles across $TARGET_COUNT unique targets"
+          
+          # Set outputs
+          echo "overview_path=$OVERVIEW_FILE" >> $GITHUB_OUTPUT
+          echo "target_count=$TARGET_COUNT" >> $GITHUB_OUTPUT
+          echo "profile_count=$PROFILE_COUNT" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Overview file is missing or invalid"
+          exit 1
+        fi

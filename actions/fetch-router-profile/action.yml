@@ -1,0 +1,141 @@
+name: 'Fetch Router Profile'
+description: 'Download the specific profiles.json file for a target architecture'
+
+inputs:
+  target:
+    description: 'Target architecture (e.g., mediatek/filogic)'
+    required: true
+  version:
+    description: 'OpenWRT version to use'
+    required: true
+  output-dir:
+    description: 'Directory to store profile files'
+    required: false
+    default: 'external_profiles'
+  force-download:
+    description: 'Force download even if profile file already exists'
+    required: false
+    default: 'false'
+
+outputs:
+  profile-path:
+    description: 'Path to the downloaded profiles.json file'
+    value: ${{ steps.fetch.outputs.profile_path }}
+  device-count:
+    description: 'Number of device profiles in the target'
+    value: ${{ steps.fetch.outputs.device_count }}
+  success:
+    description: 'Whether the profile was successfully retrieved'
+    value: ${{ steps.fetch.outputs.success }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch target profile
+      id: fetch
+      shell: bash
+      run: |
+        WORKSPACE_DIR="${GITHUB_WORKSPACE}"
+        TARGET="${{ inputs.target }}"
+        VERSION="${{ inputs.version }}"
+        OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
+        FORCE_DOWNLOAD="${{ inputs.force-download }}"
+        
+        # Split target into platform and subtarget
+        PLATFORM=$(echo $TARGET | cut -d'/' -f1)
+        SUBTARGET=$(echo $TARGET | cut -d'/' -f2)
+        
+        if [ -z "$PLATFORM" ] || [ -z "$SUBTARGET" ]; then
+          echo "❌ Invalid target format: $TARGET. Expected format: platform/subtarget"
+          echo "success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Create directory structure
+        TARGET_DIR="${OUTPUT_DIR}/${VERSION}/${PLATFORM}/${SUBTARGET}"
+        mkdir -p "$TARGET_DIR"
+        
+        # Path to profiles file
+        PROFILE_FILE="${TARGET_DIR}/profiles.json"
+        MAPPING_FILE="${TARGET_DIR}/profiles-mapping.txt"
+        
+        # Check if we need to download or can use cache
+        if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
+          echo "✅ Using existing profiles for $TARGET (OpenWRT $VERSION)"
+        else
+          echo "🔍 Downloading profiles for $TARGET (OpenWRT $VERSION)..."
+          
+          # URL for the profiles file
+          URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${PLATFORM}/${SUBTARGET}/profiles.json"
+          
+          # Try to download with retries
+          MAX_RETRIES=3
+          SUCCESS=false
+          
+          for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+            echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
+            
+            if curl -s -f -o "$PROFILE_FILE" "$URL"; then
+              if [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
+                SUCCESS=true
+                break
+              else
+                echo "⚠️ Downloaded file is invalid. Retrying..."
+                rm -f "$PROFILE_FILE"
+              fi
+            else
+              echo "⚠️ Download attempt $ATTEMPT failed"
+            fi
+            
+            if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+              sleep 3
+            fi
+          done
+          
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Failed to download profiles for $TARGET (OpenWRT $VERSION)"
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "✅ Downloaded profiles for $TARGET (OpenWRT $VERSION)"
+        fi
+        
+        # Generate mapping file if it doesn't exist or force-download
+        if [ ! -f "$MAPPING_FILE" ] || [ ! -s "$MAPPING_FILE" ] || [ "$FORCE_DOWNLOAD" = "true" ]; then
+          echo "📝 Generating device mapping for $TARGET..."
+          
+          echo "# Device ID to Name mapping" > "$MAPPING_FILE"
+          echo "# Format: device_id | vendor | model | full_name" >> "$MAPPING_FILE"
+          echo "# Generated from: $PROFILE_FILE" >> "$MAPPING_FILE"
+          echo "# Generated on: $(date)" >> "$MAPPING_FILE"
+          echo "" >> "$MAPPING_FILE"
+          
+          # Extract all profile IDs and details
+          jq -r '.profiles | keys[]' "$PROFILE_FILE" 2>/dev/null | while read id; do
+            vendor=$(jq -r --arg id "$id" '.profiles[$id].titles[0].vendor // "Unknown"' "$PROFILE_FILE")
+            model=$(jq -r --arg id "$id" '.profiles[$id].titles[0].model // "Unknown"' "$PROFILE_FILE")
+            variant=$(jq -r --arg id "$id" '.profiles[$id].titles[0].variant // ""' "$PROFILE_FILE")
+            
+            # Construct full name
+            if [ -n "$variant" ] && [ "$variant" != "null" ]; then
+              full_name="$vendor $model ($variant)"
+            else
+              full_name="$vendor $model"
+            fi
+            
+            # Add to mapping file
+            echo "$id | $vendor | $model | $full_name" >> "$MAPPING_FILE"
+          done
+          
+          echo "✅ Generated mapping file: $(basename "$MAPPING_FILE")"
+        fi
+        
+        # Count the number of devices
+        DEVICE_COUNT=$(jq '.profiles | length' "$PROFILE_FILE" 2>/dev/null || echo 0)
+        echo "📊 Found $DEVICE_COUNT device profiles for $TARGET"
+        
+        # Set outputs
+        echo "profile_path=$PROFILE_FILE" >> $GITHUB_OUTPUT
+        echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
+        echo "success=true" >> $GITHUB_OUTPUT
