@@ -410,10 +410,12 @@ jobs:
             curl -L -C - -O "$DOWNLOAD_URL"
             
             echo "📦 Extracting OpenWRT ImageBuilder"
-            if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+            if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
+              echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
               tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
             else
-              tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+              tar xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
             fi
             
             # Create a marker file to indicate this was a fresh setup
@@ -444,10 +446,12 @@ jobs:
               echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
               curl -L -C - -O "$DOWNLOAD_URL"
               
-              if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+              if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
+                echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
                 tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
               else
-                tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+                echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+                tar xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
               fi
             else
               echo "Error: URL $DOWNLOAD_URL does not exist"
