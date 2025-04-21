@@ -150,6 +150,7 @@ jobs:
             echo "Build process did not generate expected log files" > build_logs/no_logs_found.txt
           fi
       
+      # Extract Firmware Types Information
       - name: Extract Firmware Types Information
         id: firmware-types
         run: |
@@ -178,6 +179,18 @@ jobs:
               echo "Warning: File $filepath not found"
             fi
           done
+          
+          # Create a manifest file with build information
+          echo "# Build Information" > firmware_files/manifest.txt
+          echo "Device: ${{ inputs.device_name || inputs.device_id }}" >> firmware_files/manifest.txt
+          echo "Architecture: ${ARCH}" >> firmware_files/manifest.txt
+          echo "OpenWrt Version: ${{ inputs.version }}" >> firmware_files/manifest.txt
+          echo "Build Date: $(date)" >> firmware_files/manifest.txt
+          echo "" >> firmware_files/manifest.txt
+          echo "## Firmware Files" >> firmware_files/manifest.txt
+          find firmware_files -type f -not -name "manifest.txt" | sort | while read -r file; do
+            echo "- $(basename "$file")" >> firmware_files/manifest.txt
+          done
       
       # Upload all firmware files as a single artifact 
       - name: Upload All Firmware Artifacts
@@ -185,7 +198,7 @@ jobs:
         with:
           name: firmware-${{ inputs.device_id }}
           path: firmware_files/
-          retention-days: 5
+          retention-days: 30
       
       - name: Upload Base OpenWrt Firmware Artifact
         uses: actions/upload-artifact@v4
@@ -279,3 +292,14 @@ jobs:
         id: build-success
         if: success()
         run: echo "success=true" >> $GITHUB_OUTPUT
+        
+      # Set the job output to capture build success
+      - name: Set job outputs
+        id: build-status
+        if: always()
+        run: |
+          if [ -f "firmware_files/*" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi

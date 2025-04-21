@@ -97,3 +97,20 @@ jobs:
           else
             echo "⚠️ Some device builds failed - check individual job logs" >> $GITHUB_STEP_SUMMARY
           fi
+          
+          # List artifacts that have been generated
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Available Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "The following firmware artifacts were generated:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.canary_build.result }}" == "success" ]]; then
+            echo "- **D-Link COVR-X1860**: `firmware-dlink_covr-x1860-a1`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.build_other_devices.result }}" == "success" ]]; then
+            echo "- **GL.iNet GL-MT3000**: `firmware-glinet_gl-mt3000`" >> $GITHUB_STEP_SUMMARY
+            echo "- **GL.iNet GL-MT6000**: `firmware-glinet_gl-mt6000`" >> $GITHUB_STEP_SUMMARY
+            echo "- **GL.iNet GL-AR300M (NOR)**: `firmware-glinet_gl-ar300m-nor`" >> $GITHUB_STEP_SUMMARY
+            echo "- **GL.iNet GL-AR300M (NAND)**: `firmware-glinet_gl-ar300m-nand`" >> $GITHUB_STEP_SUMMARY
+          fi
