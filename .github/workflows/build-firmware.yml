@@ -10,6 +10,11 @@ on:
         description: 'Override OpenWRT version (leave empty for latest)'
         required: false
         type: string
+      enable_cache:
+        description: 'Enable Docker layer caching'
+        required: false
+        type: boolean
+        default: true
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
@@ -98,14 +103,6 @@ jobs:
         uses: ./actions/fetch-overview-json
         with:
           version: ${{ needs.check-versions.outputs.openwrt_version }}
-      
-      # Upload the .overview.json as an artifact for use in build jobs
-      - name: Upload overview as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-overview
-          path: external_profiles/${{ needs.check-versions.outputs.openwrt_version }}/.overview.json
-          retention-days: 1
 
   # Step 3: Build firmware for each router model in the matrix
   # Each job in the matrix will:
@@ -137,9 +134,42 @@ jobs:
 
     runs-on: ubuntu-latest
     name: Build ${{ matrix.model }}
+    env:
+      # Default packages to include in all firmware builds
+      BASE_PACKAGES: >-
+        base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
+        kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
+        libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
+        ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
+        uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+      # Default settings for Docker cache
+      CACHE_KEY_PREFIX: openwrt-builder
+      ENABLE_CACHE: ${{ github.event.inputs.enable_cache || 'true' }}
+      # Nostr relay configuration
+      NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
 
     steps:
       - uses: actions/checkout@v4
+      
+      # Set up Python for Nostr operations
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # Install system dependencies
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gawk \
+            build-essential \
+            curl \
+            zstd \
+            libssl-dev \
+            jq
+          python -m pip install --upgrade pip
+          pip install nostr
       
       # Restore the .overview.json file from cache
       - name: Get .overview.json
@@ -184,36 +214,492 @@ jobs:
           fi
           echo "📊 Found ${{ steps.fetch-profile.outputs.device-count }} device profiles"
       
-      # Build the firmware for this router model
-      - name: Build OpenWRT Image
-        id: build-openwrt-image
-        uses: ./actions/build-firmware
+      # Set Build Variables
+      - name: Set Build Variables
+        id: vars
+        run: |
+          # Create build directory first
+          mkdir -p /tmp/openwrt-build
+          
+          # Split target into platform and type (from input parameter)
+          PLATFORM=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f1)
+          TYPE=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f2)
+          
+          echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
+          echo "TYPE=${TYPE}" >> $GITHUB_ENV
+          echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
+          echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
+          
+          # Set architecture based on platform/target
+          case "${PLATFORM}_${TYPE}" in
+            "ath79_generic"|"ath79_nand")
+              echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            "mediatek_filogic")
+              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            "ipq40xx_generic")
+              echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            "ipq806x_generic")
+              echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            "x86_64")
+              echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            "bcm27xx_bcm2711")
+              echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
+              echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+              echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+              ;;
+          esac
+          
+          # Common settings for all models
+          echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+          echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
+          
+          # Set cache variables for Docker layer caching
+          CACHE_KEY="${CACHE_KEY_PREFIX}-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
+
+      # Setup Build Directory
+      - name: Setup Build Directory
+        run: |
+          mkdir -p $BUILDDIR
+          
+          if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
+            DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+            echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+          elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-ath79-nand.Linux-x86_64"
+            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+            echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+          else
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${TARGET_DEVICE}.Linux-x86_64"
+            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+            echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
+          fi
+          
+          echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+          
+          # Create Docker context directory
+          DOCKER_CONTEXT="${BUILDDIR}/docker-context"
+          mkdir -p "${DOCKER_CONTEXT}"
+          echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
+
+      # Try to restore the Docker image from cache
+      - name: Check for Docker cache
+        id: cache-docker
+        if: env.ENABLE_CACHE == 'true'
+        uses: actions/cache/restore@v3
         with:
-          model: ${{ matrix.model }}
-          version: ${{ needs.check-versions.outputs.openwrt_version }}
-          target: ${{ steps.lookup-router.outputs.target }}
-          nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
-          nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
-          files_path: "./files"
-          nsecbech: ${{ secrets.NSECBECH }}
-          nsec: ${{ secrets.NSEC }}
-          enable-cache: 'true'
+          path: ${{ env.DOCKER_CONTEXT }}
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ env.CACHE_KEY_PREFIX }}-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
+
+      # Download and Extract ImageBuilder if cache miss
+      - name: Download and Extract ImageBuilder (If cache miss)
+        if: steps.cache-docker.outputs.cache-hit != 'true'
+        run: |
+          cd $BUILDDIR
+          if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+            echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }})"
+            curl -L -C - -O "$DOWNLOAD_URL"
+            
+            echo "📦 Extracting OpenWRT ImageBuilder"
+            if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+              tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+            else
+              tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+            fi
+            
+            # Create a marker file to indicate this was a fresh setup
+            echo "Cache miss: Setting up fresh Docker environment for ${{ env.PLATFORM }}/${{ env.TYPE }}" > "${DOCKER_CONTEXT}/cache-status.txt"
+          else
+            echo "Error: URL $DOWNLOAD_URL does not exist"
+            exit 1
+          fi
       
+      # Use cached ImageBuilder
+      - name: Use cached ImageBuilder
+        if: steps.cache-docker.outputs.cache-hit == 'true'
+        run: |
+          echo "✅ Using cached OpenWRT ImageBuilder environment for ${{ env.PLATFORM }}/${{ env.TYPE }}"
+          echo "Cache hit: Using cached Docker environment from $(cat ${DOCKER_CONTEXT}/cache-status.txt 2>/dev/null || echo 'previous run')" > "${DOCKER_CONTEXT}/cache-status.txt"
+          
+          # Verify the cache contents
+          if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            echo "✅ Cached ImageBuilder found and valid"
+          else
+            echo "⚠️ Cached ImageBuilder appears to be invalid or incomplete"
+            echo "Available files in cache:"
+            ls -la "${DOCKER_CONTEXT}/"
+            
+            # Force download if cache is invalid
+            cd $BUILDDIR
+            if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
+              echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
+              curl -L -C - -O "$DOWNLOAD_URL"
+              
+              if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+                tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              else
+                tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              fi
+            else
+              echo "Error: URL $DOWNLOAD_URL does not exist"
+              exit 1
+            fi
+          fi
+
       # Report on Docker image cache status
       - name: Docker Build Environment Status
         run: |
-          if [ "${{ steps.build-openwrt-image.outputs.cache-hit }}" == "true" ]; then
+          if [ "${{ steps.cache-docker.outputs.cache-hit }}" == "true" ]; then
             echo "🚀 Used cached Docker build environment for ${{ steps.lookup-router.outputs.target }}"
             echo "⚡ Build time reduction achieved through Docker layer caching"
           else
             echo "🔨 Set up fresh Docker build environment for ${{ steps.lookup-router.outputs.target }}"
             echo "♻️ This environment will be cached for future builds"
           fi
+
+      - name: Check Available Profiles
+        run: |
+          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          echo "📋 Checking for available profiles..."
+          
+          # More reliable method to check profiles
+          if [ -f "profiles.json" ]; then
+            grep -q "${PROFILE}" profiles.json && \
+              echo "✅ Profile ${PROFILE} appears to be available" || \
+              echo "⚠️ Profile ${PROFILE} not found, checking with make info"
+          fi
+          
+          # Try to list all available profiles if grep fails
+          echo "Available profiles:"
+          make info || echo "⚠️ Could not run 'make info', but continuing anyway"
+          
+          # Always continue - we'll let the build fail if the profile is truly invalid
+          echo "🔄 Proceeding with profile: ${PROFILE}"
+
+      - name: Setup Custom Files and Packages
+        env:
+          NOSTR_SECRET_KEY: ${{ secrets.NOSTR_SECRET_KEY }}
+          NOSTR_PUBLIC_KEY: ${{ secrets.NOSTR_PUBLIC_KEY }}
+        run: |
+          mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files
+          if [ -d "./files" ]; then
+            cp -r ./files/* $BUILDDIR/${IMAGEBUILDER_NAME}/files/
+          fi
+          PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+          mkdir -p "${PACKAGES_DIR}"
+          
+          # Add U-Boot config for supported devices
+          case "${{ matrix.model }}" in
+            "glinet_gl-mt3000"|"glinet_gl-mt6000")
+              echo "Creating U-Boot environment config"
+              mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc
+              echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc/fw_env.config
+              ;;
+          esac
+
+      - name: Download TollGate Packages from release.json
+        run: |
+          # Create packages directory if it doesn't exist
+          PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+          mkdir -p "${PACKAGES_DIR}"
+          
+          # Convert BLOSSOM_ARCH (if needed)
+          if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
+            TARGET_ARCH="mips_24kc"
+          else
+            TARGET_ARCH="${BLOSSOM_ARCH}"
+          fi
+          
+          echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+          
+          # Create an empty Packages file to prevent build failures if no packages are downloaded
+          touch "${PACKAGES_DIR}/Packages"
+          
+          # Parse release.json and download all packages for this architecture
+          DOWNLOADED_PACKAGES=""
+          for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
+            echo "📦 Processing module: ${MODULE_NAME}"
+            
+            # Extract URL for this module and architecture
+            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
+              
+            # Skip placeholder URLs
+            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+              echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+              continue
+            fi
+            
+            # Download the package with retry logic
+            PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+            echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
+            
+            # Try up to 3 times with increasing timeouts
+            for ATTEMPT in {1..3}; do
+              echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
+              if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+                echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
+                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+                break
+              else
+                echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
+                if [ $ATTEMPT -eq 3 ]; then
+                  echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
+                fi
+                sleep 5
+              fi
+            done
+          done
+          
+          # Add the downloaded packages to the build package list
+          if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+            echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
+            echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
+          else
+            echo "⚠️ No packages were downloaded successfully"
+            echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
+          fi
+          
+          # List the downloaded packages
+          echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
+          ls -la "${PACKAGES_DIR}" || true
+
+      - name: Generate Package Index
+        run: |
+          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+          export -f mkhash; \
+          export MKHASH=mkhash; \
+          ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
+          gzip -9c packages/local/Packages > packages/local/Packages.gz'
+
+      - name: Analyze Package Sizes
+        run: |
+          echo "📊 Analyzing TollGate package sizes:"
+          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          
+          # Check if packages directory has .ipk files 
+          if ls packages/local/*.ipk 1> /dev/null 2>&1; then
+            # Get total size of all packages
+            TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
+            echo "Total size of all packages: ${TOTAL_SIZE}"
+            
+            # List packages by size
+            echo "Packages ordered by size (largest first):"
+            du -h packages/local/*.ipk | sort -hr
+          else
+            echo "⚠️ No .ipk packages found in packages/local/"
+          fi
+          
+          # Check device specs
+          if grep -q "Flash" "${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
+            FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile)
+            echo "Device flash information: ${FLASH_INFO}"
+          else
+            echo "⚠️ Flash information not found in Makefile"
+          fi
+          
+          # Create package groups to try with fewer packages
+          echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
+          echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
+
+      - name: Build Firmware with All Packages
+        continue-on-error: true
+        id: build-all
+        run: |
+          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
+          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
+          
+          echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
+          
+          if [ -n "${DEVICE_EXTRA}" ]; then
+            echo "Adding device compatibility: ${DEVICE_EXTRA}"
+            # Use eval to properly handle the parameters
+            eval sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              ${DEVICE_EXTRA} \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          else
+            # Original command
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          fi
+          
+          # Check if build succeeded
+          if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+            echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
+            echo "✅ Build with ALL packages succeeded!"
+            exit 0
+          else
+            echo "❌ Build with ALL packages failed, will try with fewer packages"
+            # Show logs or errors
+            cat ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+            exit 1
+          fi
+
+      - name: Build Firmware with Essential Packages Only
+        if: steps.build-all.outcome == 'failure'
+        continue-on-error: true
+        id: build-essential
+        run: |
+          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
+          sudo make clean
+          
+          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
+          
+          echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
+          
+          # Check if DEVICE_EXTRA is set and add it to the build command if it is
+          if [ -n "${DEVICE_EXTRA}" ]; then
+            echo "Adding device compatibility: ${DEVICE_EXTRA}"
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              ${DEVICE_EXTRA} \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          else
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          fi
+          
+          # Check if build succeeded
+          if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+            echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
+            echo "✅ Build with ESSENTIAL packages succeeded!"
+            exit 0
+          else
+            echo "❌ Build with ESSENTIAL packages failed, will try without TollGate packages"
+            exit 1
+          fi
+
+      - name: Build Basic Firmware (Fallback)
+        if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
+        id: build-basic
+        run: |
+          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
+          sudo make clean
+          
+          BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES}"
+          
+          echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
+          
+          # Check if DEVICE_EXTRA is set and add it to the build command if it is
+          if [ -n "${DEVICE_EXTRA}" ]; then
+            echo "Adding device compatibility: ${DEVICE_EXTRA}"
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              ${DEVICE_EXTRA} \
+              PACKAGES="${BASIC_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          else
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              PACKAGES="${BASIC_PACKAGE_LIST}" \
+              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+          fi
+          
+          # Check if build succeeded
+          if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+            echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
+            echo "✅ Basic build succeeded!"
+          else
+            echo "❌ Even basic build failed, there might be a fundamental issue"
+            exit 1
+          fi
+
+      - name: Find Firmware File
+        id: find-firmware
+        run: |
+          # Look for any sysupgrade.bin file
+          FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+          
+          if [ -z "$FIRMWARE_PATH" ]; then
+            # Try to find any .bin file as fallback
+            FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+          fi
+          
+          if [ -f "$FIRMWARE_PATH" ]; then
+            echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
+            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
+            echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
+            
+            # Store firmware metadata
+            FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
+            echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
+            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
+          else
+            echo "❌ Error: No firmware file found!"
+            exit 1
+          fi
+
+      # Save the Docker image to cache (only if we built it from scratch)
+      - name: Save Docker image to cache
+        id: save-cache
+        uses: actions/cache/save@v3
+        if: env.ENABLE_CACHE == 'true' && steps.cache-docker.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.DOCKER_CONTEXT }}
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Upload Firmware to Blossom
+        id: upload_firmware
+        uses: c03rad0r/cli-blossom-uploader-go@main
+        with:
+          host: "https://blossom.swissdash.site"
+          filePath: ${{ steps.find-firmware.outputs.firmware_path }}
+          nostrPrivateKey: ${{ secrets.NSECBECH }}
+
+      - name: Publish Firmware NIP-94 Metadata
+        id: publish_firmware
+        uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
+        with:
+          relays: ${{ env.NOSTR_RELAYS }}
+          url: ${{ steps.upload_firmware.outputs.url }}
+          mimeType: "application/octet-stream"
+          fileHash: ${{ steps.upload_firmware.outputs.hash }}
+          originalHash: ${{ env.FIRMWARE_HASH }}
+          filename: ${{ steps.find-firmware.outputs.firmware_name }}
+          content: "TollGate OS Firmware for ${{ matrix.model }}"
+          nsec: ${{ secrets.NSEC }}
+          size: ${{ env.FIRMWARE_SIZE }}
+          architecture: ${{ env.BLOSSOM_ARCH }}
+          model: ${{ matrix.model }}
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+
+      - name: Verify Firmware Publication
+        id: verify_firmware
+        uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
+        with:
+          eventId: ${{ steps.publish_firmware.outputs.eventId }}
+          relays: ${{ env.NOSTR_RELAYS }}
       
       # Upload the built firmware as an artifact
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.model }}.img
-          path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+          path: ${{ steps.find-firmware.outputs.firmware_path }}
           retention-days: 5
