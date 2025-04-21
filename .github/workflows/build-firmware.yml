@@ -5,31 +5,129 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: 'Override OpenWRT version (leave empty for latest)'
+        required: false
+        type: string
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
 jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      openwrt_version: ${{ steps.get-version.outputs.version }}
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      # Set version based on run type and available overrides
+      - name: Get OpenWRT version
+        id: get-version
+        run: |
+          # Start with empty VERSION
+          OPENWRT_VERSION=""
+          
+          # 1. Check for scheduled run - use hardcoded version
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            OPENWRT_VERSION="23.05.5"
+            echo "Using hardcoded version for scheduled run: $OPENWRT_VERSION"
+          fi
+          
+          # 2. Check for manual override if VERSION still not set
+          if [ -z "$OPENWRT_VERSION" ] && [ -n "${{ github.event.inputs.openwrt_version }}" ]; then
+            OPENWRT_VERSION="${{ github.event.inputs.openwrt_version }}"
+            echo "Using manual override version: $OPENWRT_VERSION"
+          fi
+          
+          # 3. Get from API if VERSION still not set
+          if [ -z "$OPENWRT_VERSION" ]; then
+            echo "Checking latest version from endoflife.date API..."
+            API_RESPONSE=$(curl -s "https://endoflife.date/api/openwrt.json")
+            
+            if [ -n "$API_RESPONSE" ]; then
+              # Extract latest version from first entry
+              OPENWRT_VERSION=$(echo $API_RESPONSE | grep -o -m 1 '"latest":"[^"]*"' | cut -d'"' -f4)
+              if [ -n "$OPENWRT_VERSION" ]; then
+                echo "Using latest version from API: $OPENWRT_VERSION"
+              fi
+            fi
+          fi
+          
+          # 4. Fallback if VERSION still not set
+          if [ -z "$OPENWRT_VERSION" ]; then
+            OPENWRT_VERSION="24.10.1"
+            echo "Using default fallback version: $OPENWRT_VERSION"
+          fi
+          
+          # Output the final VERSION
+          echo "version=$OPENWRT_VERSION" >> $GITHUB_OUTPUT
+          echo "🔧 Final OpenWRT version: $OPENWRT_VERSION"
+  
+  fetch-profiles:
+    needs: check-versions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Fetch the overview JSON for the specified version
+      - name: Fetch OpenWRT overview
+        id: fetch-overview
+        uses: ./actions/fetch-overview-json
+        with:
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      # Download profile files for common architectures
+      - name: Fetch mediatek/filogic profile
+        uses: ./actions/fetch-router-profile
+        with:
+          target: "mediatek/filogic"
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      - name: Fetch ath79/generic profile
+        uses: ./actions/fetch-router-profile
+        with:
+          target: "ath79/generic"
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      - name: Fetch ath79/nand profile
+        uses: ./actions/fetch-router-profile
+        with:
+          target: "ath79/nand"
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      # Upload the external_profiles directory as an artifact
+      - name: Upload profiles as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: router-profiles
+          path: external_profiles/
+          retention-days: 1
+
   build:
+    needs: [check-versions, fetch-profiles]
     strategy:
-      fail-fast: true
-      max-parallel: 1 
       matrix:
         model: [
           # D-Link models
           'dlink_covr-x1860-a1',
-          #'dlink_covr-c1200-a1',
+          'dlink_covr-c1200-a1',
           
           # GL.iNet models
           'glinet_gl-mt3000',
-          #'glinet_gl-mt6000',
-          'glinet_gl-ar300m-nand',
-          #'glinet_gl-ar300m-nor',
-          #'glinet_gl-ar300m16',
-          #'glinet_gl-ar300m-lite',
+          'glinet_gl-mt6000',
+          'glinet_gl-ar300m-nor',
+          'glinet_gl-ar300m16',
+          'glinet_gl-ar300m-lite',
           
           # ZyXEL models
-          #'zyxel_nr7101',
+          'zyxel_nr7101'
         ]
+      fail-fast: false
 
     runs-on: ubuntu-latest
     name: Build ${{ matrix.model }}
@@ -37,11 +135,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Download router profiles
+        uses: actions/download-artifact@v4
+        with:
+          name: router-profiles
+          path: external_profiles/
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+      
+      - name: Lookup Router Details
+        id: lookup-router
+        uses: ./actions/lookup-router-target
+        with:
+          router-id: ${{ matrix.model }}
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      - name: Check if router was found
+        run: |
+          if [ "${{ steps.lookup-router.outputs.found }}" != "true" ]; then
+            echo "❌ Router ${{ matrix.model }} not found in profiles!"
+            exit 1
+          else
+            echo "✅ Found router: ${{ steps.lookup-router.outputs.full-name }}"
+            echo "📊 Target architecture: ${{ steps.lookup-router.outputs.target }}"
+          fi
+      
+      # Download any additional profiles needed (other architectures)
+      - name: Fetch additional router profile if needed
+        id: fetch-profile
+        if: ${{ !contains(steps.lookup-router.outputs.target, 'mediatek/filogic') && !contains(steps.lookup-router.outputs.target, 'ath79/generic') && !contains(steps.lookup-router.outputs.target, 'ath79/nand') }}
+        uses: ./actions/fetch-router-profile
+        with:
+          target: ${{ steps.lookup-router.outputs.target }}
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
       - name: Build OpenWRT Image
         id: build-openwrt-image
         uses: ./actions/build-firmware
         with:
           model: ${{ matrix.model }}
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           files_path: "./files"
