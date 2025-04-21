@@ -12,7 +12,10 @@ inputs:
     required: true
   version:
     description: 'OpenWRT version'
-    default: '23.05.5'
+    required: true
+  target:
+    description: 'Target architecture (e.g., ramips/mt7621) - passed from workflow'
+    required: true
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -82,37 +85,6 @@ runs:
         python -m pip install --upgrade pip
         pip install nostr
 
-    - name: Fetch OpenWRT Overview
-      id: fetch-overview
-      uses: ./actions/fetch-overview-json
-      with:
-        version: ${{ inputs.version }}
-
-    - name: Lookup Router Details
-      id: lookup-router
-      uses: ./actions/lookup-router-target
-      with:
-        router-id: ${{ inputs.model }}
-        version: ${{ inputs.version }}
-        
-    - name: Verify Router Was Found
-      shell: bash
-      run: |
-        if [ "${{ steps.lookup-router.outputs.found }}" != "true" ]; then
-          echo "❌ Error: Router ID '${{ inputs.model }}' not found in OpenWRT ${{ inputs.version }}"
-          echo "Available models can be found in the overview.json file"
-          exit 1
-        fi
-        echo "✅ Found router: ${{ steps.lookup-router.outputs.full-name }}"
-        echo "📊 Target architecture: ${{ steps.lookup-router.outputs.target }}"
-
-    - name: Fetch Router Profile
-      id: fetch-profile
-      uses: ./actions/fetch-router-profile
-      with:
-        target: ${{ steps.lookup-router.outputs.target }}
-        version: ${{ inputs.version }}
-
     - name: Set Build Variables
       id: vars
       shell: bash
@@ -120,9 +92,9 @@ runs:
         # Create build directory first
         mkdir -p /tmp/openwrt-build
         
-        # Split target into platform and type
-        PLATFORM=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f1)
-        TYPE=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f2)
+        # Split target into platform and type (from input parameter)
+        PLATFORM=$(echo ${{ inputs.target }} | cut -d'/' -f1)
+        TYPE=$(echo ${{ inputs.target }} | cut -d'/' -f2)
         
         echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
         echo "TYPE=${TYPE}" >> $GITHUB_ENV
@@ -236,7 +208,7 @@ runs:
       if: steps.cache-docker.outputs.cache-hit == 'true'
       run: |
         echo "✅ Using cached OpenWRT ImageBuilder environment for ${{ env.PLATFORM }}/${{ env.TYPE }}"
-        echo "Cache hit: Using cached Docker environment from $(cat ${DOCKER_CONTEXT}/cache-status.txt 2>/dev/null || echo 'previous run')" > "${DOCKER_CONTEXT}/cache-status.txt"
+        echo "Cache hit: Using cached Docker environment from $(cat ${DOCKER_CONTEXT}/cache-status.txt 2>/null || echo 'previous run')" > "${DOCKER_CONTEXT}/cache-status.txt"
         
         # Verify the cache contents
         if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then

@@ -25,6 +25,12 @@ jobs:
         with:
           fetch-depth: 1
       
+      # Install jq for proper JSON parsing
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+      
       # Set version based on run type and available overrides
       - name: Get OpenWRT version
         id: get-version
@@ -50,17 +56,23 @@ jobs:
             API_RESPONSE=$(curl -s "https://endoflife.date/api/openwrt.json")
             
             if [ -n "$API_RESPONSE" ]; then
-              # Extract latest version from first entry
-              OPENWRT_VERSION=$(echo $API_RESPONSE | grep -o -m 1 '"latest":"[^"]*"' | cut -d'"' -f4)
-              if [ -n "$OPENWRT_VERSION" ]; then
+              # Use jq to extract the latest version from the first entry in the array
+              # First entry is the newest OpenWRT release
+              OPENWRT_VERSION=$(echo "$API_RESPONSE" | jq -r '.[0].latest')
+              
+              if [ -n "$OPENWRT_VERSION" ] && [ "$OPENWRT_VERSION" != "null" ]; then
                 echo "Using latest version from API: $OPENWRT_VERSION"
+              else
+                echo "Failed to extract version from API response"
               fi
+            else
+              echo "Failed to get API response from endoflife.date"
             fi
           fi
           
           # 4. Fallback if VERSION still not set
-          if [ -z "$OPENWRT_VERSION" ]; then
-            OPENWRT_VERSION="24.10.1"
+          if [ -z "$OPENWRT_VERSION" ] || [ "$OPENWRT_VERSION" = "null" ]; then
+            OPENWRT_VERSION="23.05.5"  # Using a known stable version as fallback
             echo "Using default fallback version: $OPENWRT_VERSION"
           fi
           
@@ -179,6 +191,7 @@ jobs:
         with:
           model: ${{ matrix.model }}
           version: ${{ needs.check-versions.outputs.openwrt_version }}
+          target: ${{ steps.lookup-router.outputs.target }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           files_path: "./files"
