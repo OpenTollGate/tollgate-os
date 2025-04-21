@@ -1,0 +1,195 @@
+name: Reusable Firmware Build Workflow
+
+on:
+  workflow_call:
+    inputs:
+      device_id:
+        description: 'Device ID to build firmware for'
+        type: string
+        required: true
+      device_name:
+        description: 'User-friendly device name'
+        type: string
+        required: false
+      platform:
+        description: 'Device platform'
+        type: string
+        required: false
+      firmware_type:
+        description: 'Type of firmware to build'
+        default: 'all'
+        type: string
+        required: false
+      version:
+        description: 'OpenWRT version'
+        default: '23.05.5'
+        type: string
+        required: false
+    secrets:
+      NOSTR_SECRET_KEY:
+        required: true
+      NOSTR_PUBLIC_KEY:
+        required: true
+      NSECBECH:
+        required: true
+      NSEC:
+        required: true
+    outputs:
+      build_success:
+        description: 'Whether the build succeeded'
+        value: ${{ jobs.build.outputs.success }}
+      firmware_path:
+        description: 'Path to the built firmware'
+        value: ${{ jobs.build.outputs.firmware_path }}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build firmware for ${{ inputs.device_name || inputs.device_id }}
+    outputs:
+      success: ${{ steps.build-success.outputs.success }}
+      firmware_path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Set build status to track success/failure
+      - name: Initialize build status
+        id: build-status
+        run: echo "success=false" >> $GITHUB_OUTPUT
+      
+      # Debug environment and find profile
+      - name: Debug and find device profile
+        run: |
+          echo "===== BUILD ENVIRONMENT DEBUG ====="
+          echo "OS: $(uname -a)"
+          echo "Available memory: $(free -h)"
+          echo "Available disk space: $(df -h)"
+          
+          # Search for the model in profiles.json files
+          echo "===== SEARCHING FOR ROUTER PROFILE: ${{ inputs.device_id }} ====="
+          MODEL_FOUND=0
+          
+          for PROFILE_PATH in $(find external_profiles -name "profiles.json"); do
+            if jq -e --arg model "${{ inputs.device_id }}" '.profiles | has($model)' "$PROFILE_PATH" > /dev/null 2>&1; then
+              MODEL_FOUND=1
+              echo "✅ Found profile in: $PROFILE_PATH"
+              
+              # Extract platform and type from path
+              REL_PATH=${PROFILE_PATH#external_profiles/}
+              PARTS=($(echo "$REL_PATH" | tr '/' ' '))
+              VERSION=${PARTS[0]}
+              PLATFORM=${PARTS[1]}
+              TYPE=${PARTS[2]}
+              
+              echo "✅ Version: $VERSION, Platform: $PLATFORM, Type: $TYPE"
+              
+              # Extract available image types for this device
+              AVAILABLE_TYPES=$(jq -r --arg p "${{ inputs.device_id }}" '.profiles[$p].images | map(.type) | unique | join(", ")' "$PROFILE_PATH")
+              echo "✅ Available image types: $AVAILABLE_TYPES"
+              
+              # Show device information from profile
+              DEVICE_VENDOR=$(jq -r --arg p "${{ inputs.device_id }}" '.profiles[$p].titles[0].vendor // "unknown"' "$PROFILE_PATH")
+              DEVICE_MODEL=$(jq -r --arg p "${{ inputs.device_id }}" '.profiles[$p].titles[0].model // "unknown"' "$PROFILE_PATH")
+              echo "📌 Device: $DEVICE_VENDOR $DEVICE_MODEL"
+              
+              # Set environment variables for later steps
+              echo "DEVICE_VENDOR=$DEVICE_VENDOR" >> $GITHUB_ENV
+              echo "DEVICE_MODEL=$DEVICE_MODEL" >> $GITHUB_ENV
+              echo "ARCH=$(jq -r '.arch_packages // "unknown"' "$PROFILE_PATH")" >> $GITHUB_ENV
+              
+              break
+            fi
+          done
+          
+          if [ $MODEL_FOUND -eq 0 ]; then
+            echo "❌ ERROR: Could not find router profile for '${{ inputs.device_id }}'"
+            echo "❌ Please check the device ID and ensure it matches the OpenWrt naming convention"
+            exit 1
+          fi
+      
+      # Use the build-firmware action
+      - name: Build OpenWRT Image
+        id: build-openwrt-image
+        uses: ./actions/build-firmware
+        with:
+          model: ${{ inputs.device_id }}
+          nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
+          nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
+          files_path: "./files"
+          nsecbech: ${{ secrets.NSECBECH }}
+          nsec: ${{ secrets.NSEC }}
+          firmware_type: ${{ inputs.firmware_type || 'all' }}
+      
+      # Collect build logs
+      - name: Collect build logs
+        if: always()
+        run: |
+          echo "===== BUILD LOGS COLLECTION ====="
+          mkdir -p build_logs
+          
+          find /tmp/openwrt-build -name "*.txt" -o -name "*.log" -type f | while read file; do
+            echo "Found log file: $file"
+            cp "$file" build_logs/ || echo "Failed to copy $file"
+          done
+          
+          if [ ! "$(ls -A build_logs)" ]; then
+            echo "No log files found in /tmp/openwrt-build"
+            echo "Build process did not generate expected log files" > build_logs/no_logs_found.txt
+          fi
+      
+      # Process firmware files for artifacts
+      - name: Process firmware files
+        id: firmware-process
+        run: |
+          # Parse the all_firmware_paths JSON to get image types
+          ALL_PATHS='${{ steps.build-openwrt-image.outputs.all_firmware_paths }}'
+          echo "ALL_PATHS JSON: $ALL_PATHS"
+          
+          if [ -z "$ALL_PATHS" ] || [ "$ALL_PATHS" = "null" ]; then
+            echo "⚠️ No firmware paths returned from build process"
+            exit 1
+          fi
+          
+          AVAILABLE_TYPES=$(echo "$ALL_PATHS" | jq -r 'keys | join(", ")')
+          echo "Available firmware types: $AVAILABLE_TYPES"
+          echo "available_types=$AVAILABLE_TYPES" >> $GITHUB_OUTPUT
+          
+          # Create directory for all firmware files
+          mkdir -p firmware_files
+          
+          # Extract filesystem paths from the JSON and copy them
+          echo "$ALL_PATHS" | jq -r 'to_entries | .[] | .value.path' | while read -r filepath; do
+            if [ -f "$filepath" ]; then
+              cp "$filepath" firmware_files/
+              echo "Copied $(basename "$filepath") to firmware_files/"
+            else
+              echo "Warning: File $filepath not found"
+            fi
+          done
+          
+          # Create a manifest file with build information
+          echo "# Build Information" > firmware_files/manifest.txt
+          echo "Device: ${{ inputs.device_name || inputs.device_id }}" >> firmware_files/manifest.txt
+          echo "Architecture: ${ARCH}" >> firmware_files/manifest.txt
+          echo "OpenWrt Version: ${{ inputs.version }}" >> firmware_files/manifest.txt
+          echo "Build Date: $(date)" >> firmware_files/manifest.txt
+          echo "" >> firmware_files/manifest.txt
+          echo "## Firmware Files" >> firmware_files/manifest.txt
+          find firmware_files -type f -not -name "manifest.txt" | sort | while read -r file; do
+            echo "- $(basename "$file")" >> firmware_files/manifest.txt
+          done
+      
+      # Upload artifacts
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ inputs.device_id }}
+          path: firmware_files/
+          retention-days: 30
+      
+      # Mark the build as successful
+      - name: Set build success status
+        id: build-success
+        if: success()
+        run: echo "success=true" >> $GITHUB_OUTPUT
