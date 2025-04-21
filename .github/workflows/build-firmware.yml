@@ -14,6 +14,7 @@ on:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
 jobs:
+  # Step 1: Determine the OpenWRT version to use
   check-versions:
     runs-on: ubuntu-latest
     outputs:
@@ -67,67 +68,60 @@ jobs:
           echo "version=$OPENWRT_VERSION" >> $GITHUB_OUTPUT
           echo "🔧 Final OpenWRT version: $OPENWRT_VERSION"
   
-  fetch-profiles:
+  # Step 2: Fetch the .overview.json file for the selected version
+  # This contains the mapping of router IDs to their target architectures
+  fetch-overview:
     needs: check-versions
     runs-on: ubuntu-latest
+    outputs:
+      overview-path: ${{ steps.fetch-overview.outputs.overview_path }}
+      cache-hit: ${{ steps.fetch-overview.outputs.cache-hit }}
     
     steps:
       - uses: actions/checkout@v4
       
-      # Fetch the overview JSON for the specified version
+      # Fetch the .overview JSON for the specified version
       - name: Fetch OpenWRT overview
         id: fetch-overview
         uses: ./actions/fetch-overview-json
         with:
           version: ${{ needs.check-versions.outputs.openwrt_version }}
       
-      # Download profile files for common architectures
-      - name: Fetch mediatek/filogic profile
-        uses: ./actions/fetch-router-profile
-        with:
-          target: "mediatek/filogic"
-          version: ${{ needs.check-versions.outputs.openwrt_version }}
-      
-      - name: Fetch ath79/generic profile
-        uses: ./actions/fetch-router-profile
-        with:
-          target: "ath79/generic"
-          version: ${{ needs.check-versions.outputs.openwrt_version }}
-      
-      - name: Fetch ath79/nand profile
-        uses: ./actions/fetch-router-profile
-        with:
-          target: "ath79/nand"
-          version: ${{ needs.check-versions.outputs.openwrt_version }}
-      
-      # Upload the external_profiles directory as an artifact
-      - name: Upload profiles as artifact
+      # Upload the .overview.json as an artifact for use in build jobs
+      - name: Upload overview as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: router-profiles
-          path: external_profiles/
+          name: openwrt-overview
+          path: external_profiles/${{ needs.check-versions.outputs.openwrt_version }}/.overview.json
           retention-days: 1
 
+  # Step 3: Build firmware for each router model in the matrix
+  # Each job in the matrix will:
+  # 1. Look up its target architecture in the .overview.json
+  # 2. Download its specific profile files
+  # 3. Build the firmware
   build:
-    needs: [check-versions, fetch-profiles]
+    needs: [check-versions, fetch-overview]
     strategy:
       matrix:
         model: [
           # D-Link models
           'dlink_covr-x1860-a1',
-          'dlink_covr-c1200-a1',
+          #'dlink_covr-c1200-a1',
           
           # GL.iNet models
           'glinet_gl-mt3000',
-          'glinet_gl-mt6000',
-          'glinet_gl-ar300m-nor',
-          'glinet_gl-ar300m16',
-          'glinet_gl-ar300m-lite',
+          # 'glinet_gl-mt6000',
+          'glinet_gl-ar300m-nand',
+          # 'glinet_gl-ar300m-nor',
+          # 'glinet_gl-ar300m16',
+          # 'glinet_gl-ar300m-lite',
           
           # ZyXEL models
-          'zyxel_nr7101'
+          # 'zyxel_nr7101'
         ]
-      fail-fast: false
+      fail-fast: true
+      max-parallel: 1
 
     runs-on: ubuntu-latest
     name: Build ${{ matrix.model }}
@@ -135,17 +129,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download router profiles
-        uses: actions/download-artifact@v4
+      # Restore the .overview.json file from cache
+      - name: Get .overview.json
+        id: get-overview
+        uses: ./actions/fetch-overview-json
         with:
-          name: router-profiles
-          path: external_profiles/
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
       
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
-      
+      # Look up this router's target architecture in .overview.json
       - name: Lookup Router Details
         id: lookup-router
         uses: ./actions/lookup-router-target
@@ -163,15 +154,15 @@ jobs:
             echo "📊 Target architecture: ${{ steps.lookup-router.outputs.target }}"
           fi
       
-      # Download any additional profiles needed (other architectures)
-      - name: Fetch additional router profile if needed
+      # Now fetch the specific profile needed for this router's target architecture
+      - name: Fetch router profile
         id: fetch-profile
-        if: ${{ !contains(steps.lookup-router.outputs.target, 'mediatek/filogic') && !contains(steps.lookup-router.outputs.target, 'ath79/generic') && !contains(steps.lookup-router.outputs.target, 'ath79/nand') }}
         uses: ./actions/fetch-router-profile
         with:
           target: ${{ steps.lookup-router.outputs.target }}
           version: ${{ needs.check-versions.outputs.openwrt_version }}
       
+      # Build the firmware for this router model
       - name: Build OpenWRT Image
         id: build-openwrt-image
         uses: ./actions/build-firmware
@@ -184,6 +175,7 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
       
+      # Upload the built firmware as an artifact
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:

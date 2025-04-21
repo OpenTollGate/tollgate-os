@@ -1,5 +1,5 @@
 name: 'Lookup Router Target'
-description: 'Find a router by ID in the OpenWRT overview.json and return its target architecture and details'
+description: 'Find a router by ID in the OpenWRT .overview.json and return its target architecture and details'
 
 inputs:
   router-id:
@@ -46,15 +46,15 @@ runs:
         OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
         
         # Path to overview file
-        OVERVIEW_FILE="${OUTPUT_DIR}/${VERSION}/overview.json"
+        OVERVIEW_FILE="${OUTPUT_DIR}/${VERSION}/.overview.json"
         
         if [ ! -f "$OVERVIEW_FILE" ] || [ ! -s "$OVERVIEW_FILE" ]; then
-          echo "❌ Overview file for OpenWRT $VERSION not found or empty"
+          echo "❌ .overview.json file for OpenWRT $VERSION not found or empty"
           echo "found=false" >> $GITHUB_OUTPUT
           exit 0
         fi
         
-        echo "🔍 Looking up router ID: $ROUTER_ID in OpenWRT $VERSION overview..."
+        echo "🔍 Looking up router ID: $ROUTER_ID in OpenWRT $VERSION .overview.json..."
         
         # Use jq to find the router in the overview
         ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$OVERVIEW_FILE")

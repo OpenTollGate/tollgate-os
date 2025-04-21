@@ -1,5 +1,5 @@
 name: 'Fetch OpenWRT Overview JSON'
-description: 'Download and cache the OpenWRT overview.json file for a specified version'
+description: 'Download and cache the OpenWRT .overview.json file for a specified version using GitHub Actions cache API'
 
 inputs:
   version:
@@ -13,10 +13,14 @@ inputs:
     description: 'Force download even if overview file already exists'
     required: false
     default: 'false'
+  cache-key-prefix:
+    description: 'Prefix for the cache key'
+    required: false
+    default: 'openwrt-overview'
 
 outputs:
   overview-path:
-    description: 'Path to the downloaded overview.json file'
+    description: 'Path to the downloaded .overview.json file'
     value: ${{ steps.fetch.outputs.overview_path }}
   target-count:
     description: 'Number of unique targets in the overview file'
@@ -24,11 +28,41 @@ outputs:
   profile-count:
     description: 'Number of device profiles in the overview file'
     value: ${{ steps.fetch.outputs.profile_count }}
+  cache-hit:
+    description: 'Whether the overview file was retrieved from cache'
+    value: ${{ steps.cache-overview.outputs.cache-hit }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Fetch overview.json
+    - name: Set up Cache variables
+      id: cache-vars
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        CACHE_KEY="${{ inputs.cache-key-prefix }}-$VERSION"
+        WORKSPACE_DIR="${GITHUB_WORKSPACE}"
+        OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
+        VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
+        
+        # Create version directory
+        mkdir -p "$VERSION_DIR"
+        
+        # Set output variables
+        echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
+        echo "overview-file=$VERSION_DIR/.overview.json" >> $GITHUB_OUTPUT
+    
+    # Try to restore the .overview.json from cache first
+    - name: Restore .overview.json from cache
+      id: cache-overview
+      uses: actions/cache/restore@v3
+      with:
+        path: ${{ steps.cache-vars.outputs.overview-file }}
+        key: ${{ steps.cache-vars.outputs.cache-key }}
+        restore-keys: |
+          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}
+    
+    - name: Fetch .overview.json
       id: fetch
       shell: bash
       run: |
@@ -36,19 +70,14 @@ runs:
         VERSION="${{ inputs.version }}"
         OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
         FORCE_DOWNLOAD="${{ inputs.force-download }}"
-        
-        # Create version directory
-        VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
-        mkdir -p "$VERSION_DIR"
-        
-        # Path to overview file
-        OVERVIEW_FILE="${VERSION_DIR}/overview.json"
+        OVERVIEW_FILE="${{ steps.cache-vars.outputs.overview-file }}"
+        CACHE_HIT="${{ steps.cache-overview.outputs.cache-hit }}"
         
         # Check if we need to download or can use cache
-        if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
-          echo "✅ Using existing overview.json for OpenWRT $VERSION"
+        if [ "$CACHE_HIT" == "true" ] && [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
+          echo "✅ Using cached .overview.json for OpenWRT $VERSION"
         else
-          echo "🔍 Downloading overview.json for OpenWRT $VERSION..."
+          echo "🔍 Downloading .overview.json for OpenWRT $VERSION..."
           
           # URL for the overview file
           URL="https://downloads.openwrt.org/releases/${VERSION}/.overview.json"
@@ -78,11 +107,11 @@ runs:
           done
           
           if [ "$SUCCESS" != "true" ]; then
-            echo "❌ Failed to download overview.json for OpenWRT $VERSION after $MAX_RETRIES attempts"
+            echo "❌ Failed to download .overview.json for OpenWRT $VERSION after $MAX_RETRIES attempts"
             exit 1
           fi
           
-          echo "✅ Downloaded overview.json for OpenWRT $VERSION"
+          echo "✅ Downloaded .overview.json for OpenWRT $VERSION"
         fi
         
         # Validate and extract stats from overview file
@@ -101,3 +130,12 @@ runs:
           echo "❌ Overview file is missing or invalid"
           exit 1
         fi
+    
+    # Save the .overview.json to cache for future use
+    - name: Save .overview.json to cache
+      id: save-cache
+      uses: actions/cache/save@v3
+      if: steps.cache-overview.outputs.cache-hit != 'true'
+      with:
+        path: ${{ steps.cache-vars.outputs.overview-file }}
+        key: ${{ steps.cache-vars.outputs.cache-key }}
