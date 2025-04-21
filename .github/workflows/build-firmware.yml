@@ -447,9 +447,11 @@ jobs:
         uses: actions/cache/restore@v3
         with:
           path: ${{ env.DOCKER_CONTEXT }}
-          key: ${{ env.CACHE_KEY }}
+          # Use simpler key without variables that might change unexpectedly
+          key: openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
           restore-keys: |
-            ${{ env.CACHE_KEY_PREFIX }}-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
+            openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
+            openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-
 
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder (If cache miss)
