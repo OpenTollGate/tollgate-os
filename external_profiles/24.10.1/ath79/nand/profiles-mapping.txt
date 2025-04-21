@@ -1,0 +1,37 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/24.10.1/ath79/nand/profiles.json
+# Generated on: Mon Apr 21 11:53:24 CEST 2025
+
+8dev_rambutan | 8devices | Rambutan | 8devices Rambutan
+aerohive_hiveap-121 | Aerohive | HiveAP 121 | Aerohive HiveAP 121
+domywifi_dw33d | DomyWifi | DW33D | DomyWifi DW33D
+dongwon_dw02-412h-128m | Dongwon T&I | DW02-412H | Dongwon T&I DW02-412H ((128M))
+dongwon_dw02-412h-64m | Dongwon T&I | DW02-412H | Dongwon T&I DW02-412H ((64M))
+glinet_gl-ar300m-nand | GL.iNet | GL-AR300M | GL.iNet GL-AR300M (NAND)
+glinet_gl-ar300m-nor | GL.iNet | GL-AR300M | GL.iNet GL-AR300M (NOR)
+glinet_gl-ar750s-nor | GL.iNet | GL-AR750S | GL.iNet GL-AR750S (NOR)
+glinet_gl-ar750s-nor-nand | GL.iNet | GL-AR750S | GL.iNet GL-AR750S (NOR/NAND)
+glinet_gl-e750 | GL.iNet | GL-E750 | GL.iNet GL-E750
+glinet_gl-s200-nor | GL.iNet | GL-S200 | GL.iNet GL-S200 (NOR)
+glinet_gl-s200-nor-nand | GL.iNet | GL-S200 | GL.iNet GL-S200 (NOR/NAND)
+glinet_gl-x1200-nor | GL.iNet | GL-X1200 | GL.iNet GL-X1200 (NOR)
+glinet_gl-x1200-nor-nand | GL.iNet | GL-X1200 | GL.iNet GL-X1200 (NOR/NAND)
+glinet_gl-xe300 | GL.iNet | GL-XE300 | GL.iNet GL-XE300
+linksys_ea4500-v3 | Linksys | EA4500 | Linksys EA4500 (v3)
+meraki_mr18 | Meraki | MR18 | Meraki MR18
+netgear_pgzng1 | NETGEAR | PGZNG1 | NETGEAR PGZNG1
+netgear_r6100 | NETGEAR | R6100 | NETGEAR R6100
+netgear_wndr3700-v4 | NETGEAR | WNDR3700 | NETGEAR WNDR3700 (v4)
+netgear_wndr4300 | NETGEAR | WNDR4300 | NETGEAR WNDR4300
+netgear_wndr4300-v2 | NETGEAR | WNDR4300 | NETGEAR WNDR4300 (v2)
+netgear_wndr4300sw | NETGEAR | WNDR4300SW | NETGEAR WNDR4300SW
+netgear_wndr4300tn | NETGEAR | WNDR4300TN | NETGEAR WNDR4300TN
+netgear_wndr4500-v3 | NETGEAR | WNDR4500 | NETGEAR WNDR4500 (v3)
+zte_mf281 | ZTE | MF281 | ZTE MF281
+zte_mf282 | ZTE | MF282 | ZTE MF282
+zte_mf286 | ZTE | MF286 | ZTE MF286
+zte_mf286a | ZTE | MF286A | ZTE MF286A
+zte_mf286r | ZTE | MF286R | ZTE MF286R
+zyxel_emg2926_q10a | Zyxel | EMG2926-Q10A | Zyxel EMG2926-Q10A
+zyxel_nbg6716 | Zyxel | NBG6716 | Zyxel NBG6716

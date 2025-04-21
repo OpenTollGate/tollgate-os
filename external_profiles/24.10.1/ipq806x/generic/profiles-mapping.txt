@@ -1,0 +1,36 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/24.10.1/ipq806x/generic/profiles.json
+# Generated on: Mon Apr 21 11:53:31 CEST 2025
+
+arris_tr4400-v2 | Arris | TR4400 | Arris TR4400 (v2)
+askey_rt4230w-rev6 | Askey | RT4230W | Askey RT4230W (REV6)
+asrock_g10 | ASRock | G10 | ASRock G10
+buffalo_wxr-2533dhp | Buffalo | WXR-2533DHP | Buffalo WXR-2533DHP
+compex_wpq864 | Compex | WPQ864 | Compex WPQ864
+edgecore_ecw5410 | Edgecore | ECW5410 | Edgecore ECW5410
+extreme_ap3935 | Extreme Networks | AP3935 | Extreme Networks AP3935
+fortinet_fap-421e | Fortinet | FAP-421E | Fortinet FAP-421E
+linksys_e8350-v1 | Linksys | E8350 | Linksys E8350 (v1)
+linksys_ea7500-v1 | Linksys | EA7500 | Linksys EA7500 (v1)
+linksys_ea8500 | Linksys | EA8500 | Linksys EA8500
+meraki_mr42 | Cisco Meraki | MR42 | Cisco Meraki MR42
+meraki_mr52 | Cisco Meraki | MR52 | Cisco Meraki MR52
+nec_wg2600hp | NEC | Aterm WG2600HP | NEC Aterm WG2600HP
+nec_wg2600hp3 | NEC Platforms | Aterm WG2600HP3 | NEC Platforms Aterm WG2600HP3
+netgear_d7800 | NETGEAR | Nighthawk X4 D7800 | NETGEAR Nighthawk X4 D7800
+netgear_r7500 | NETGEAR | Nighthawk X4 R7500 | NETGEAR Nighthawk X4 R7500 (v1)
+netgear_r7500v2 | NETGEAR | Nighthawk X4 R7500 | NETGEAR Nighthawk X4 R7500 (v2)
+netgear_r7800 | NETGEAR | Nighthawk X4S R7800 | NETGEAR Nighthawk X4S R7800
+netgear_xr450 | NETGEAR | Nighthawk XR450 | NETGEAR Nighthawk XR450
+netgear_xr500 | NETGEAR | Nighthawk XR500 | NETGEAR Nighthawk XR500
+nokia_ac400i | Nokia | AC400i | Nokia AC400i
+qcom_ipq8064-ap148 | Qualcomm | AP148 | Qualcomm AP148 (standard)
+qcom_ipq8064-ap148-legacy | Qualcomm | AP148 | Qualcomm AP148 (legacy)
+qcom_ipq8064-ap161 | Qualcomm | AP161 | Qualcomm AP161
+qcom_ipq8064-db149 | Qualcomm | DB149 | Qualcomm DB149
+tplink_ad7200 | TP-Link | AD7200 | TP-Link AD7200 (v1/v2)
+tplink_c2600 | TP-Link | Archer C2600 | TP-Link Archer C2600 (v1)
+tplink_vr2600v | TP-Link | Archer VR2600v | TP-Link Archer VR2600v (v1)
+ubnt_unifi-ac-hd | Ubiquiti | UniFi AC HD | Ubiquiti UniFi AC HD
+zyxel_nbg6817 | Zyxel | NBG6817 | Zyxel NBG6817

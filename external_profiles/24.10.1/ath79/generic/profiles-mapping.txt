@@ -1,0 +1,377 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/24.10.1/ath79/generic/profiles.json
+# Generated on: Mon Apr 21 11:53:04 CEST 2025
+
+8dev_carambola2 | 8devices | Carambola2 | 8devices Carambola2
+8dev_carambola3 | 8devices | Carambola3 | 8devices Carambola3
+8dev_lima | 8devices | Lima | 8devices Lima
+adtran_bsap1800-v2 | Adtran/Bluesocket | BSAP-1800 | Adtran/Bluesocket BSAP-1800 (v2)
+adtran_bsap1840 | Adtran/Bluesocket | BSAP-1840 | Adtran/Bluesocket BSAP-1840
+airtight_c-75 | AirTight Networks | C-75 | AirTight Networks C-75
+alcatel_hh40v | Alcatel | HH40V | Alcatel HH40V
+alfa-network_ap121f | ALFA Network | AP121F | ALFA Network AP121F
+alfa-network_ap121fe | ALFA Network | AP121FE | ALFA Network AP121FE
+alfa-network_n2q | ALFA Network | N2Q | ALFA Network N2Q
+alfa-network_n5q | ALFA Network | N5Q | ALFA Network N5Q
+alfa-network_pi-wifi4 | ALFA Network | Pi-WiFi4 | ALFA Network Pi-WiFi4
+alfa-network_r36a | ALFA Network | R36A | ALFA Network R36A
+alfa-network_tube-2hq | ALFA Network | Tube-2HQ | ALFA Network Tube-2HQ
+alfa-network_wifi-camppro-nano-duo | ALFA Network | WiFi CampPro Nano Duo | ALFA Network WiFi CampPro Nano Duo
+allnet_all-wap02860ac | ALLNET | ALL-WAP02860AC | ALLNET ALL-WAP02860AC
+araknis_an-300-ap-i-n | Araknis | AN-300-AP-I-N | Araknis AN-300-AP-I-N
+araknis_an-500-ap-i-ac | Araknis | AN-500-AP-I-AC | Araknis AN-500-AP-I-AC
+araknis_an-700-ap-i-ac | Araknis | AN-700-AP-I-AC | Araknis AN-700-AP-I-AC
+arduino_yun | Arduino | Yun | Arduino Yun
+aruba_ap-105 | Aruba | AP-105 | Aruba AP-105
+aruba_ap-115 | Aruba | AP-115 | Aruba AP-115
+aruba_ap-175 | Aruba | AP-175 | Aruba AP-175
+asus_pl-ac56 | ASUS | PL-AC56 | ASUS PL-AC56 (A1)
+asus_rp-ac51 | ASUS | RP-AC51 | ASUS RP-AC51
+asus_rp-ac66 | ASUS | RP-AC66 | ASUS RP-AC66
+asus_rt-ac59u | ASUS | RT-AC59U | ASUS RT-AC59U
+asus_rt-ac59u-v2 | ASUS | RT-AC59U | ASUS RT-AC59U (v2)
+asus_zenwifi-cd6n | ASUS | ZenWiFi CD6N | ASUS ZenWiFi CD6N
+asus_zenwifi-cd6r | ASUS | ZenWiFi CD6R | ASUS ZenWiFi CD6R
+atheros_db120 | Atheros | DB120 | Atheros DB120
+avm_fritz1750e | AVM | FRITZ!WLAN Repeater 1750E | AVM FRITZ!WLAN Repeater 1750E
+avm_fritz300e | AVM | FRITZ!WLAN Repeater 300E | AVM FRITZ!WLAN Repeater 300E
+avm_fritz4020 | AVM | FRITZ!Box 4020 | AVM FRITZ!Box 4020
+avm_fritz450e | AVM | FRITZ!WLAN Repeater 450E | AVM FRITZ!WLAN Repeater 450E
+avm_fritzdvbc | AVM | FRITZ!WLAN Repeater DVB-C | AVM FRITZ!WLAN Repeater DVB-C
+belkin_f9j1108-v2 | Belkin | F9J1108 v2 (AC1750 DB Wi-Fi) | Belkin F9J1108 v2 (AC1750 DB Wi-Fi)
+belkin_f9k1115-v2 | Belkin | F9K1115 v2 (AC1750 DB Wi-Fi) | Belkin F9K1115 v2 (AC1750 DB Wi-Fi)
+buffalo_bhr-4grv | Buffalo | BHR-4GRV | Buffalo BHR-4GRV
+buffalo_bhr-4grv2 | Buffalo | BHR-4GRV2 | Buffalo BHR-4GRV2
+buffalo_wzr-450hp2 | Buffalo | WZR-450HP2 | Buffalo WZR-450HP2
+buffalo_wzr-600dhp | Buffalo | WZR-600DHP | Buffalo WZR-600DHP
+buffalo_wzr-hp-ag300h | Buffalo | WZR-HP-AG300H | Buffalo WZR-HP-AG300H
+buffalo_wzr-hp-g300nh-rb | Buffalo | WZR-HP-G300NH (RTL8366RB switch) | Buffalo WZR-HP-G300NH (RTL8366RB switch)
+buffalo_wzr-hp-g300nh-s | Buffalo | WZR-HP-G300NH (RTL8366S switch) | Buffalo WZR-HP-G300NH (RTL8366S switch)
+buffalo_wzr-hp-g302h-a1a0 | Buffalo | WZR-HP-G302H | Buffalo WZR-HP-G302H (A1A0)
+buffalo_wzr-hp-g450h | Buffalo | WZR-HP-G450H/WZR-450HP | Buffalo WZR-HP-G450H/WZR-450HP
+comfast_cf-e110n-v2 | COMFAST | CF-E110N | COMFAST CF-E110N (v2)
+comfast_cf-e120a-v3 | COMFAST | CF-E120A | COMFAST CF-E120A (v3)
+comfast_cf-e130n-v2 | COMFAST | CF-E130N | COMFAST CF-E130N (v2)
+comfast_cf-e313ac | COMFAST | CF-E313AC | COMFAST CF-E313AC
+comfast_cf-e314n-v2 | COMFAST | CF-E314N | COMFAST CF-E314N (v2)
+comfast_cf-e355ac-v2 | COMFAST | CF-E355AC | COMFAST CF-E355AC (v2)
+comfast_cf-e375ac | COMFAST | CF-E375AC | COMFAST CF-E375AC
+comfast_cf-e380ac-v2 | COMFAST | CF-E380AC | COMFAST CF-E380AC (v2)
+comfast_cf-e5 | COMFAST | CF-E5/E7 | COMFAST CF-E5/E7
+comfast_cf-e560ac | COMFAST | CF-E560AC | COMFAST CF-E560AC
+comfast_cf-ew71-v2 | COMFAST | CF-EW71 | COMFAST CF-EW71 (v2)
+comfast_cf-ew72 | COMFAST | CF-EW72 | COMFAST CF-EW72
+comfast_cf-wr650ac-v1 | COMFAST | CF-WR650AC | COMFAST CF-WR650AC (v1)
+comfast_cf-wr650ac-v2 | COMFAST | CF-WR650AC | COMFAST CF-WR650AC (v2)
+comfast_cf-wr752ac-v1 | COMFAST | CF-WR752AC | COMFAST CF-WR752AC (v1)
+compex_wpj344-16m | Compex | WPJ344 | Compex WPJ344 (16M)
+compex_wpj531-16m | Compex | WPJ531 | Compex WPJ531 (16M)
+compex_wpj558-16m | Compex | WPJ558 | Compex WPJ558 (16M)
+compex_wpj563 | Compex | WPJ563 | Compex WPJ563
+dell_apl26-0ae | Dell | SonicPoint | Dell SonicPoint (ACe (APL26-0AE))
+devolo_dlan-pro-1200plus-ac | devolo | dLAN pro 1200+ WiFi ac | devolo dLAN pro 1200+ WiFi ac
+devolo_dvl1200e | devolo | WiFi pro 1200e | devolo WiFi pro 1200e
+devolo_dvl1200i | devolo | WiFi pro 1200i | devolo WiFi pro 1200i
+devolo_dvl1750c | devolo | WiFi pro 1750c | devolo WiFi pro 1750c
+devolo_dvl1750e | devolo | WiFi pro 1750e | devolo WiFi pro 1750e
+devolo_dvl1750i | devolo | WiFi pro 1750i | devolo WiFi pro 1750i
+devolo_dvl1750x | devolo | WiFi pro 1750x | devolo WiFi pro 1750x
+devolo_magic-2-wifi | devolo | Magic 2 WiFi | devolo Magic 2 WiFi
+dlink_covr-c1200-a1 | D-Link | COVR-C1200 | D-Link COVR-C1200 (A1)
+dlink_covr-p2500-a1 | D-Link | COVR-P2500 | D-Link COVR-P2500 (A1)
+dlink_dap-1330-a1 | D-Link | DAP-1330 | D-Link DAP-1330 (A1)
+dlink_dap-1365-a1 | D-Link | DAP-1365 | D-Link DAP-1365 (A1)
+dlink_dap-2230-a1 | D-Link | DAP-2230 | D-Link DAP-2230 (A1)
+dlink_dap-2660-a1 | D-Link | DAP-2660 | D-Link DAP-2660 (A1)
+dlink_dap-2680-a1 | D-Link | DAP-2680 | D-Link DAP-2680 (A1)
+dlink_dap-2695-a1 | D-Link | DAP-2695 | D-Link DAP-2695 (A1)
+dlink_dap-3320-a1 | D-Link | DAP-3320 | D-Link DAP-3320 (A1)
+dlink_dap-3662-a1 | D-Link | DAP-3662 | D-Link DAP-3662 (A1)
+dlink_dch-g020-a1 | D-Link | DCH-G020 | D-Link DCH-G020 (A1)
+dlink_dir-505 | D-Link | DIR-505 | D-Link DIR-505
+dlink_dir-629-a1 | D-Link | DIR-629 | D-Link DIR-629 (A1)
+dlink_dir-825-b1 | D-Link | DIR-825 | D-Link DIR-825 (B1)
+dlink_dir-825-c1 | D-Link | DIR-825 | D-Link DIR-825 (C1)
+dlink_dir-835-a1 | D-Link | DIR-835 | D-Link DIR-835 (A1)
+dlink_dir-842-c1 | D-Link | DIR-842 | D-Link DIR-842 (C1)
+dlink_dir-842-c2 | D-Link | DIR-842 | D-Link DIR-842 (C2)
+dlink_dir-842-c3 | D-Link | DIR-842 | D-Link DIR-842 (C3)
+elecom_wab-i1750-ps | ELECOM | WAB-I1750-PS | ELECOM WAB-I1750-PS
+elecom_wab-s1167-ps | ELECOM | WAB-S1167-PS | ELECOM WAB-S1167-PS
+elecom_wab-s600-ps | ELECOM | WAB-S600-PS | ELECOM WAB-S600-PS
+elecom_wrc-1750ghbk2-i | ELECOM | WRC-1750GHBK2-I/C | ELECOM WRC-1750GHBK2-I/C
+elecom_wrc-300ghbk2-i | ELECOM | WRC-300GHBK2-I | ELECOM WRC-300GHBK2-I
+embeddedwireless_balin | Embedded Wireless | Balin | Embedded Wireless Balin
+embeddedwireless_dorin | Embedded Wireless | Dorin | Embedded Wireless Dorin
+engenius_eap1200h | EnGenius | EAP1200H | EnGenius EAP1200H
+engenius_eap1750h | EnGenius | EAP1750H | EnGenius EAP1750H
+engenius_eap300-v2 | EnGenius | EAP300 | EnGenius EAP300 (v2)
+engenius_eap600 | EnGenius | EAP600 | EnGenius EAP600
+engenius_ecb1200 | EnGenius | ECB1200 | EnGenius ECB1200
+engenius_ecb1750 | EnGenius | ECB1750 | EnGenius ECB1750
+engenius_ecb600 | EnGenius | ECB600 | EnGenius ECB600
+engenius_ens1750 | EnGenius | ENS1750 | EnGenius ENS1750
+engenius_ens202ext-v1 | EnGenius | ENS202EXT | EnGenius ENS202EXT (v1)
+engenius_enstationac-v1 | EnGenius | EnStationAC | EnGenius EnStationAC (v1)
+engenius_epg5000 | EnGenius | EPG5000 | EnGenius EPG5000
+engenius_esr1200 | EnGenius | ESR1200 | EnGenius ESR1200
+engenius_esr1750 | EnGenius | ESR1750 | EnGenius ESR1750
+engenius_esr900 | EnGenius | ESR900 | EnGenius ESR900
+engenius_ews511ap | EnGenius | EWS511AP | EnGenius EWS511AP
+engenius_ews660ap | EnGenius | EWS660AP | EnGenius EWS660AP
+enterasys_ws-ap3705i | Enterasys | WS-AP3705i | Enterasys WS-AP3705i
+etactica_eg200 | eTactica | EG200 | eTactica EG200
+extreme-networks_ws-ap3805i | Extreme Networks | WS-AP3805i | Extreme Networks WS-AP3805i
+fortinet_fap-220-b | Fortinet | FAP-220-B | Fortinet FAP-220-B
+fortinet_fap-221-b | Fortinet | FAP-221-B | Fortinet FAP-221-B
+glinet_6408 | GL.iNet | 6408 | GL.iNet 6408
+glinet_6416 | GL.iNet | 6416 | GL.iNet 6416
+glinet_gl-ar150 | GL.iNet | GL-AR150 | GL.iNet GL-AR150
+glinet_gl-ar300m-lite | GL.iNet | GL-AR300M | GL.iNet GL-AR300M (Lite)
+glinet_gl-ar300m16 | GL.iNet | GL-AR300M16 | GL.iNet GL-AR300M16
+glinet_gl-ar750 | GL.iNet | GL-AR750 | GL.iNet GL-AR750
+glinet_gl-mifi | GL.iNET | GL-MiFi | GL.iNET GL-MiFi
+glinet_gl-usb150 | GL.iNET | GL-USB150 | GL.iNET GL-USB150
+glinet_gl-x300b | GL.iNet | GL-X300B | GL.iNet GL-X300B
+glinet_gl-x750 | GL.iNet | GL-X750 | GL.iNet GL-X750
+hak5_lan-turtle | Hak5 | LAN Turtle | Hak5 LAN Turtle
+hak5_packet-squirrel | Hak5 | Packet Squirrel | Hak5 Packet Squirrel
+hak5_wifi-pineapple-nano | Hak5 | WiFi Pineapple NANO | Hak5 WiFi Pineapple NANO
+hiwifi_hc6361 | HiWiFi | HC6361 | HiWiFi HC6361
+huawei_ap5030dn | Huawei | AP5030DN | Huawei AP5030DN
+huawei_ap6010dn | Huawei | AP6010DN | Huawei AP6010DN
+iodata_etg3-r | I-O DATA | ETG3-R | I-O DATA ETG3-R
+iodata_wn-ac1167dgr | I-O DATA | WN-AC1167DGR | I-O DATA WN-AC1167DGR
+iodata_wn-ac1600dgr | I-O DATA | WN-AC1600DGR | I-O DATA WN-AC1600DGR
+iodata_wn-ac1600dgr2 | I-O DATA | WN-AC1600DGR2/DGR3 | I-O DATA WN-AC1600DGR2/DGR3
+iodata_wn-ag300dgr | I-O DATA | WN-AG300DGR | I-O DATA WN-AG300DGR
+jjplus_ja76pf2 | jjPlus | JA76PF2 | jjPlus JA76PF2
+jjplus_jwap230 | jjPlus | JWAP230 | jjPlus JWAP230
+joyit_jt-or750i | Joy-IT | JT-OR750i | Joy-IT JT-OR750i
+kuwfi_c910 | KuWFi | C910 | KuWFi C910
+kuwfi_n650 | KuWFi | N650 | KuWFi N650
+letv_lba-047-ch | Letv | LBA-047-CH | Letv LBA-047-CH
+librerouter_librerouter-v1 | Librerouter | LibreRouter | Librerouter LibreRouter (v1)
+meraki_mr12 | Meraki | MR12 | Meraki MR12
+meraki_mr16 | Meraki | MR16 | Meraki MR16
+mercury_mw4530r-v1 | Mercury | MW4530R | Mercury MW4530R (v1)
+moxa_awk-1137c | MOXA | AWK-1137C | MOXA AWK-1137C
+nec_wf1200cr | NEC | Aterm WF1200CR | NEC Aterm WF1200CR
+nec_wg1200cr | NEC | Aterm WG1200CR | NEC Aterm WG1200CR
+nec_wg1400hp | NEC | Aterm WG1400HP | NEC Aterm WG1400HP
+nec_wg1800hp | NEC | Aterm WG1800HP | NEC Aterm WG1800HP
+nec_wg1800hp2 | NEC | Aterm WG1800HP2 | NEC Aterm WG1800HP2
+nec_wg800hp | NEC | Aterm WG800HP | NEC Aterm WG800HP
+netgear_ex7300 | NETGEAR | EX7300 | NETGEAR EX7300
+netgear_ex7300-v2 | NETGEAR | EX7300 | NETGEAR EX7300 (v2)
+netgear_wndap360 | NETGEAR | WNDAP360 | NETGEAR WNDAP360
+netgear_wndr3700 | NETGEAR | WNDR3700 | NETGEAR WNDR3700 (v1)
+netgear_wndr3700-v2 | NETGEAR | WNDR3700 | NETGEAR WNDR3700 (v2)
+netgear_wndr3800 | NETGEAR | WNDR3800 | NETGEAR WNDR3800
+netgear_wndr3800ch | NETGEAR | WNDR3800CH | NETGEAR WNDR3800CH
+netgear_wndrmac-v1 | NETGEAR | WNDRMAC | NETGEAR WNDRMAC (v1)
+netgear_wndrmac-v2 | NETGEAR | WNDRMAC | NETGEAR WNDRMAC (v2)
+netgear_wnr2200-16m | NETGEAR | WNR2200 | NETGEAR WNR2200 (16M)
+netgear_wnr2200-8m | NETGEAR | WNR2200 | NETGEAR WNR2200 (8M)
+ocedo_koala | Ocedo | Koala | Ocedo Koala
+ocedo_raccoon | Ocedo | Raccoon | Ocedo Raccoon
+ocedo_ursus | Ocedo | Ursus | Ocedo Ursus
+onion_omega | Onion | Omega | Onion Omega
+openmesh_a40 | OpenMesh | A40 | OpenMesh A40
+openmesh_a60 | OpenMesh | A60 | OpenMesh A60
+openmesh_mr1750-v1 | OpenMesh | MR1750 | OpenMesh MR1750 (v1)
+openmesh_mr1750-v2 | OpenMesh | MR1750 | OpenMesh MR1750 (v2)
+openmesh_mr600-v1 | OpenMesh | MR600 | OpenMesh MR600 (v1)
+openmesh_mr600-v2 | OpenMesh | MR600 | OpenMesh MR600 (v2)
+openmesh_mr900-v1 | OpenMesh | MR900 | OpenMesh MR900 (v1)
+openmesh_mr900-v2 | OpenMesh | MR900 | OpenMesh MR900 (v2)
+openmesh_om2p-hs-v1 | OpenMesh | OM2P-HS | OpenMesh OM2P-HS (v1)
+openmesh_om2p-hs-v2 | OpenMesh | OM2P-HS | OpenMesh OM2P-HS (v2)
+openmesh_om2p-hs-v3 | OpenMesh | OM2P-HS | OpenMesh OM2P-HS (v3)
+openmesh_om2p-hs-v4 | OpenMesh | OM2P-HS | OpenMesh OM2P-HS (v4)
+openmesh_om2p-lc | OpenMesh | OM2P-LC | OpenMesh OM2P-LC
+openmesh_om2p-v1 | OpenMesh | OM2P | OpenMesh OM2P (v1)
+openmesh_om2p-v2 | OpenMesh | OM2P | OpenMesh OM2P (v2)
+openmesh_om2p-v4 | OpenMesh | OM2P | OpenMesh OM2P (v4)
+openmesh_om5p | OpenMesh | OM5P | OpenMesh OM5P
+openmesh_om5p-ac-v1 | OpenMesh | OM5P-AC | OpenMesh OM5P-AC (v1)
+openmesh_om5p-ac-v2 | OpenMesh | OM5P-AC | OpenMesh OM5P-AC (v2)
+openmesh_om5p-an | OpenMesh | OM5P-AN | OpenMesh OM5P-AN
+pcs_cap324 | PowerCloud Systems | CAP324 | PowerCloud Systems CAP324
+pcs_cr3000 | PowerCloud Systems | CR3000 | PowerCloud Systems CR3000
+pcs_cr5000 | PowerCloud Systems | CR5000 | PowerCloud Systems CR5000
+phicomm_k2t | Phicomm | K2T | Phicomm K2T
+pisen_ts-d084 | PISEN | TS-D084 | PISEN TS-D084
+pisen_wmb001n | PISEN | WMB001N | PISEN WMB001N
+pisen_wmm003n | PISEN | Cloud Easy Power (WMM003N) | PISEN Cloud Easy Power (WMM003N)
+plasmacloud_pa300 | Plasma Cloud | PA300 | Plasma Cloud PA300
+plasmacloud_pa300e | Plasma Cloud | PA300E | Plasma Cloud PA300E
+qca_ap143-16m | Qualcomm Atheros | AP143 | Qualcomm Atheros AP143 ((16M))
+qca_ap143-8m | Qualcomm Atheros | AP143 | Qualcomm Atheros AP143 ((8M))
+qihoo_c301 | Qihoo | C301 | Qihoo C301
+qxwlan_e1700ac-v2-16m | Qxwlan | E1700AC | Qxwlan E1700AC (v2 (16M))
+qxwlan_e1700ac-v2-8m | Qxwlan | E1700AC | Qxwlan E1700AC (v2 (8M))
+qxwlan_e558-v2-16m | Qxwlan | E558 | Qxwlan E558 (v2 (16M))
+qxwlan_e558-v2-8m | Qxwlan | E558 | Qxwlan E558 (v2 (8M))
+qxwlan_e600g-v2-16m | Qxwlan | E600G | Qxwlan E600G (v2 (16M))
+qxwlan_e600g-v2-8m | Qxwlan | E600G | Qxwlan E600G (v2 (8M))
+qxwlan_e600gac-v2-16m | Qxwlan | E600GAC | Qxwlan E600GAC (v2 (16M))
+qxwlan_e600gac-v2-8m | Qxwlan | E600GAC | Qxwlan E600GAC (v2 (8M))
+qxwlan_e750a-v4-16m | Qxwlan | E750A | Qxwlan E750A (v4 (16M))
+qxwlan_e750a-v4-8m | Qxwlan | E750A | Qxwlan E750A (v4 (8M))
+qxwlan_e750g-v8-16m | Qxwlan | E750G | Qxwlan E750G (v8 (16M))
+qxwlan_e750g-v8-8m | Qxwlan | E750G | Qxwlan E750G (v8 (8M))
+rosinson_wr818 | Rosinson | WR818 | Rosinson WR818
+ruckus_zf7025 | Ruckus | ZoneFlex 7025 | Ruckus ZoneFlex 7025
+ruckus_zf7321 | Ruckus | ZoneFlex 7321[-U] | Ruckus ZoneFlex 7321[-U]
+ruckus_zf7341 | Ruckus | ZoneFlex 7341[-U] | Ruckus ZoneFlex 7341[-U]
+ruckus_zf7351 | Ruckus | ZoneFlex 7351[-U] | Ruckus ZoneFlex 7351[-U]
+ruckus_zf7363 | Ruckus | ZoneFlex 7363[-U] | Ruckus ZoneFlex 7363[-U]
+ruckus_zf7372 | Ruckus | ZoneFlex 7352/7372[-E/-U] | Ruckus ZoneFlex 7352/7372[-E/-U]
+samsung_wam250 | Samsung | WAM250 | Samsung WAM250
+siemens_ws-ap3610 | Siemens | WS-AP3610 | Siemens WS-AP3610
+sitecom_wlr-7100 | Sitecom | WLR-7100 | Sitecom WLR-7100
+sitecom_wlr-8100 | Sitecom | WLR-8100 | Sitecom WLR-8100
+sophos_ap100 | Sophos | AP100 | Sophos AP100
+sophos_ap100c | Sophos | AP100C | Sophos AP100C
+sophos_ap15 | Sophos | AP15 | Sophos AP15
+sophos_ap15c | Sophos | AP15C | Sophos AP15C
+sophos_ap55 | Sophos | AP55 | Sophos AP55
+sophos_ap55c | Sophos | AP55C | Sophos AP55C
+telco_t1 | Telco | T1 | Telco T1
+teltonika_rut230-v1 | Teltonika | RUT230 | Teltonika RUT230 (v1)
+teltonika_rut300 | Teltonika | RUT300 | Teltonika RUT300
+teltonika_rut955 | Teltonika | RUT955 | Teltonika RUT955
+teltonika_rut955-h7v3c0 | Teltonika | RUT955 | Teltonika RUT955 (H7V3C0)
+tplink_archer-a7-v5 | TP-Link | Archer A7 | TP-Link Archer A7 (v5)
+tplink_archer-a9-v6 | TP-Link | Archer A9 | TP-Link Archer A9 (v6)
+tplink_archer-c2-v3 | TP-Link | Archer C2 | TP-Link Archer C2 (v3)
+tplink_archer-c25-v1 | TP-Link | Archer C25 | TP-Link Archer C25 (v1)
+tplink_archer-c5-v1 | TP-Link | Archer C5 | TP-Link Archer C5 (v1)
+tplink_archer-c58-v1 | TP-Link | Archer C58 | TP-Link Archer C58 (v1)
+tplink_archer-c59-v1 | TP-Link | Archer C59 | TP-Link Archer C59 (v1)
+tplink_archer-c59-v2 | TP-Link | Archer C59 | TP-Link Archer C59 (v2)
+tplink_archer-c6-v2 | TP-Link | Archer C6 | TP-Link Archer C6 (v2 (EU/RU/JP))
+tplink_archer-c6-v2-us | TP-Link | Archer C6 | TP-Link Archer C6 (v2 (US))
+tplink_archer-c60-v1 | TP-Link | Archer C60 | TP-Link Archer C60 (v1)
+tplink_archer-c60-v2 | TP-Link | Archer C60 | TP-Link Archer C60 (v2)
+tplink_archer-c60-v3 | TP-Link | Archer C60 | TP-Link Archer C60 (v3)
+tplink_archer-c7-v1 | TP-Link | Archer C7 | TP-Link Archer C7 (v1)
+tplink_archer-c7-v2 | TP-Link | Archer C7 | TP-Link Archer C7 (v2)
+tplink_archer-c7-v4 | TP-Link | Archer C7 | TP-Link Archer C7 (v4)
+tplink_archer-c7-v5 | TP-Link | Archer C7 | TP-Link Archer C7 (v5)
+tplink_archer-d50-v1 | TP-Link | Archer D50 | TP-Link Archer D50 (v1)
+tplink_archer-d7-v1 | TP-Link | Archer D7 | TP-Link Archer D7 (v1)
+tplink_archer-d7b-v1 | TP-Link | Archer D7b | TP-Link Archer D7b (v1)
+tplink_cpe210-v1 | TP-Link | CPE210 | TP-Link CPE210 (v1)
+tplink_cpe210-v2 | TP-Link | CPE210 | TP-Link CPE210 (v2)
+tplink_cpe210-v3 | TP-Link | CPE210 | TP-Link CPE210 (v3)
+tplink_cpe220-v2 | TP-Link | CPE220 | TP-Link CPE220 (v2)
+tplink_cpe220-v3 | TP-Link | CPE220 | TP-Link CPE220 (v3)
+tplink_cpe510-v1 | TP-Link | CPE510 | TP-Link CPE510 (v1)
+tplink_cpe510-v2 | TP-Link | CPE510 | TP-Link CPE510 (v2)
+tplink_cpe510-v3 | TP-Link | CPE510 | TP-Link CPE510 (v3)
+tplink_cpe605-v1 | TP-Link | CPE605 | TP-Link CPE605 (v1)
+tplink_cpe610-v1 | TP-Link | CPE610 | TP-Link CPE610 (v1)
+tplink_cpe610-v2 | TP-Link | CPE610 | TP-Link CPE610 (v2)
+tplink_cpe710-v1 | TP-Link | CPE710 | TP-Link CPE710 (v1)
+tplink_cpe710-v2 | TP-Link | CPE710 | TP-Link CPE710 (v2)
+tplink_deco-m4r-v1 | TP-Link | Deco M4R | TP-Link Deco M4R (v1)
+tplink_deco-s4-v2 | TP-Link | Deco S4 | TP-Link Deco S4 (v2)
+tplink_eap225-outdoor-v1 | TP-Link | EAP225-Outdoor | TP-Link EAP225-Outdoor (v1)
+tplink_eap225-outdoor-v3 | TP-Link | EAP225-Outdoor | TP-Link EAP225-Outdoor (v3)
+tplink_eap225-v1 | TP-Link | EAP225 | TP-Link EAP225 (v1)
+tplink_eap225-v3 | TP-Link | EAP225 | TP-Link EAP225 (v3)
+tplink_eap225-v4 | TP-Link | EAP225 | TP-Link EAP225 (v4)
+tplink_eap225-wall-v2 | TP-Link | EAP225-Wall | TP-Link EAP225-Wall (v2)
+tplink_eap245-v1 | TP-Link | EAP245 | TP-Link EAP245 (v1)
+tplink_eap245-v3 | TP-Link | EAP245 | TP-Link EAP245 (v3)
+tplink_re350k-v1 | TP-Link | RE350K | TP-Link RE350K (v1)
+tplink_re450-v3 | TP-Link | RE450 | TP-Link RE450 (v3)
+tplink_re455-v1 | TP-Link | RE455 | TP-Link RE455 (v1)
+tplink_tl-mr6400-v1 | TP-Link | TL-MR6400 | TP-Link TL-MR6400 (v1)
+tplink_tl-wa1201-v2 | TP-Link | TL-WA1201 | TP-Link TL-WA1201 (v2)
+tplink_tl-wdr3500-v1 | TP-Link | TL-WDR3500 | TP-Link TL-WDR3500 (v1)
+tplink_tl-wdr3600-v1 | TP-Link | TL-WDR3600 | TP-Link TL-WDR3600 (v1)
+tplink_tl-wdr4300-v1 | TP-Link | TL-WDR4300 | TP-Link TL-WDR4300 (v1)
+tplink_tl-wdr4300-v1-il | TP-Link | TL-WDR4300 | TP-Link TL-WDR4300 (v1 (IL))
+tplink_tl-wdr4310-v1 | TP-Link | TL-WDR4310 | TP-Link TL-WDR4310 (v1)
+tplink_tl-wdr4900-v2 | TP-Link | TL-WDR4900 | TP-Link TL-WDR4900 (v2)
+tplink_tl-wdr6500-v2 | TP-Link | TL-WDR6500 | TP-Link TL-WDR6500 (v2)
+tplink_tl-wdr7500-v3 | TP-Link | TL-WDR7500 | TP-Link TL-WDR7500 (v3)
+tplink_tl-wpa8630-v1 | TP-Link | TL-WPA8630 | TP-Link TL-WPA8630 (v1)
+tplink_tl-wr1043n-v5 | TP-Link | TL-WR1043N | TP-Link TL-WR1043N (v5)
+tplink_tl-wr1043nd-v2 | TP-Link | TL-WR1043N/ND | TP-Link TL-WR1043N/ND (v2)
+tplink_tl-wr1043nd-v3 | TP-Link | TL-WR1043N/ND | TP-Link TL-WR1043N/ND (v3)
+tplink_tl-wr1043nd-v4 | TP-Link | TL-WR1043N/ND | TP-Link TL-WR1043N/ND (v4)
+tplink_tl-wr1045nd-v2 | TP-Link | TL-WR1045ND | TP-Link TL-WR1045ND (v2)
+tplink_tl-wr2543-v1 | TP-Link | TL-WR2543N/ND | TP-Link TL-WR2543N/ND (v1)
+tplink_tl-wr810n-v1 | TP-Link | TL-WR810N | TP-Link TL-WR810N (v1)
+tplink_tl-wr841hp-v2 | TP-Link | TL-WR841HP | TP-Link TL-WR841HP (v2)
+tplink_tl-wr841hp-v3 | TP-Link | TL-WR841HP | TP-Link TL-WR841HP (v3)
+tplink_tl-wr842n-v3 | TP-Link | TL-WR842N | TP-Link TL-WR842N (v3)
+tplink_tl-wr902ac-v1 | TP-Link | TL-WR902AC | TP-Link TL-WR902AC (v1)
+tplink_tl-wr941hp-v1 | TP-Link | TL-WR941HP | TP-Link TL-WR941HP (v1)
+tplink_wbs210-v1 | TP-Link | WBS210 | TP-Link WBS210 (v1)
+tplink_wbs210-v2 | TP-Link | WBS210 | TP-Link WBS210 (v2)
+tplink_wbs510-v1 | TP-Link | WBS510 | TP-Link WBS510 (v1)
+tplink_wbs510-v2 | TP-Link | WBS510 | TP-Link WBS510 (v2)
+trendnet_tew-673gru | Trendnet | TEW-673GRU | Trendnet TEW-673GRU (v1.0R)
+trendnet_tew-823dru | Trendnet | TEW-823DRU | Trendnet TEW-823DRU (v1.0R)
+ubnt_aircube-ac | Ubiquiti | airCube AC | Ubiquiti airCube AC
+ubnt_aircube-isp | Ubiquiti | airCube ISP | Ubiquiti airCube ISP
+ubnt_amplifi-router-hd | Ubiquiti | AmpliFi Router HD | Ubiquiti AmpliFi Router HD
+ubnt_bullet-ac | Ubiquiti | Bullet AC | Ubiquiti Bullet AC
+ubnt_bullet-m-xw | Ubiquiti | Bullet M | Ubiquiti Bullet M (XW)
+ubnt_edgeswitch-5xp | Ubiquiti | EdgeSwitch 5XP | Ubiquiti EdgeSwitch 5XP
+ubnt_edgeswitch-8xp | Ubiquiti | EdgeSwitch 8XP | Ubiquiti EdgeSwitch 8XP
+ubnt_lap-120 | Ubiquiti | LiteAP ac (LAP-120) | Ubiquiti LiteAP ac (LAP-120)
+ubnt_litebeam-ac-gen2 | Ubiquiti | LiteBeam AC | Ubiquiti LiteBeam AC (Gen2)
+ubnt_litebeam-m5-xw | Ubiquiti | LiteBeam M5 | Ubiquiti LiteBeam M5 (XW)
+ubnt_nanobeam-ac | Ubiquiti | NanoBeam AC | Ubiquiti NanoBeam AC (Gen1)
+ubnt_nanobeam-ac-gen2 | Ubiquiti | NanoBeam AC | Ubiquiti NanoBeam AC (Gen2)
+ubnt_nanobeam-ac-xc | Ubiquiti | NanoBeam AC | Ubiquiti NanoBeam AC (Gen1 (XC))
+ubnt_nanostation-ac | Ubiquiti | Nanostation AC | Ubiquiti Nanostation AC
+ubnt_nanostation-ac-loco | Ubiquiti | Nanostation AC loco | Ubiquiti Nanostation AC loco
+ubnt_nanostation-loco-m-xw | Ubiquiti | Nanostation Loco M | Ubiquiti Nanostation Loco M (XW)
+ubnt_nanostation-m-xw | Ubiquiti | Nanostation M | Ubiquiti Nanostation M (XW)
+ubnt_powerbeam-5ac-500 | Ubiquiti | PowerBeam 5AC | Ubiquiti PowerBeam 5AC (500)
+ubnt_powerbeam-5ac-gen2 | Ubiquiti | PowerBeam 5AC | Ubiquiti PowerBeam 5AC (Gen2)
+ubnt_powerbeam-m2-xw | Ubiquiti | PowerBeam M2 | Ubiquiti PowerBeam M2 (XW)
+ubnt_powerbeam-m5-xw | Ubiquiti | PowerBeam M5 | Ubiquiti PowerBeam M5 (XW)
+ubnt_powerbridge-m | Ubiquiti | PowerBridge M | Ubiquiti PowerBridge M (XM)
+ubnt_rocket-5ac-lite | Ubiquiti | Rocket 5AC | Ubiquiti Rocket 5AC (Lite)
+ubnt_rocket-m | Ubiquiti | Rocket M | Ubiquiti Rocket M (XM)
+ubnt_routerstation | Ubiquiti | RouterStation | Ubiquiti RouterStation
+ubnt_routerstation-pro | Ubiquiti | RouterStation Pro | Ubiquiti RouterStation Pro
+ubnt_uk-ultra | Ubiquiti | UniFi Swiss Army Knife Ultra | Ubiquiti UniFi Swiss Army Knife Ultra
+ubnt_unifi-ap | Ubiquiti | UniFi AP | Ubiquiti UniFi AP
+ubnt_unifi-ap-lr | Ubiquiti | UniFi AP | Ubiquiti UniFi AP (LR)
+ubnt_unifi-ap-outdoor-plus | Ubiquiti | UniFi AP Outdoor+ | Ubiquiti UniFi AP Outdoor+
+ubnt_unifi-ap-pro | Ubiquiti | UniFi AP Pro | Ubiquiti UniFi AP Pro
+ubnt_unifiac-lite | Ubiquiti | UniFi AC Lite | Ubiquiti UniFi AC Lite
+ubnt_unifiac-lr | Ubiquiti | UniFi AC LR | Ubiquiti UniFi AC LR
+ubnt_unifiac-mesh | Ubiquiti | UniFi AC Mesh | Ubiquiti UniFi AC Mesh
+ubnt_unifiac-mesh-pro | Ubiquiti | UniFi AC Mesh Pro | Ubiquiti UniFi AC Mesh Pro
+ubnt_unifiac-pro | Ubiquiti | UniFi AC Pro | Ubiquiti UniFi AC Pro
+wallys_dr531 | Wallys | DR531 | Wallys DR531
+watchguard_ap100 | WatchGuard | AP100 | WatchGuard AP100
+watchguard_ap200 | WatchGuard | AP200 | WatchGuard AP200
+watchguard_ap300 | WatchGuard | AP300 | WatchGuard AP300
+wd_mynet-n600 | Western Digital | My Net N600 | Western Digital My Net N600
+wd_mynet-n750 | Western Digital | My Net N750 | Western Digital My Net N750
+winchannel_wb2000 | Winchannel | WB2000 | Winchannel WB2000
+xiaomi_aiot-ac2350 | Xiaomi | AIoT AC2350 | Xiaomi AIoT AC2350
+xiaomi_mi-router-4q | Xiaomi | Mi Router 4Q | Xiaomi Mi Router 4Q
+yuncore_a770 | YunCore | A770 | YunCore A770
+yuncore_a782 | YunCore | A782 | YunCore A782
+yuncore_a930 | YunCore | A930 | YunCore A930
+yuncore_xd3200 | YunCore | XD3200 | YunCore XD3200
+yuncore_xd4200 | YunCore | XD4200 | YunCore XD4200
+zbtlink_zbt-wd323 | ZBT | WD323 | ZBT WD323
+zyxel_nbg6616 | Zyxel | NBG6616 | Zyxel NBG6616
+zyxel_nwa1100-nh | Zyxel | NWA1100 | Zyxel NWA1100 (NH)
+zyxel_nwa1121-ni | Zyxel | NWA1121 | Zyxel NWA1121 (NI)
+zyxel_nwa1123-ac | Zyxel | NWA1123 | Zyxel NWA1123 (AC)
+zyxel_nwa1123-ni | Zyxel | NWA1123 | Zyxel NWA1123 (NI)

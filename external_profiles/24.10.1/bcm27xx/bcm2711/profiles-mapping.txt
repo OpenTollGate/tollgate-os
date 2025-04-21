@@ -1,0 +1,6 @@
+# Device ID to Name mapping
+# Format: device_id | vendor | model | full_name
+# Generated from: /Users/macbook/src/tollgate-os/external_profiles/24.10.1/bcm27xx/bcm2711/profiles.json
+# Generated on: Mon Apr 21 11:53:34 CEST 2025
+
+rpi-4 | Raspberry Pi | 4B/400/CM4 | Raspberry Pi 4B/400/CM4 ((64bit))
