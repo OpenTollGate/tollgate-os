@@ -448,26 +448,79 @@ jobs:
         if: steps.cache-docker.outputs.cache-hit != 'true'
         run: |
           cd $BUILDDIR
+          echo "🔍 Current working directory: $(pwd)"
+          echo "📂 BUILDDIR contents before download:"
+          ls -la ./ || true
+          
           if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
-            echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }})"
-            curl -L -C - -O "$DOWNLOAD_URL"
+            echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }}) from $DOWNLOAD_URL"
+            curl -L -C - -o "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" "$DOWNLOAD_URL"
             
-            echo "📦 Extracting OpenWRT ImageBuilder"
-            if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
-              echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-              tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+            # Verify download was successful
+            if [ -f "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" ]; then
+              echo "✅ Successfully downloaded ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+              echo "📊 Downloaded file size: $(du -h ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT} | cut -f1)"
+              
+              # Make sure the target directory exists
+              mkdir -p "${DOCKER_CONTEXT}"
+              echo "🔧 Created Docker context directory: ${DOCKER_CONTEXT}"
+              
+              echo "📦 Extracting OpenWRT ImageBuilder to ${DOCKER_CONTEXT}"
+              if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
+                echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+                tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              else
+                echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+                tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              fi
+              
+              # Check if extraction was successful
+              if [ $? -ne 0 ]; then
+                echo "❌ Failed to extract ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+                exit 1
+              fi
+              
+              # Verify extracted contents
+              echo "📂 Contents of Docker context directory after extraction:"
+              ls -la "${DOCKER_CONTEXT}"
+              
+              # In some cases, the archive might extract to a differently named directory
+              # Check if we need to create a symlink to match the expected name
+              if [ ! -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+                echo "🔍 Looking for extracted directory inside ${DOCKER_CONTEXT}..."
+                EXTRACTED_DIR=$(find "${DOCKER_CONTEXT}" -maxdepth 1 -type d -name "openwrt-imagebuilder*" | head -1)
+                
+                if [ -n "${EXTRACTED_DIR}" ]; then
+                  echo "✅ Found extracted directory: ${EXTRACTED_DIR}"
+                  echo "Creating symlink from ${EXTRACTED_DIR} to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                  ln -sf "${EXTRACTED_DIR}" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                else
+                  echo "❌ Could not find any openwrt-imagebuilder directory in ${DOCKER_CONTEXT}"
+                  echo "Available directories:"
+                  find "${DOCKER_CONTEXT}" -type d | sort
+                  exit 1
+                fi
+              fi
+              
+              # Final verification
+              if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+                echo "✅ Successfully extracted to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+              else
+                echo "❌ Failed to locate extracted directory at ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                exit 1
+              fi
+              
+              # Create a marker file to indicate this was a fresh setup
+              echo "Cache miss: Setting up fresh Docker environment for ${{ env.PLATFORM }}/${{ env.TYPE }} on $(date)" > "${DOCKER_CONTEXT}/cache-status.txt"
             else
-              echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-              tar xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+              echo "❌ Failed to download ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT} from $DOWNLOAD_URL"
+              exit 1
             fi
-            
-            # Create a marker file to indicate this was a fresh setup
-            echo "Cache miss: Setting up fresh Docker environment for ${{ env.PLATFORM }}/${{ env.TYPE }}" > "${DOCKER_CONTEXT}/cache-status.txt"
           else
-            echo "Error: URL $DOWNLOAD_URL does not exist"
+            echo "❌ Error: URL $DOWNLOAD_URL does not exist"
             exit 1
           fi
-      
+
       # Use cached ImageBuilder
       - name: Use cached ImageBuilder
         if: steps.cache-docker.outputs.cache-hit == 'true'
