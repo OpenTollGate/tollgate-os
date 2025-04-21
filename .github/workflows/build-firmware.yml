@@ -173,15 +173,24 @@ jobs:
           path: firmware_files/
           retention-days: 5
       
-      # Also upload the build logs as artifacts for troubleshooting
-      - name: Upload Build Logs
-        if: always()
+      - name: Upload Base OpenWrt Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ matrix.device.id }}
-          path: build_logs/
+          name: openwrt-firmware-base-${{ matrix.device.id }}
+          path: |
+            firmware_files/*openwrt-*${{ matrix.device.id }}*sysupgrade.bin
+            firmware_files/*openwrt-*${{ matrix.device.id }}*factory*
           retention-days: 5
-      
+
+      - name: Upload TollGate Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-firmware-tollgate-${{ matrix.device.id }}
+          path: |
+            firmware_files/*openwrt-*${{ matrix.device.id }}*tollgate*sysupgrade.bin
+            firmware_files/*openwrt-*${{ matrix.device.id }}*tollgate*factory*
+          retention-days: 5
+
       # Upload each firmware type to Blossom and publish metadata
       - name: Upload Multiple Firmware Types
         id: multi-upload
@@ -205,38 +214,43 @@ jobs:
               
               # Only upload and publish sysupgrade type
               if [ "$TYPE" = "sysupgrade" ]; then
-                echo "📤 Uploading sysupgrade firmware to Blossom..."
-                # Perform upload using the CLI tool (if needed)
-                UPLOAD_RESULT=$(cd /tmp && \
-                  NSEC="${{ secrets.NSECBECH }}" \
-                  /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/blossom-uploader \
-                  -f "$FILE_PATH" \
-                  -u "https://blossom.swissdash.site")
-                echo "Upload result: $UPLOAD_RESULT"
-                # Extract URL and hash from the JSON result
-                BLOSSOM_URL=$(echo "$UPLOAD_RESULT" | jq -r '.url')
-                BLOSSOM_HASH=$(echo "$UPLOAD_RESULT" | jq -r '.hash')
-                if [ -n "$BLOSSOM_URL" ] && [ "$BLOSSOM_URL" != "null" ]; then
-                  echo "✅ Uploaded sysupgrade firmware to $BLOSSOM_URL"
-                  # Publish NIP-94 metadata
-                  echo "📝 Publishing NIP-94 metadata for sysupgrade firmware..."
-                  python3 /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/publish_metadata.py \
-                    --relays "${{ inputs.nostr_relays }}" \
-                    --url "$BLOSSOM_URL" \
-                    --mime-type "application/octet-stream" \
-                    --file-hash "$BLOSSOM_HASH" \
-                    --original-hash "$FILE_HASH" \
-                    --filename "$FILE_NAME" \
-                    --content "TollGate OS sysupgrade firmware for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ matrix.device.id }}, OpenWRT ${{ inputs.version }})" \
-                    --nsec "${{ secrets.NSEC }}" \
-                    --size "$FILE_SIZE" \
-                    --architecture "${{ env.ARCH }}" \
-                    --model "${{ matrix.device.id }}" \
-                    --version "${{ inputs.version }}" \
-                    --firmware-type "$TYPE"
-                  echo "✅ Published metadata for sysupgrade firmware"
+                UPLOADER="/home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/blossom-uploader"
+                if [ -x "$UPLOADER" ]; then
+                  echo "📤 Uploading sysupgrade firmware to Blossom..."
+                  # Perform upload using the CLI tool (if needed)
+                  UPLOAD_RESULT=$(cd /tmp && \
+                    NSEC="${{ secrets.NSECBECH }}" \
+                    "$UPLOADER" \
+                    -f "$FILE_PATH" \
+                    -u "https://blossom.swissdash.site")
+                  echo "Upload result: $UPLOAD_RESULT"
+                  # Extract URL and hash from the JSON result
+                  BLOSSOM_URL=$(echo "$UPLOAD_RESULT" | jq -r '.url')
+                  BLOSSOM_HASH=$(echo "$UPLOAD_RESULT" | jq -r '.hash')
+                  if [ -n "$BLOSSOM_URL" ] && [ "$BLOSSOM_URL" != "null" ]; then
+                    echo "✅ Uploaded sysupgrade firmware to $BLOSSOM_URL"
+                    # Publish NIP-94 metadata
+                    echo "📝 Publishing NIP-94 metadata for sysupgrade firmware..."
+                    python3 /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/publish_metadata.py \
+                      --relays "${{ inputs.nostr_relays }}" \
+                      --url "$BLOSSOM_URL" \
+                      --mime-type "application/octet-stream" \
+                      --file-hash "$BLOSSOM_HASH" \
+                      --original-hash "$FILE_HASH" \
+                      --filename "$FILE_NAME" \
+                      --content "TollGate OS sysupgrade firmware for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ matrix.device.id }}, OpenWRT ${{ inputs.version }})" \
+                      --nsec "${{ secrets.NSEC }}" \
+                      --size "$FILE_SIZE" \
+                      --architecture "${{ env.ARCH }}" \
+                      --model "${{ matrix.device.id }}" \
+                      --version "${{ inputs.version }}" \
+                      --firmware-type "$TYPE"
+                    echo "✅ Published metadata for sysupgrade firmware"
+                  else
+                    echo "❌ Failed to upload sysupgrade firmware"
+                  fi
                 else
-                  echo "❌ Failed to upload sysupgrade firmware"
+                  echo "⚠️ Blossom uploader not found at $UPLOADER, skipping upload."
                 fi
               else
                 echo "ℹ️ Skipping upload for $TYPE firmware (only sysupgrade is processed)"
