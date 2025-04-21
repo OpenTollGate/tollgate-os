@@ -8,11 +8,11 @@ branding:
 
 inputs:
   model:
-    description: 'The device model to build for'
+    description: 'The device model ID to build for (e.g., glinet_gl-mt3000)'
     required: true
   version:
     description: 'OpenWRT version'
-    default: '23.05.3'
+    default: '23.05.5'
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -66,9 +66,41 @@ runs:
           build-essential \
           curl \
           zstd \
-          libssl-dev
+          libssl-dev \
+          jq
         python -m pip install --upgrade pip
         pip install nostr
+
+    - name: Fetch OpenWRT Overview
+      id: fetch-overview
+      uses: ./actions/fetch-overview-json
+      with:
+        version: ${{ inputs.version }}
+
+    - name: Lookup Router Details
+      id: lookup-router
+      uses: ./actions/lookup-router-target
+      with:
+        router-id: ${{ inputs.model }}
+        version: ${{ inputs.version }}
+        
+    - name: Verify Router Was Found
+      shell: bash
+      run: |
+        if [ "${{ steps.lookup-router.outputs.found }}" != "true" ]; then
+          echo "❌ Error: Router ID '${{ inputs.model }}' not found in OpenWRT ${{ inputs.version }}"
+          echo "Available models can be found in the overview.json file"
+          exit 1
+        fi
+        echo "✅ Found router: ${{ steps.lookup-router.outputs.full-name }}"
+        echo "📊 Target architecture: ${{ steps.lookup-router.outputs.target }}"
+
+    - name: Fetch Router Profile
+      id: fetch-profile
+      uses: ./actions/fetch-router-profile
+      with:
+        target: ${{ steps.lookup-router.outputs.target }}
+        version: ${{ inputs.version }}
 
     - name: Set Build Variables
       id: vars
@@ -77,50 +109,51 @@ runs:
         # Create build directory first
         mkdir -p /tmp/openwrt-build
         
-        case "${{ inputs.model }}" in
-          "gl-ar300m")
-            echo "PLATFORM=ath79" >> $GITHUB_ENV
-            echo "TYPE=generic" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=ath79-generic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-ar300m16" >> $GITHUB_ENV
+        # Split target into platform and type
+        PLATFORM=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f1)
+        TYPE=$(echo ${{ steps.lookup-router.outputs.target }} | cut -d'/' -f2)
+        
+        echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
+        echo "TYPE=${TYPE}" >> $GITHUB_ENV
+        echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
+        echo "PROFILE=${{ inputs.model }}" >> $GITHUB_ENV
+        
+        # Set architecture based on platform/target
+        case "${PLATFORM}_${TYPE}" in
+          "ath79_generic"|"ath79_nand")
             echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
             echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
-          "gl-ar300m-nor")
-            echo "PLATFORM=ath79" >> $GITHUB_ENV
-            echo "TYPE=nand" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=ath79-nand" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-ar300m-nor" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
-            echo "EXTRA_PACKAGES=uboot-envtools kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
-            ;;
-          "gl-mt3000")
-            echo "PLATFORM=mediatek" >> $GITHUB_ENV
-            echo "TYPE=filogic" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-mt3000" >> $GITHUB_ENV
+          "mediatek_filogic")
             echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
             echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
             ;;
-          "gl-mt6000")
-            echo "PLATFORM=mediatek" >> $GITHUB_ENV
-            echo "TYPE=filogic" >> $GITHUB_ENV
-            echo "TARGET_DEVICE=mediatek-filogic" >> $GITHUB_ENV
-            echo "PROFILE=glinet_gl-mt6000" >> $GITHUB_ENV
-            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+          "ipq40xx_generic")
+            echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
             echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
-            echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+            ;;
+          "ipq806x_generic")
+            echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            ;;
+          "x86_64")
+            echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
+            ;;
+          "bcm27xx_bcm2711")
+            echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             ;;
           *)
-            echo "Unsupported model: ${{ inputs.model }}" >> $GITHUB_ENV
-            exit 1
+            echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
+            echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+            echo "EXTRA_PACKAGES=kmod-usb2 kmod-usb-core kmod-usb-storage luci luci-ssl iwinfo wpad-wolfssl" >> $GITHUB_ENV
             ;;
         esac
+        
+        # Common settings for all models
+        echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
         echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
-
 
     - name: Setup Build Directory
       shell: bash
@@ -196,7 +229,7 @@ runs:
         
         # Add U-Boot config for supported devices
         case "${{ inputs.model }}" in
-          "gl-mt3000"|"gl-mt6000")
+          "glinet_gl-mt3000"|"glinet_gl-mt6000")
             echo "Creating U-Boot environment config"
             mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc
             echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc/fw_env.config
@@ -346,7 +379,7 @@ runs:
         else
           echo "❌ Build with ALL packages failed, will try with fewer packages"
           # Show logs or errors
-          cat ${BUILDDIR}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          cat ${BUILDDIR/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
           exit 1
         fi
 
