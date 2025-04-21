@@ -720,8 +720,8 @@ runs:
             PROFILE_PATH="$P"
             break
           fi
-        end
-        
+        done
+
         if [ -n "$PROFILE_PATH" ]; then
           # Extract image info directly from the profile
           IMAGE_INFO=$(jq -r --arg p "$PROFILE" '.profiles[$p].images' "$PROFILE_PATH")
@@ -848,7 +848,7 @@ runs:
                 FIRMWARE_SIZE=$(stat -c%s "$F")
                 
                 # Add to JSON output
-                if [ "$FIRST_ENTRY" -eq 0 ]; then
+                if [ "$FIRST_ENTRY" -eq 0]; then
                   echo "," >> /tmp/firmware_paths.json
                 fi
                 FIRST_ENTRY=0
