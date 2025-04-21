@@ -274,7 +274,7 @@ runs:
             IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           else
             IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
-          end
+          fi
           
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
@@ -722,7 +722,7 @@ runs:
               
               # Extract the base pattern by removing version-specific parts
               # openwrt-VERSION-PLATFORM-SUBTYPE-PROFILE-FILESYSTEM-TYPE.ext → openwrt-*-PROFILE-*-TYPE.*
-              BASE_PATTERN=$(echo "$EXPECTED_NAME" | sed -E 's/openwrt-[0-9.]+-([^-]+)-([^-]+)-([^-]+)-([^-]+)-([^.]+)\.(.*)/openwrt-*-\3-*-\5\.\6/')
+              BASE_PATTERN=$(echo "$EXPECTED_NAME" | sed -E 's/openwrt-[0-9.]+-([^-]+)-([^-]+)-([^-]+)-([^-]+)-([^.]+)\.(.*)/openwrt-*-PROFILE-*-TYPE./')
               echo "🔎 Using search pattern: $BASE_PATTERN"
               
               # Look for files matching this pattern in the build output
