@@ -66,18 +66,6 @@ runs:
       with:
         python-version: '3.x'
 
-    - name: Setup Build Caching
-      id: cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          /tmp/openwrt-build/dl
-          /tmp/openwrt-build/imagebuilder
-        key: openwrt-${{ inputs.version }}-${{ inputs.model }}-${{ hashFiles('files/**') }}
-        restore-keys: |
-          openwrt-${{ inputs.version }}-${{ inputs.model }}-
-          openwrt-${{ inputs.version }}-
-
     - name: Install System Dependencies
       shell: bash
       run: |
