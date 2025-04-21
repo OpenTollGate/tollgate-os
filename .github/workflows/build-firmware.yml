@@ -683,21 +683,39 @@ jobs:
           NOSTR_SECRET_KEY: ${{ secrets.NOSTR_SECRET_KEY }}
           NOSTR_PUBLIC_KEY: ${{ secrets.NOSTR_PUBLIC_KEY }}
         run: |
-          mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files
-          if [ -d "./files" ]; then
-            cp -r ./files/* $BUILDDIR/${IMAGEBUILDER_NAME}/files/
+          # First determine which path to use
+          if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            TARGET_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            TARGET_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Find any ImageBuilder directory as a fallback
+            TARGET_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${TARGET_DIR}" ]; then
+              echo "❌ Could not find ImageBuilder directory!"
+              exit 1
+            fi
           fi
-          PACKAGES_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}/packages/local"
+          
+          echo "✅ Using ImageBuilder at: ${TARGET_DIR}"
+          mkdir -p ${TARGET_DIR}/files
+          if [ -d "./files" ]; then
+            cp -r ./files/* ${TARGET_DIR}/files/
+          fi
+          PACKAGES_DIR="${TARGET_DIR}/packages/local"
           mkdir -p "${PACKAGES_DIR}"
           
           # Add U-Boot config for supported devices
           case "${{ matrix.model }}" in
             "glinet_gl-mt3000"|"glinet_gl-mt6000")
               echo "Creating U-Boot environment config"
-              mkdir -p $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc
-              echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/${IMAGEBUILDER_NAME}/files/etc/fw_env.config
+              mkdir -p ${TARGET_DIR}/files/etc
+              echo "/dev/mtd1 0x0 0x1000 0x10000" > ${TARGET_DIR}/files/etc/fw_env.config
               ;;
           esac
+          
+          # Save for later use
+          echo "TARGET_DIR=${TARGET_DIR}" >> $GITHUB_ENV
 
       - name: Download TollGate Packages from release.json
         run: |
