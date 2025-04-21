@@ -272,48 +272,61 @@ jobs:
             # Map architecture names to proper format for package downloads
             case "${ARCH_PACKAGES}" in
               "mipsel_24kc")
-                echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+                BLOSSOM_ARCH="mips_24kc"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               "x86_64")
-                echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+                BLOSSOM_ARCH="x86_64"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               "aarch64_cortex-a53")
-                echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                BLOSSOM_ARCH="aarch64_cortex-a53"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               "arm_cortex-a7_neon-vfpv4")
-                echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+                BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               "arm_cortex-a15_neon-vfpv4")
-                echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+                BLOSSOM_ARCH="arm_cortex-a15_neon-vfpv4"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               "aarch64_cortex-a72")
-                echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+                BLOSSOM_ARCH="aarch64_cortex-a72"
+                echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                 ;;
               *)
                 echo "⚠️ Unknown architecture in profiles.json: ${ARCH_PACKAGES}, using default mapping"
                 # Fall back to the legacy mapping for unknown architectures
                 case "${PLATFORM}_${TYPE}" in
                   "ath79_generic"|"ath79_nand")
-                    echo "BLOSSOM_ARCH=mips_24kc" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="mips_24kc"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   "mediatek_filogic")
-                    echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="aarch64_cortex-a53"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   "ipq40xx_generic")
-                    echo "BLOSSOM_ARCH=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   "ipq806x_generic")
-                    echo "BLOSSOM_ARCH=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="arm_cortex-a15_neon-vfpv4"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   "x86_64")
-                    echo "BLOSSOM_ARCH=x86_64" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="x86_64"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   "bcm27xx_bcm2711")
-                    echo "BLOSSOM_ARCH=aarch64_cortex-a72" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="aarch64_cortex-a72"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                   *)
                     echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
-                    echo "BLOSSOM_ARCH=aarch64_cortex-a53" >> $GITHUB_ENV
+                    BLOSSOM_ARCH="aarch64_cortex-a53"
+                    echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
                     ;;
                 esac
                 ;;
