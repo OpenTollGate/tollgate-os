@@ -111,7 +111,7 @@ jobs:
       # Use the build-firmware action
       - name: Build OpenWRT Image
         id: build-openwrt-image
-        uses: ./actions/build-firmware
+        uses: ./ # Use relative path since we're in the same directory
         with:
           model: ${{ inputs.device_id }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
@@ -120,6 +120,7 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           firmware_type: ${{ inputs.firmware_type || 'all' }}
+          version: ${{ inputs.version }}
       
       # Collect build logs
       - name: Collect build logs
