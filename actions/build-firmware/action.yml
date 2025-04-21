@@ -380,8 +380,8 @@ runs:
             echo "📦 Processing module: ${MODULE_NAME}"
 
             # Find the URL for this architecture
-            # Use single quotes around $arch to prevent shell expansion
-            PACKAGE_URL=$(jq -r --arg arch "$ARCH" '.modules[$i].versions[0].architectures[$arch].url // ""' "$RELEASE_JSON")
+            # Use --argjson for the index and --arg for the architecture
+            PACKAGE_URL=$(jq -r --argjson idx "$i" --arg arch "$ARCH" '.modules[$idx].versions[0].architectures[$arch].url // ""' "$RELEASE_JSON")
 
             if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
