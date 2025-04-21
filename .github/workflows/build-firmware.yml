@@ -203,30 +203,23 @@ jobs:
             if [ -f "$FILE_PATH" ]; then
               echo "✅ Found file: $FILE_PATH"
               
-              # Only upload additional types if they're not the primary type
-              if [ "$TYPE" != "${{ env.PRIMARY_FIRMWARE_TYPE }}" ]; then
-                echo "📤 Uploading $TYPE firmware to Blossom..."
-                
-                # Perform upload using the CLI tool 
+              # Only upload and publish sysupgrade type
+              if [ "$TYPE" = "sysupgrade" ]; then
+                echo "📤 Uploading sysupgrade firmware to Blossom..."
+                # Perform upload using the CLI tool (if needed)
                 UPLOAD_RESULT=$(cd /tmp && \
                   NSEC="${{ secrets.NSECBECH }}" \
                   /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/blossom-uploader \
                   -f "$FILE_PATH" \
                   -u "https://blossom.swissdash.site")
-                
                 echo "Upload result: $UPLOAD_RESULT"
-                
                 # Extract URL and hash from the JSON result
                 BLOSSOM_URL=$(echo "$UPLOAD_RESULT" | jq -r '.url')
                 BLOSSOM_HASH=$(echo "$UPLOAD_RESULT" | jq -r '.hash')
-                
                 if [ -n "$BLOSSOM_URL" ] && [ "$BLOSSOM_URL" != "null" ]; then
-                  echo "✅ Uploaded $TYPE firmware to $BLOSSOM_URL"
-                  
+                  echo "✅ Uploaded sysupgrade firmware to $BLOSSOM_URL"
                   # Publish NIP-94 metadata
-                  echo "📝 Publishing NIP-94 metadata for $TYPE firmware..."
-                  
-                  # This uses the Python script directly instead of the action
+                  echo "📝 Publishing NIP-94 metadata for sysupgrade firmware..."
                   python3 /home/runner/work/tollgate-os/tollgate-os/actions/update-from-nip94/publish_metadata.py \
                     --relays "${{ inputs.nostr_relays }}" \
                     --url "$BLOSSOM_URL" \
@@ -234,20 +227,19 @@ jobs:
                     --file-hash "$BLOSSOM_HASH" \
                     --original-hash "$FILE_HASH" \
                     --filename "$FILE_NAME" \
-                    --content "TollGate OS $TYPE firmware for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ matrix.device.id }}, OpenWRT ${{ inputs.version }})" \
+                    --content "TollGate OS sysupgrade firmware for ${{ env.DEVICE_VENDOR }} ${{ env.DEVICE_MODEL }} (${{ matrix.device.id }}, OpenWRT ${{ inputs.version }})" \
                     --nsec "${{ secrets.NSEC }}" \
                     --size "$FILE_SIZE" \
                     --architecture "${{ env.ARCH }}" \
                     --model "${{ matrix.device.id }}" \
                     --version "${{ inputs.version }}" \
                     --firmware-type "$TYPE"
-                  
-                  echo "✅ Published metadata for $TYPE firmware"
+                  echo "✅ Published metadata for sysupgrade firmware"
                 else
-                  echo "❌ Failed to upload $TYPE firmware"
+                  echo "❌ Failed to upload sysupgrade firmware"
                 fi
               else
-                echo "ℹ️ Skipping upload for primary firmware type ($TYPE) as it's already handled by the main action"
+                echo "ℹ️ Skipping upload for $TYPE firmware (only sysupgrade is processed)"
               fi
             else
               echo "⚠️ File not found: $FILE_PATH"
