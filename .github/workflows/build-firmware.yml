@@ -626,7 +626,40 @@ jobs:
 
       - name: Check Available Profiles
         run: |
-          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          # Make sure the ImageBuilder directory exists
+          ACTUAL_PATH=""
+          
+          # First try the expected path
+          if [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            ACTUAL_PATH="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+            echo "✅ Found ImageBuilder at expected path: ${ACTUAL_PATH}"
+          # Then try the Docker context path
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            ACTUAL_PATH="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+            echo "✅ Found ImageBuilder in Docker context: ${ACTUAL_PATH}"
+          # Then search for any ImageBuilder directory
+          else
+            echo "🔍 ImageBuilder directory not found at expected locations. Searching..."
+            FOUND_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -n "${FOUND_DIR}" ]; then
+              ACTUAL_PATH="${FOUND_DIR}"
+              echo "✅ Found ImageBuilder at: ${ACTUAL_PATH}"
+              
+              # Create symlink to expected path for compatibility
+              echo "Creating symlink from ${FOUND_DIR} to ${BUILDDIR}/${IMAGEBUILDER_NAME}"
+              ln -sf "${FOUND_DIR}" "${BUILDDIR}/${IMAGEBUILDER_NAME}"
+            else
+              echo "❌ Could not find any ImageBuilder directory"
+              echo "Contents of BUILDDIR:"
+              ls -la "${BUILDDIR}" || echo "Failed to list BUILDDIR contents"
+              echo "Contents of Docker context:"
+              ls -la "${DOCKER_CONTEXT}" || echo "Failed to list Docker context contents"
+              exit 1
+            fi
+          fi
+          
+          # Now use the verified path
+          cd "${ACTUAL_PATH}"
           echo "📋 Checking for available profiles..."
           
           # More reliable method to check profiles
