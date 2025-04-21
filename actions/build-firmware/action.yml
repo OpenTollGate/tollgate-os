@@ -223,8 +223,8 @@ runs:
             if [ -s "$PROFILE_PATH" ]; then
               REL_PATH=${PROFILE_PATH#${GITHUB_WORKSPACE}/external_profiles/${VERSION}/}
               echo "  - $REL_PATH:"
-              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/dev/null | head -10 | sed 's/^/    - /' || echo "    (Invalid JSON)"
-              TOTAL_MODELS=$(jq -r '.profiles | keys | length' "$PROFILE_PATH" 2>/dev/null || echo 0)
+              jq -r '.profiles | keys[]' "$PROFILE_PATH" 2>/null | head -10 | sed 's/^/    - /' || echo "    (Invalid JSON)"
+              TOTAL_MODELS=$(jq -r '.profiles | keys | length' "$PROFILE_PATH" 2>/null || echo 0)
               if [ "$TOTAL_MODELS" -gt 10 ]; then
                 REMAINING=$((TOTAL_MODELS - 10))
                 echo "      ... and $REMAINING more"
@@ -593,16 +593,15 @@ runs:
             ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
           elif [ "$TYPE_TO_BUILD" = "factory" ]; then
             if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
-              PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
+              PATTERN="*${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
             fi
           fi
           
-          # Build command
+          # Build command (no EXTRA_IMAGE_NAME)
           FORCE=1 make image \
             PROFILE="$PROFILE" \
             PACKAGES="$PACKAGES" \
             FILES="files" \
-            EXTRA_IMAGE_NAME="base-${TYPE_TO_BUILD}" \
             $ADDITIONAL_FLAGS
         done
         
@@ -653,12 +652,11 @@ runs:
               ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
             fi
             
-            # Build command
+            # Build command (no EXTRA_IMAGE_NAME)
             FORCE=1 make image \
               PROFILE="$PROFILE" \
               PACKAGES="$PACKAGES ${TOLLGATE_PACKAGES}" \
               FILES="files" \
-              EXTRA_IMAGE_NAME="tollgate-os-${TYPE_TO_BUILD}" \
               $ADDITIONAL_FLAGS
           done
           
