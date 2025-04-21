@@ -274,7 +274,7 @@ runs:
             IB_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           else
             IB_NAME="openwrt-imagebuilder-${VERSION}-${PLATFORM}-${TYPE}.Linux-x86_64"
-          fi
+          end
           
           DOWNLOAD_URL="${TARGET_URL}/${IB_NAME}.${DEFAULT_ARCHIVE_EXT}"
         fi
@@ -380,7 +380,8 @@ runs:
             echo "📦 Processing module: ${MODULE_NAME}"
 
             # Find the URL for this architecture
-            PACKAGE_URL=$(jq -r --arg arch "$ARCH" ".modules[$i].versions[0].architectures[$arch].url // \"\"" "$RELEASE_JSON")
+            # Use single quotes around $arch to prevent shell expansion
+            PACKAGE_URL=$(jq -r --arg arch "$ARCH" '.modules[$i].versions[0].architectures[$arch].url // ""' "$RELEASE_JSON")
 
             if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "null" ] || [[ "$PACKAGE_URL" == *"[HASH]"* ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${ARCH})"
