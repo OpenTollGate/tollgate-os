@@ -10,22 +10,19 @@ set -e  # Exit on any error
 IMAGE_BUILDER_DIR="openwrt-imagebuilder-23.05.5-ath79-nand.Linux-x86_64"
 PROFILE="netgear_wndr4300"  # Change this to your router profile
 PACKAGES="luci luci-ssl"     # Add your other packages here
-
-# Store the tollgate module name
 TOLLGATE_PKG="tollgate-module-basic-go"
+
+cd $IMAGE_BUILDER_DIR
 
 echo "=== Starting two-step build process ==="
 
-# Step 1: Build without tollgate module
-echo "Step 1: Building base image without $TOLLGATE_PKG..."
-cd $IMAGE_BUILDER_DIR
+echo "Step 1: Building base images without $TOLLGATE_PKG..."
 make image PROFILE="$PROFILE" PACKAGES="$PACKAGES -$TOLLGATE_PKG" || {
     echo "Error in Step 1 build!"
     exit 1
 }
 
-# Step 2: Build with tollgate module
-echo "Step 2: Building with $TOLLGATE_PKG..."
+echo "Step 2: Building images with $TOLLGATE_PKG..."
 make image PROFILE="$PROFILE" PACKAGES="$PACKAGES $TOLLGATE_PKG" || {
     echo "Warning: Second build with $TOLLGATE_PKG failed."
     echo "The first build without $TOLLGATE_PKG should still be available."
