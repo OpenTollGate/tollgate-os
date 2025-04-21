@@ -592,7 +592,9 @@ runs:
           if [ "$TYPE_TO_BUILD" = "kernel" ]; then
             ADDITIONAL_FLAGS="CONFIG_TARGET_KERNEL_PARTSIZE=64 CONFIG_TARGET_ROOTFS_PARTSIZE=256"
           elif [ "$TYPE_TO_BUILD" = "factory" ]; then
-            ADDITIONAL_FLAGS="CONFIG_TARGET_ROOTFS_PARTSIZE=256"
+            if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
+              PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
+            fi
           fi
           
           # Build command
@@ -616,7 +618,7 @@ runs:
             if [ "$TYPE_TO_BUILD" = "factory" ]; then
               if ! find "$BUILDDIR/bin/targets/${PLATFORM}/${TYPE}" -name "$PATTERN" | grep -q .; then
                 PATTERN="*base-${TYPE_TO_BUILD}*${TYPE_TO_BUILD}.img"
-              end
+              fi
             fi
           fi
           
@@ -684,7 +686,7 @@ runs:
             fi
           done
           
-          if [ $TOLLGATE_BUILD_SUCCESS -eq 1 ]; then
+          if [ $TOLLGATE_BUILD_SUCCESS -eq 1; then
             echo "BUILD_TYPE=TOLLGATE" >> $GITHUB_ENV
           else
             echo "⚠️ All TollGate firmware builds failed, using base firmware"
