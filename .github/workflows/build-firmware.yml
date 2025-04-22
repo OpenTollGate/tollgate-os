@@ -1051,7 +1051,7 @@ jobs:
                 echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
                 # Use xfJ for .tar.xz as in the old code
                 tar xfJ "$(basename $DOWNLOAD_URL)"
-              fi
+              end
               
               # Check if extraction was successful
               if [ $? -ne 0 ]; then
@@ -1517,36 +1517,56 @@ jobs:
         continue-on-error: true
         id: build-essential
         run: |
-          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
-          sudo make clean
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
+          cd ${IMAGEBUILDER_DIR}
+          
+          # Clean only what's necessary without removing the output directory structure
+          rm -rf ${IMAGEBUILDER_DIR}/tmp ${IMAGEBUILDER_DIR}/dl ${IMAGEBUILDER_DIR}/build_dir/target-*
           
           COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
           
-          if [ -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
-            echo "✅ Found firmware file: ${FIRMWARE_NAME}"
-            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
-            echo "firmware_name=${FIRMWARE_NAME}" >> $GITHUB_OUTPUT
-            echo "FIRMWARE_PATH=${FIRMWARE_PATH}" >> $GITHUB_ENV
-            echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
-            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
-            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
-            
-            # Log which image type was found (factory, sysupgrade, etc.)
-            if [[ "${FIRMWARE_NAME}" == *"factory"* ]]; then
-              echo "📦 Found factory image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=factory" >> $GITHUB_ENV
-            elif [[ "${FIRMWARE_NAME}" == *"sysupgrade"* ]]; then
-              echo "📦 Found sysupgrade image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=sysupgrade" >> $GITHUB_ENV
-            else
-              echo "📦 Found image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=other" >> $GITHUB_ENV
-            fi
+          echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
+          
+          if [ -n "${DEVICE_EXTRA}" ]; then
+            echo "Adding device compatibility: ${DEVICE_EXTRA}"
+            # Use eval to properly handle the parameters
+            eval sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              ${DEVICE_EXTRA} \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${IMAGEBUILDER_DIR}/files"
           else
-            echo "❌ Error: No firmware file found!"
-            echo "📂 Contents of target directory:"
-            ls -la ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ || echo "Directory not found or empty"
+            # Original command
+            sudo make -j$(nproc) image V=s \
+              PROFILE="${PROFILE}" \
+              PACKAGES="${COMBINED_PACKAGE_LIST}" \
+              FILES="${IMAGEBUILDER_DIR}/files"
+          fi
+          
+          # Check if build succeeded
+          if find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f -o -name "*factory.bin" -type f | grep -q .; then
+            echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
+            echo "✅ Build with ESSENTIAL packages succeeded!"
+          else
+            echo "❌ Build failed even with essential packages!"
+            # Show logs or errors
+            cat ${IMAGEBUILDER_DIR}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
             exit 1
           fi
 
