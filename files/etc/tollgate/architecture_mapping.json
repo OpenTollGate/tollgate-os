@@ -1,0 +1,21 @@
+{
+  "comment": "This file maps OpenWRT architecture names to Tollgate package architecture names",
+  "mappings": {
+    "mipsel_24kc": "mips_24kc",
+    "x86_64": "x86_64",
+    "aarch64_cortex-a53": "aarch64_cortex-a53",
+    "arm_cortex-a7_neon-vfpv4": "arm_cortex-a7_neon-vfpv4",
+    "arm_cortex-a15_neon-vfpv4": "arm_cortex-a15_neon-vfpv4",
+    "aarch64_cortex-a72": "aarch64_cortex-a72"
+  },
+  "platform_mappings": {
+    "ath79_generic": "mips_24kc",
+    "ath79_nand": "mips_24kc",
+    "mediatek_filogic": "aarch64_cortex-a53",
+    "ipq40xx_generic": "arm_cortex-a7_neon-vfpv4",
+    "ipq806x_generic": "arm_cortex-a15_neon-vfpv4",
+    "x86_64": "x86_64",
+    "bcm27xx_bcm2711": "aarch64_cortex-a72"
+  },
+  "default": "aarch64_cortex-a53"
+}
