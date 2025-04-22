@@ -398,11 +398,12 @@ jobs:
               echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
               
               if curl -s -f -o "$OVERVIEW_FILE" "$URL"; then
-                if [ -s "$OVERVIEW_FILE" ] && grep -q "\"profiles\"" "$OVERVIEW_FILE" 2>/dev/null; then
+                # Use jq to validate JSON instead of grep - much more reliable
+                if [ -s "$OVERVIEW_FILE" ] && jq -e . "$OVERVIEW_FILE" > /dev/null 2>&1; then
                   SUCCESS=true
                   break
                 else
-                  echo "⚠️ Downloaded file is invalid. Retrying..."
+                  echo "⚠️ Downloaded file is invalid JSON. Retrying..."
                   rm -f "$OVERVIEW_FILE"
                 fi
               else
@@ -428,15 +429,18 @@ jobs:
           echo "🔍 Finding router $ROUTER_ID in overview file..."
           
           # First determine if profiles is an array (newer format) or object (older format)
-          # We check if the file contains "profiles": [ which indicates array format
-          if grep -q "\"profiles\": \[" "$OVERVIEW_FILE"; then
+          # Use jq to check data structure (more reliable than grep)
+          if jq -e 'has("profiles") and (.profiles | type == "array")' "$OVERVIEW_FILE" > /dev/null; then
             echo "📊 Detected array format for profiles in overview.json (newer format)"
             # Use jq to find the router in the array by comparing id field
             ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$OVERVIEW_FILE")
-          else
+          elif jq -e 'has("profiles") and (.profiles | type == "object")' "$OVERVIEW_FILE" > /dev/null; then
             echo "📊 Detected object format for profiles in overview.json (older format)"
             # Use jq to extract router data using object access (older format)
             ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$OVERVIEW_FILE")
+          else
+            echo "❌ Could not determine profiles format in overview.json"
+            exit 1
           fi
           
           if [ -z "$ROUTER_DATA" ] || [ "$ROUTER_DATA" = "null" ]; then
@@ -485,7 +489,7 @@ jobs:
           mkdir -p "$PROFILE_DIR"
           
           # Check if profiles.json already exists and is valid
-          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\"" "$PROFILE_FILE" 2>/dev/null; then
+          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && jq -e . "$PROFILE_FILE" > /dev/null 2>&1; then
             echo "✅ Using existing profile for ${TARGET}"
           else
             # Download the profiles.json if it doesn't exist
@@ -502,11 +506,11 @@ jobs:
               echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
               
               if curl -s -f -o "$PROFILE_FILE" "$PROFILE_URL"; then
-                if [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\"" "$PROFILE_FILE" 2>/dev/null; then
+                if [ -s "$PROFILE_FILE" ] && jq -e . "$PROFILE_FILE" > /dev/null 2>&1; then
                   SUCCESS=true
                   break
                 else
-                  echo "⚠️ Downloaded file is invalid. Retrying..."
+                  echo "⚠️ Downloaded file is invalid JSON. Retrying..."
                   rm -f "$PROFILE_FILE"
                 fi
               else
@@ -526,8 +530,7 @@ jobs:
             echo "✅ Downloaded profiles for $TARGET (OpenWRT $VERSION)"
           fi
           
-          # Check if profiles.json has array or object format (similar to overview.json)
-          # First extract architecture-specific information
+          # Extract architecture-specific information
           ARCH_PACKAGES=$(jq -r '.arch_packages' "$PROFILE_FILE")
           echo "📦 Architecture packages: ${ARCH_PACKAGES}"
           
@@ -540,13 +543,17 @@ jobs:
           # Extract complete device profile
           echo "🔍 Full device profile for $ROUTER_ID from profiles.json:"
           
-          # Check if profiles in profiles.json is an array or object
-          if grep -q "\"profiles\": \[" "$PROFILE_FILE"; then
+          # Check if profiles in profiles.json is an array or object 
+          # using jq type checking (more reliable than grep)
+          if jq -e 'has("profiles") and (.profiles | type == "array")' "$PROFILE_FILE" > /dev/null; then
             echo "📊 Detected array format for profiles in profiles.json (newer format)"
             DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$PROFILE_FILE")
-          else
+          elif jq -e 'has("profiles") and (.profiles | type == "object")' "$PROFILE_FILE" > /dev/null; then
             echo "📊 Detected object format for profiles in profiles.json (older format)"
             DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$PROFILE_FILE")
+          else
+            echo "⚠️ Could not determine profiles format in profiles.json"
+            DEVICE_PROFILE=""
           fi
           
           if [ -n "$DEVICE_PROFILE" ] && [ "$DEVICE_PROFILE" != "null" ]; then
