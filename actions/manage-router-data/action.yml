@@ -1,0 +1,469 @@
+name: 'Manage Router Data'
+description: 'Centralized management of OpenWRT router data - fetch, cache, and query router information efficiently'
+
+inputs:
+  operation:
+    description: 'Operation to perform: fetch-overview, fetch-profiles, lookup-router, get-profiles-list, generate-database'
+    required: true
+  version:
+    description: 'OpenWRT version to use'
+    required: true
+  router-id:
+    description: 'Router ID for lookup operations'
+    required: false
+    default: ''
+  platform:
+    description: 'Specific platform/target to fetch profiles for (format: platform/target, e.g. ramips/mt7621)'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Directory to store router data'
+    required: false
+    default: 'external_profiles'
+  force-download:
+    description: 'Force download even if data already exists'
+    required: false
+    default: 'false'
+  cache-key-prefix:
+    description: 'Prefix for the cache key'
+    required: false
+    default: 'openwrt-data'
+
+outputs:
+  # Common outputs
+  operation-status:
+    description: 'Status of the operation (success/failed)'
+    value: ${{ steps.router-data-op.outputs.status }}
+  
+  # Overview outputs
+  overview-path:
+    description: 'Path to the downloaded .overview.json file'
+    value: ${{ steps.router-data-op.outputs.overview_path }}
+  target-count:
+    description: 'Number of unique targets in the overview file'
+    value: ${{ steps.router-data-op.outputs.target_count }}
+  profile-count:
+    description: 'Number of device profiles in the overview file'
+    value: ${{ steps.router-data-op.outputs.profile_count }}
+  
+  # Lookup outputs
+  found:
+    description: 'Whether the router was found (true/false)'
+    value: ${{ steps.router-data-op.outputs.found }}
+  target:
+    description: 'Target architecture of the router (e.g., mediatek/filogic)'
+    value: ${{ steps.router-data-op.outputs.target }}
+  vendor:
+    description: 'Vendor name of the router'
+    value: ${{ steps.router-data-op.outputs.vendor }}
+  model:
+    description: 'Model name of the router'
+    value: ${{ steps.router-data-op.outputs.model }}
+  variant:
+    description: 'Variant of the router (if any)'
+    value: ${{ steps.router-data-op.outputs.variant }}
+  full-name:
+    description: 'Full display name of the router'
+    value: ${{ steps.router-data-op.outputs.full_name }}
+  
+  # Profile outputs
+  profile-path:
+    description: 'Path to the fetched profile file'
+    value: ${{ steps.router-data-op.outputs.profile_path }}
+  device-count:
+    description: 'Number of devices in the profile'
+    value: ${{ steps.router-data-op.outputs.device_count }}
+  
+  # Profiles list output
+  platforms-list:
+    description: 'JSON string containing list of available platforms'
+    value: ${{ steps.router-data-op.outputs.platforms_list }}
+    
+  # Database outputs
+  database-path:
+    description: 'Path to the generated router database file'
+    value: ${{ steps.router-data-op.outputs.database_path }}
+  csv-path:
+    description: 'Path to the CSV export of the router database'
+    value: ${{ steps.router-data-op.outputs.csv_path }}
+  router-count:
+    description: 'Number of routers in the database'
+    value: ${{ steps.router-data-op.outputs.router_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up environment
+      id: setup
+      shell: bash
+      run: |
+        # Set up variables
+        WORKSPACE_DIR="${GITHUB_WORKSPACE}"
+        VERSION="${{ inputs.version }}"
+        OPERATION="${{ inputs.operation }}"
+        OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
+        VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
+        FORCE_DOWNLOAD="${{ inputs.force-download }}"
+        ROUTER_ID="${{ inputs.router-id }}"
+        PLATFORM="${{ inputs.platform }}"
+        
+        # Make sure jq is installed
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq is required but not installed"
+          exit 1
+        fi
+        
+        # Create version directory
+        mkdir -p "$VERSION_DIR"
+        
+        # Set cache keys
+        OVERVIEW_CACHE_KEY="${{ inputs.cache-key-prefix }}-overview-$VERSION"
+        PROFILE_CACHE_KEY="${{ inputs.cache-key-prefix }}-profile-$VERSION-${PLATFORM//\//-}"
+        
+        # Set paths
+        OVERVIEW_FILE="${VERSION_DIR}/.overview.json"
+        
+        # Set values
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "operation=$OPERATION" >> $GITHUB_OUTPUT
+        echo "overview_file=$OVERVIEW_FILE" >> $GITHUB_OUTPUT
+        echo "overview_cache_key=$OVERVIEW_CACHE_KEY" >> $GITHUB_OUTPUT
+        echo "profile_cache_key=$PROFILE_CACHE_KEY" >> $GITHUB_OUTPUT
+
+    - name: Perform Router Data Operation
+      id: router-data-op
+      shell: bash
+      run: |
+        WORKSPACE_DIR="${GITHUB_WORKSPACE}"
+        VERSION="${{ inputs.version }}"
+        OPERATION="${{ inputs.operation }}"
+        OUTPUT_DIR="${WORKSPACE_DIR}/${{ inputs.output-dir }}"
+        VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
+        FORCE_DOWNLOAD="${{ inputs.force-download }}"
+        ROUTER_ID="${{ inputs.router-id }}"
+        PLATFORM="${{ inputs.platform }}"
+        OVERVIEW_FILE="${VERSION_DIR}/.overview.json"
+        
+        # Function to download a file with retries
+        download_with_retries() {
+          local url=$1
+          local output_file=$2
+          local description=$3
+          local max_retries=3
+          
+          echo "⬇️ Downloading ${description}..."
+          
+          # Validate URL exists before attempting download
+          if ! curl --head --silent --fail "$url" > /dev/null; then
+            echo "❌ URL does not exist or is unreachable: $url"
+            return 1
+          fi
+          
+          # Download with retries
+          for ATTEMPT in $(seq 1 $max_retries); do
+            echo "  • Download attempt $ATTEMPT of $max_retries"
+            
+            if curl -s -f -o "$output_file" "$url"; then
+              # Validate downloaded file is not empty
+              if [ -s "$output_file" ]; then
+                echo "✅ Downloaded ${description}"
+                return 0
+              else
+                echo "⚠️ Downloaded file is empty. Retrying..."
+                rm -f "$output_file"
+              fi
+            else
+              echo "⚠️ Download attempt $ATTEMPT failed"
+            fi
+            
+            # Only sleep if we're going to retry
+            if [ "$ATTEMPT" -lt $max_retries ]; then
+              sleep 3
+            fi
+          done
+          
+          echo "❌ Failed to download ${description} after $max_retries attempts"
+          return 1
+        }
+        
+        case "$OPERATION" in
+          # Fetch overview operation
+          "fetch-overview")
+            echo "🔄 Operation: Fetch OpenWRT overview for version $VERSION"
+            
+            # Check if we need to download
+            if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
+              echo "✅ Using existing .overview.json for OpenWRT $VERSION"
+            else
+              # URL for the overview file
+              URL="https://downloads.openwrt.org/releases/${VERSION}/.overview.json"
+              
+              if ! download_with_retries "$URL" "$OVERVIEW_FILE" "OpenWRT $VERSION overview"; then
+                echo "status=failed" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+            fi
+            
+            # Validate and extract stats from overview file
+            if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ]; then
+              # Count unique targets and profiles
+              TARGET_COUNT=$(jq '.profiles | map(.target) | unique | length' "$OVERVIEW_FILE")
+              PROFILE_COUNT=$(jq '.profiles | length' "$OVERVIEW_FILE")
+              
+              echo "📊 OpenWRT $VERSION has $PROFILE_COUNT device profiles across $TARGET_COUNT unique targets"
+              
+              # Set outputs
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "overview_path=$OVERVIEW_FILE" >> $GITHUB_OUTPUT
+              echo "target_count=$TARGET_COUNT" >> $GITHUB_OUTPUT
+              echo "profile_count=$PROFILE_COUNT" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Overview file is missing or invalid"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            ;;
+          
+          # Lookup router operation
+          "lookup-router")
+            echo "🔍 Operation: Looking up router ID: $ROUTER_ID in OpenWRT $VERSION"
+            
+            # First check if we have a database file for more efficient lookup
+            DB_FILE="${VERSION_DIR}/router-database.json"
+            
+            if [ -f "$DB_FILE" ] && [ -s "$DB_FILE" ]; then
+              echo "🔍 Looking up router in unified database..."
+              
+              # Use jq to find router in the database
+              ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.routers[] | select(.id == $id)' "$DB_FILE")
+              
+              if [ -n "$ROUTER_DATA" ]; then
+                # Extract details from database
+                TARGET=$(echo "$ROUTER_DATA" | jq -r '.target')
+                VENDOR=$(echo "$ROUTER_DATA" | jq -r '.vendor')
+                MODEL=$(echo "$ROUTER_DATA" | jq -r '.model')
+                VARIANT=$(echo "$ROUTER_DATA" | jq -r '.variant // ""')
+                FULL_NAME=$(echo "$ROUTER_DATA" | jq -r '.full_name')
+                HAS_PROFILE=$(echo "$ROUTER_DATA" | jq -r '.has_full_profile')
+                
+                echo "✅ Found router in database: $FULL_NAME"
+                echo "📊 Target architecture: $TARGET"
+                
+                # Set outputs
+                echo "status=success" >> $GITHUB_OUTPUT
+                echo "found=true" >> $GITHUB_OUTPUT
+                echo "target=$TARGET" >> $GITHUB_OUTPUT
+                echo "vendor=$VENDOR" >> $GITHUB_OUTPUT
+                echo "model=$MODEL" >> $GITHUB_OUTPUT
+                echo "variant=$VARIANT" >> $GITHUB_OUTPUT
+                echo "full_name=$FULL_NAME" >> $GITHUB_OUTPUT
+                echo "has_profile=$HAS_PROFILE" >> $GITHUB_OUTPUT
+                exit 0
+              else
+                echo "⚠️ Router not found in database, falling back to overview lookup"
+              fi
+            fi
+            
+            # Fallback to overview lookup
+            if [ ! -f "$OVERVIEW_FILE" ] || [ ! -s "$OVERVIEW_FILE" ]; then
+              echo "❌ .overview.json file for OpenWRT $VERSION not found or empty"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "found=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Use jq to find the router in the overview
+            ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$OVERVIEW_FILE")
+            
+            if [ -z "$ROUTER_DATA" ]; then
+              echo "❌ Router ID $ROUTER_ID not found in OpenWRT $VERSION"
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "found=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            
+            # Extract router details
+            TARGET=$(echo "$ROUTER_DATA" | jq -r '.target')
+            VENDOR=$(echo "$ROUTER_DATA" | jq -r '.titles[0].vendor')
+            MODEL=$(echo "$ROUTER_DATA" | jq -r '.titles[0].model')
+            VARIANT=$(echo "$ROUTER_DATA" | jq -r '.titles[0].variant // ""')
+            
+            # Construct full name
+            if [ -n "$VARIANT" ] && [ "$VARIANT" != "null" ]; then
+              FULL_NAME="${VENDOR} ${MODEL} (${VARIANT})"
+            else
+              FULL_NAME="${VENDOR} ${MODEL}"
+            fi
+            
+            echo "✅ Found router: $FULL_NAME"
+            echo "📊 Target architecture: $TARGET"
+            
+            # Set outputs
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "target=$TARGET" >> $GITHUB_OUTPUT
+            echo "vendor=$VENDOR" >> $GITHUB_OUTPUT
+            echo "model=$MODEL" >> $GITHUB_OUTPUT
+            echo "variant=$VARIANT" >> $GITHUB_OUTPUT
+            echo "full_name=$FULL_NAME" >> $GITHUB_OUTPUT
+            ;;
+          
+          # Fetch profiles operation
+          "fetch-profiles")
+            echo "🔄 Operation: Fetching profiles for platform: $PLATFORM"
+            
+            if [ -z "$PLATFORM" ]; then
+              echo "❌ No platform specified for fetch-profiles operation"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Split into platform and target
+            PLATFORM_NAME=$(echo $PLATFORM | cut -d'/' -f1)
+            TARGET_NAME=$(echo $PLATFORM | cut -d'/' -f2)
+            
+            # Create target directory
+            TARGET_DIR="${VERSION_DIR}/${PLATFORM_NAME}/${TARGET_NAME}"
+            mkdir -p "$TARGET_DIR"
+            
+            # Path for profile file
+            PROFILE_FILE="${TARGET_DIR}/profiles.json"
+            
+            # Check if the profile already exists and is valid
+            if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && [ "$FORCE_DOWNLOAD" != "true" ]; then
+              if grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
+                echo "✅ Using existing profile for ${PLATFORM}"
+              else
+                echo "⚠️ Existing profile file for ${PLATFORM} appears invalid. Will download again."
+                FORCE_DOWNLOAD="true"
+              fi
+            fi
+            
+            # Download if needed
+            if [ ! -f "$PROFILE_FILE" ] || [ ! -s "$PROFILE_FILE" ] || [ "$FORCE_DOWNLOAD" == "true" ]; then
+              # Create URL for profile
+              URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${PLATFORM}/profiles.json"
+              
+              if ! download_with_retries "$URL" "$PROFILE_FILE" "${PLATFORM} profiles"; then
+                echo "status=failed" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+            fi
+            
+            # Generate mapping file (trimmed down version that doesn't duplicate data)
+            MAPPING_FILE="${TARGET_DIR}/devices.csv"
+            
+            # Create the mapping file in CSV format for easier processing
+            echo "# device_id,vendor,model,full_name" > "$MAPPING_FILE"
+            jq -r '.profiles | to_entries[] | 
+                  [.key, 
+                   .value.titles[0].vendor // "Unknown", 
+                   .value.titles[0].model // "Unknown", 
+                   if .value.titles[0].variant and .value.titles[0].variant != null then 
+                     .value.titles[0].vendor + " " + .value.titles[0].model + " (" + .value.titles[0].variant + ")" 
+                   else 
+                     .value.titles[0].vendor + " " + .value.titles[0].model 
+                   end] | @csv' "$PROFILE_FILE" >> "$MAPPING_FILE"
+            
+            # Count the number of devices
+            DEVICE_COUNT=$(tail -n +2 "$MAPPING_FILE" | wc -l | tr -d ' ')
+            
+            # Update the central database if it exists
+            DB_FILE="${VERSION_DIR}/router-database.json"
+            if [ -f "$DB_FILE" ] && [ -s "$DB_FILE" ]; then
+              echo "🔄 Updating router database with new profile data..."
+              
+              # Update database to mark routers with this target as having a profile available
+              jq --arg target "$PLATFORM" '.routers = (.routers | map(
+                if .target == $target then 
+                  . + {has_full_profile: true} 
+                else 
+                  . 
+                end
+              ))' "$DB_FILE" > "${DB_FILE}.tmp" && mv "${DB_FILE}.tmp" "$DB_FILE"
+            fi
+            
+            echo "✅ Processed $DEVICE_COUNT devices for ${PLATFORM}"
+            
+            # Set outputs
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "profile_path=$PROFILE_FILE" >> $GITHUB_OUTPUT
+            echo "mapping_path=$MAPPING_FILE" >> $GITHUB_OUTPUT
+            echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
+            ;;
+          
+          # Get profiles list operation
+          "get-profiles-list")
+            echo "🔍 Operation: Getting list of available platforms/profiles"
+            
+            # Check if overview file exists
+            if [ ! -f "$OVERVIEW_FILE" ] || [ ! -s "$OVERVIEW_FILE" ]; then
+              echo "❌ .overview.json file for OpenWRT $VERSION not found or empty"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Extract list of platforms from overview
+            PLATFORMS_JSON=$(jq -c '.profiles | map(.target) | unique | sort' "$OVERVIEW_FILE")
+            
+            # Count platforms
+            PLATFORM_COUNT=$(echo "$PLATFORMS_JSON" | jq 'length')
+            
+            echo "📊 Found $PLATFORM_COUNT unique platforms in OpenWRT $VERSION"
+            
+            # Set outputs
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "platforms_list=$PLATFORMS_JSON" >> $GITHUB_OUTPUT
+            ;;
+            
+          # Generate unified database operation
+          "generate-database")
+            echo "🔄 Operation: Generating unified router database"
+            
+            # Use the database generation script
+            SCRIPT_PATH="${{ github.action_path }}/create_router_db.sh"
+            
+            if [ ! -f "$SCRIPT_PATH" ] || [ ! -x "$SCRIPT_PATH" ]; then
+              echo "❌ Database generation script not found or not executable: $SCRIPT_PATH"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Run the script
+            "$SCRIPT_PATH" "$VERSION" "${{ inputs.output-dir }}" "${{ inputs.force-download }}"
+            SCRIPT_STATUS=$?
+            
+            if [ $SCRIPT_STATUS -ne 0 ]; then
+              echo "❌ Database generation failed with status $SCRIPT_STATUS"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Get paths and stats from generated files
+            DB_FILE="${VERSION_DIR}/router-database.json"
+            CSV_FILE="${VERSION_DIR}/routers.csv"
+            
+            if [ ! -f "$DB_FILE" ] || [ ! -s "$DB_FILE" ]; then
+              echo "❌ Database file was not created correctly"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Count routers in database
+            ROUTER_COUNT=$(jq '.routers | length' "$DB_FILE")
+            
+            echo "✅ Generated router database with $ROUTER_COUNT routers"
+            
+            # Set outputs
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "database_path=$DB_FILE" >> $GITHUB_OUTPUT
+            echo "csv_path=$CSV_FILE" >> $GITHUB_OUTPUT
+            echo "router_count=$ROUTER_COUNT" >> $GITHUB_OUTPUT
+            ;;
+          
+          *)
+            echo "❌ Unknown operation: $OPERATION"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+        esac
