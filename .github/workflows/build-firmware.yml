@@ -442,18 +442,6 @@ jobs:
           mkdir -p "${DOCKER_CONTEXT}"
           echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
-      # Try to restore the Docker image from cache
-      - name: Check for Docker cache
-        id: cache-docker
-        if: env.ENABLE_CACHE == 'true'
-        uses: actions/cache/restore@v3
-        with:
-          path: ${{ env.DOCKER_CONTEXT }}
-          # Use simpler key without variables that might change unexpectedly
-          key: openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
-          restore-keys: |
-            openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-
-
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder (If cache miss)
         if: steps.cache-docker.outputs.cache-hit != 'true'
@@ -465,33 +453,31 @@ jobs:
           
           if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
             echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }}) from $DOWNLOAD_URL"
-            curl -L -C - -o "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" "$DOWNLOAD_URL"
+            # Use the -O flag to save with original filename as in the old code
+            curl -L -C - -O "$DOWNLOAD_URL"
             
             # Verify download was successful
-            if [ -f "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" ]; then
-              echo "✅ Successfully downloaded ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-              echo "📊 Downloaded file size: $(du -h ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT} | cut -f1)"
+            if [ -f "$(basename $DOWNLOAD_URL)" ]; then
+              echo "✅ Successfully downloaded $(basename $DOWNLOAD_URL)"
+              echo "📊 Downloaded file size: $(du -h $(basename $DOWNLOAD_URL) | cut -f1)"
               
-              # Make sure the target directory exists with proper permissions
-              sudo mkdir -p "${DOCKER_CONTEXT}"
-              sudo chown $(whoami):$(whoami) "${DOCKER_CONTEXT}"
+              # Make sure the Docker context directory exists with proper permissions
+              mkdir -p "${DOCKER_CONTEXT}"
               echo "🔧 Created Docker context directory: ${DOCKER_CONTEXT}"
               
               echo "📦 Extracting OpenWRT ImageBuilder to ${DOCKER_CONTEXT}"
               if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
-                echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                sudo tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+                echo "Using zstd extraction for $(basename $DOWNLOAD_URL)"
+                tar --zstd -xf "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
               else
-                echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                sudo tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+                echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
+                # Use xfJ as in the original code for .tar.xz files
+                tar xfJ "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
               fi
-              
-              # Ensure proper ownership
-              sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               
               # Check if extraction was successful
               if [ $? -ne 0 ]; then
-                echo "❌ Failed to extract ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
+                echo "❌ Failed to extract $(basename $DOWNLOAD_URL)"
                 exit 1
               fi
               
@@ -508,7 +494,7 @@ jobs:
                 if [ -n "${EXTRACTED_DIR}" ]; then
                   echo "✅ Found extracted directory: ${EXTRACTED_DIR}"
                   echo "Creating symlink from ${EXTRACTED_DIR} to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-                  sudo ln -sf "${EXTRACTED_DIR}" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                  ln -sf "${EXTRACTED_DIR}" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
                 else
                   echo "❌ Could not find any openwrt-imagebuilder directory in ${DOCKER_CONTEXT}"
                   echo "Available directories:"
@@ -520,8 +506,6 @@ jobs:
               # Final verification
               if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
                 echo "✅ Successfully extracted to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-                # Ensure proper ownership of the extracted directory
-                sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
               else
                 echo "❌ Failed to locate extracted directory at ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
                 exit 1
@@ -530,7 +514,7 @@ jobs:
               # Create a marker file to indicate this was a fresh setup
               echo "Cache miss: Setting up fresh Docker environment for ${{ env.PLATFORM }}/${{ env.TYPE }} on $(date)" > "${DOCKER_CONTEXT}/cache-status.txt"
             else
-              echo "❌ Failed to download ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT} from $DOWNLOAD_URL"
+              echo "❌ Failed to download from $DOWNLOAD_URL"
               exit 1
             fi
           else
