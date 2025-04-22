@@ -590,7 +590,6 @@ jobs:
               # Force download if no alternative directory found
               cd $BUILDDIR
               echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
-              echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
               curl -L -C - -o "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" "$DOWNLOAD_URL"
               
               if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
