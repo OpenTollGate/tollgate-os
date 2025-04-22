@@ -71,23 +71,32 @@ runs:
         OV_URL="https://downloads.openwrt.org/releases/${{ steps.version.outputs.openwrt_version }}/.overview.json"
         echo "Downloading $OV_URL"
         overview_json=$(curl -fsSL "$OV_URL")
-        # Ensure router ID exists
-        if ! echo "$overview_json" \
-             | jq -e --arg id "${{ inputs.router_id }}" \
-                  '.profiles[] | select(.id == $id)' >/dev/null; then
-          echo "❌ Router ID '${{ inputs.router_id }}' not found in overview.json"
-          exit 1
-        fi
+        
+        # Find the profile matching our router_id
         profile_entry=$(echo "$overview_json" \
           | jq -c --arg id "${{ inputs.router_id }}" \
                '.profiles[] | select(.id == $id)')
+        
+        # Check if we found it
+        if [ -z "$profile_entry" ] || [ "$profile_entry" = "null" ]; then
+          echo "❌ Router ID '${{ inputs.router_id }}' not found in overview.json"
+          exit 1
+        fi
+        
+        # Extract the target
         target=$(echo "$profile_entry" | jq -r '.target')
         echo "Found target: $target"
+        
+        # Display just the relevant profile for our router_id
+        echo "📱 Router profile information:"
+        echo "$profile_entry" | jq '.'
+        
         # Export
         echo "target=$target" >> "$GITHUB_OUTPUT"
-        # Also make entire overview available if needed
-        echo "overview_json<<EOF" >> "$GITHUB_OUTPUT"
-        echo "$overview_json"
+        
+        # Store the profile entry for future reference
+        echo "profile_entry<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$profile_entry"
         echo "EOF" >> "$GITHUB_OUTPUT"
 
     - name: Fetch profiles.json and extract all fields
@@ -102,7 +111,7 @@ runs:
         raw=$(curl -fsSL "$URL")
         
         # Debug: Show the structure of profiles.json
-        echo "📊 profiles.json structure:"
+        echo "📊 profiles.json structure contains these keys:"
         echo "$raw" | jq -r 'keys'
         echo "📝 Checking for router ID: ${{ inputs.router_id }}"
         
@@ -130,7 +139,7 @@ runs:
         # If the profile is empty, log error but don't fail
         if [ -z "$prof" ] || [ "$prof" = "null" ]; then
           echo "⚠️ Could not find profile for ${{ inputs.router_id }} in profiles.json"
-          echo "Available profiles:"
+          echo "Available profiles (first 10):"
           echo "$raw" | jq -r '.profiles | keys[]' | head -10
           echo "...and more"
           # Create empty object as fallback
@@ -139,6 +148,10 @@ runs:
         else
           # Extract device packages as comma-separated list
           dev_pkgs=$(echo "$prof" | jq -r '.device_packages | join(",") // ""')
+          
+          # Display the profile for our router
+          echo "📱 Router profile details from profiles.json:"
+          echo "$prof" | jq '.'
         fi
 
         # Export everything
@@ -150,11 +163,7 @@ runs:
         echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
         echo "device_packages=$dev_pkgs" >> "$GITHUB_OUTPUT"
 
-        # Expose full JSON objects too
-        echo "profiles_json<<EOF" >> "$GITHUB_OUTPUT"
-        echo "$raw"
-        echo "EOF" >> "$GITHUB_OUTPUT"
-
+        # Store only the profile information we need
         echo "profile_json<<EOF" >> "$GITHUB_OUTPUT"
         echo "$prof"
         echo "EOF" >> "$GITHUB_OUTPUT"
