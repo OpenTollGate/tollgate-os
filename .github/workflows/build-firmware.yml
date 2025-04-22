@@ -319,11 +319,14 @@ jobs:
           sudo chown $USER:$USER /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache key for caching - add run_id and matrix model for uniqueness
-          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}-${{ github.run_id }}-${{ matrix.model }}"
+          # Set cache key for caching - without run_id to enable sharing across workflow runs
+          # Create a stable part of the cache key
+          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          # For restore keys, use a prefix that will match across runs
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
+          echo "CACHE_KEY_RESTORE=${CACHE_KEY}" >> $GITHUB_ENV
           
-          # Create a work directory for temporary files (not actually using Docker)
+          # Create a work directory for temporary files
           WORK_DIR="/tmp/openwrt-build/work-dir"
           sudo mkdir -p "${WORK_DIR}"
           sudo chown $USER:$USER "${WORK_DIR}"
@@ -591,11 +594,20 @@ jobs:
       - name: Generate Package Index
         run: |
           cd ${TARGET_DIR}
-          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; }; \
-          export -f mkhash; \
-          export MKHASH=mkhash; \
-          ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
-          gzip -9c packages/local/Packages > packages/local/Packages.gz'
+          # Fix the mkhash function with proper escaping
+          sudo bash -c '
+            mkhash() {
+              if [ "$1" = "sha256" ]; then 
+                sha256sum "$2" | cut -d" " -f1
+              else 
+                sha256sum "$1" | cut -d" " -f1
+              fi
+            }
+            export -f mkhash
+            export MKHASH=mkhash
+            ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages
+            gzip -9c packages/local/Packages > packages/local/Packages.gz
+          '
 
       # Build Firmware with All Packages
       - name: Build Firmware with All Packages
