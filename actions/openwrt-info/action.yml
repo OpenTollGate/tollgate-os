@@ -1,0 +1,136 @@
+name: 'OpenWrt Router Info'
+description: >
+  Given a router ID (and optionally an OpenWrt version), fetch all the
+  metadata your build system needs: version, target, packages, kernel info, etc.
+author: Your Name <you@example.com>
+
+inputs:
+  router_id:
+    description: 'The .overview.json `id` of the router profile (e.g. checkpoint_l-50)'
+    required: true
+  openwrt_version:
+    description: 'Optional override of the OpenWrt release (e.g. 24.10.1). If omitted, fetches latest supported.'
+    required: false
+
+outputs:
+  openwrt_version:
+    description: 'The OpenWrt release used (e.g. 24.10.1)'
+  target:
+    description: 'The download target triple (e.g. kirkwood/generic)'
+  arch_packages:
+    description: 'arch_packages from profiles.json'
+  default_packages:
+    description: 'default_packages from profiles.json'
+  metadata_version:
+    description: 'metadata_version from profiles.json'
+  linux_kernel_release:
+    description: 'linux_kernel.release'
+  linux_kernel_version:
+    description: 'linux_kernel.version'
+  linux_kernel_vermagic:
+    description: 'linux_kernel.vermagic'
+  profile_json:
+    description: 'Full profile object for router_id (JSON‑encoded)'
+  device_packages:
+    description: 'device_packages array for router_id'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        set -e
+        # jq + curl should already be present on ubuntu-latest,
+        # but install to be safe if runner image changes:
+        if ! command -v jq >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+        fi
+
+    - name: Determine OpenWrt version
+      id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${{ inputs.openwrt_version }}" ]; then
+          echo "🚀 No version provided; fetching latest supported from endoflife.date..."
+          openwrt_version=$(curl -fsSL https://endoflife.date/api/openwrt.json \
+            | jq -r '[.[] | select(.support == true)][0].latest')
+        else
+          openwrt_version="${{ inputs.openwrt_version }}"
+        fi
+        echo "Using OpenWrt version: $openwrt_version"
+        echo "openwrt_version=$openwrt_version" >> "$GITHUB_OUTPUT"
+
+    - name: Fetch overview.json and extract target
+      id: overview
+      shell: bash
+      run: |
+        set -euo pipefail
+        OV_URL="https://downloads.openwrt.org/releases/${{ steps.version.outputs.openwrt_version }}/.overview.json"
+        echo "Downloading $OV_URL"
+        overview_json=$(curl -fsSL "$OV_URL")
+        # Ensure router ID exists
+        if ! echo "$overview_json" \
+             | jq -e --arg id "${{ inputs.router_id }}" \
+                  '.profiles[] | select(.id == $id)' >/dev/null; then
+          echo "❌ Router ID '${{ inputs.router_id }}' not found in overview.json"
+          exit 1
+        fi
+        profile_entry=$(echo "$overview_json" \
+          | jq -c --arg id "${{ inputs.router_id }}" \
+               '.profiles[] | select(.id == $id)')
+        target=$(echo "$profile_entry" | jq -r '.target')
+        echo "Found target: $target"
+        # Export
+        echo "target=$target" >> "$GITHUB_OUTPUT"
+        # Also make entire overview available if needed
+        echo "overview_json<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$overview_json"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Fetch profiles.json and extract all fields
+      id: profiles
+      shell: bash
+      run: |
+        set -euo pipefail
+        PV="${{ steps.version.outputs.openwrt_version }}"
+        TG="${{ steps.overview.outputs.target }}"
+        URL="https://downloads.openwrt.org/releases/$PV/targets/$TG/profiles.json"
+        echo "Downloading $URL"
+        raw=$(curl -fsSL "$URL")
+
+        # Pull out the overall top-level fields
+        arch=$(echo "$raw" | jq -r '.arch_packages')
+        defaults=$(echo "$raw" | jq -r '.default_packages | join(",")')
+        meta=$(echo "$raw" | jq -r '.metadata_version')
+        lin_rel=$(echo "$raw" | jq -r '.linux_kernel.release')
+        lin_ver=$(echo "$raw" | jq -r '.linux_kernel.version')
+        lin_vmg=$(echo "$raw" | jq -r '.linux_kernel.vermagic')
+
+        # Pull the specific profile object
+        prof=$(echo "$raw" \
+          | jq -c --arg id "${{ inputs.router_id }}" \
+               '.profiles[$id]')
+
+        # And device_packages within it
+        dev_pkgs=$(echo "$prof" | jq -r '.device_packages | join(",")')
+
+        # Export everything
+        echo "arch_packages=$arch"       >> "$GITHUB_OUTPUT"
+        echo "default_packages=$defaults">> "$GITHUB_OUTPUT"
+        echo "metadata_version=$meta"    >> "$GITHUB_OUTPUT"
+        echo "linux_kernel_release=$lin_rel"  >> "$GITHUB_OUTPUT"
+        echo "linux_kernel_version=$lin_ver"  >> "$GITHUB_OUTPUT"
+        echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
+        echo "device_packages=$dev_pkgs" >> "$GITHUB_OUTPUT"
+
+        # Expose full JSON objects too
+        echo "profiles_json<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$raw"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+        echo "profile_json<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$prof"
+        echo "EOF" >> "$GITHUB_OUTPUT"

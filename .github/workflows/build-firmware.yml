@@ -122,7 +122,6 @@ jobs:
           echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
           echo "overview-file=$VERSION_DIR/.overview.json" >> $GITHUB_OUTPUT
           echo "database-file=$VERSION_DIR/router-database.json" >> $GITHUB_OUTPUT
-          echo "csv-file=$VERSION_DIR/routers.csv" >> $GITHUB_OUTPUT
           echo "version-dir=$VERSION_DIR" >> $GITHUB_OUTPUT
       
       # Try to restore the .overview.json from cache first
@@ -219,7 +218,6 @@ jobs:
           OVERVIEW_FILE="${{ steps.cache-vars.outputs.overview-file }}"
           VERSION_DIR="${{ steps.cache-vars.outputs.version-dir }}"
           DB_FILE="${{ steps.cache-vars.outputs.database-file }}"
-          CSV_FILE="${{ steps.cache-vars.outputs.csv-file }}"
           
           echo "🔄 Creating unified router database for OpenWRT $VERSION..."
           
@@ -276,16 +274,10 @@ jobs:
             fi
           done
           
-          # Create a CSV version for easier grepping
-          echo "# id,target,vendor,model,full_name,has_profile" > "$CSV_FILE"
-          jq -r '.routers[] | [.id, .target, .vendor, .model, .full_name, (.has_full_profile|tostring)] | @csv' "$DB_FILE" >> "$CSV_FILE"
-          
-          echo "✅ Created CSV export of router database: $CSV_FILE"
           echo "✨ Done! Router database creation complete"
           
           # Set outputs
           echo "database_path=$DB_FILE" >> $GITHUB_OUTPUT
-          echo "csv_path=$CSV_FILE" >> $GITHUB_OUTPUT
           echo "router_count=$(jq '.routers | length' "$DB_FILE")" >> $GITHUB_OUTPUT
 
   # Step 3: Build firmware for each router model in the matrix
