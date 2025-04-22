@@ -203,18 +203,8 @@ jobs:
           echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
           echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
           
-          # Debug output
-          echo "✅ Set TARGET=$TARGET"
-          echo "✅ Set PLATFORM=$PLATFORM"
-          echo "✅ Set TYPE=$TYPE"
-          echo "✅ Set TARGET_DEVICE=${PLATFORM}-${TYPE}"
-          
           # Extract architecture packages
           ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
-          if [ -z "$ARCH_PACKAGES" ]; then
-            echo "⚠️ No arch_packages found in router info, using platform as fallback"
-            ARCH_PACKAGES="$PLATFORM"
-          fi
           echo "ARCH_PACKAGES=$ARCH_PACKAGES" >> $GITHUB_ENV
           
           # Parse device packages (comes as comma-separated list)
@@ -233,10 +223,7 @@ jobs:
             echo "🔍 Using architecture mapping from: ${ARCH_MAPPING_PATH}"
             
             # First try direct mapping from architecture name
-            BLOSSOM_ARCH=""
-            if [ -n "$ARCH_PACKAGES" ]; then
-              BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
-            fi
+            BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
             
             # If not found in direct mappings, use platform+type mapping
             if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
