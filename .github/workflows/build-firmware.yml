@@ -258,15 +258,45 @@ jobs:
             
             # Extract arch_packages from profiles.json
             ARCH_PACKAGES=$(jq -r '.arch_packages' "${PROFILES_JSON_PATH}")
+            echo "📦 Architecture packages: ${ARCH_PACKAGES}"
             
-            # Extract device-specific packages for this router model
+            # Get default packages for this architecture
+            echo "📦 Default packages for architecture ${ARCH_PACKAGES}:"
+            DEFAULT_ARCH_PACKAGES=$(jq -r '.default_packages | join(" ")' "${PROFILES_JSON_PATH}")
+            echo "${DEFAULT_ARCH_PACKAGES}" | fold -sw 80
+            
+            # Extract complete device profile as JSON
+            echo "🔍 Full device profile for ${{ matrix.model }}:"
             if jq -e --arg profile "${{ matrix.model }}" '.profiles[$profile]' "${PROFILES_JSON_PATH}" > /dev/null; then
               echo "✅ Found profile ${{ matrix.model }} in profiles.json"
+              
+              # Pretty print the complete device profile JSON for better readability
+              jq --arg profile "${{ matrix.model }}" '.profiles[$profile]' "${PROFILES_JSON_PATH}" | jq '.'
+              
+              # Extract image_prefix for this device
+              IMAGE_PREFIX=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].image_prefix' "${PROFILES_JSON_PATH}")
+              echo "📄 Image prefix: ${IMAGE_PREFIX}"
+              echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
               
               # Extract device_packages array (this returns packages with + or - prefixes)
               DEVICE_PACKAGES=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].device_packages | join(" ")' "${PROFILES_JSON_PATH}")
               echo "📦 Device-specific packages from profiles.json: ${DEVICE_PACKAGES}"
               echo "EXTRA_PACKAGES=${DEVICE_PACKAGES}" >> $GITHUB_ENV
+              
+              # Extract supported device information
+              SUPPORTED_DEVICES=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].supported_devices | join(", ")' "${PROFILES_JSON_PATH}")
+              echo "🔌 Supported devices: ${SUPPORTED_DEVICES}"
+              
+              # Get device title information
+              DEVICE_VENDOR=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].vendor // "Unknown"' "${PROFILES_JSON_PATH}")
+              DEVICE_MODEL=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].model // "Unknown"' "${PROFILES_JSON_PATH}")
+              DEVICE_VARIANT=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].variant // ""' "${PROFILES_JSON_PATH}")
+              
+              echo "📱 Device: ${DEVICE_VENDOR} ${DEVICE_MODEL} ${DEVICE_VARIANT}"
+              
+              # Extract available image types and filesystems
+              echo "📀 Available image types:"
+              jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].images[] | "- \(.type) (\(.filesystem)): \(.name)"' "${PROFILES_JSON_PATH}"
             else
               echo "⚠️ Profile ${{ matrix.model }} not found in profiles.json, using default packages"
               echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
@@ -1008,12 +1038,44 @@ jobs:
       - name: Find Firmware File
         id: find-firmware
         run: |
-          # Look for any sysupgrade.bin file
-          FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+
+          # If we have an image_prefix from the profile, use it to locate the firmware file
+          if [ -n "${IMAGE_PREFIX}" ]; then
+            echo "🔍 Looking for firmware file with prefix: ${IMAGE_PREFIX}"
+            # First try to find sysupgrade file with the image prefix
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "${IMAGE_PREFIX}*sysupgrade*" -type f | head -1)
+            
+            # If not found, try to locate any file with the image prefix
+            if [ -z "$FIRMWARE_PATH" ]; then
+              echo "⚠️ No sysupgrade file found with prefix ${IMAGE_PREFIX}, looking for any matching file"
+              FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "${IMAGE_PREFIX}*" -type f | head -1)
+            fi
+          else
+            echo "⚠️ No image_prefix available, using fallback search method"
+            # Look for any sysupgrade.bin file
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+          fi
           
+          # If still not found, try broader patterns
           if [ -z "$FIRMWARE_PATH" ]; then
+            echo "⚠️ No firmware file found with specific prefix, trying broader search patterns"
             # Try to find any .bin file as fallback
-            FIRMWARE_PATH=$(find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
           fi
           
           if [ -f "$FIRMWARE_PATH" ]; then
@@ -1025,8 +1087,22 @@ jobs:
             echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
             echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
             echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
+            
+            # Log which image type was found (factory, sysupgrade, etc.)
+            if [[ "${FIRMWARE_NAME}" == *"factory"* ]]; then
+              echo "📦 Found factory image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=factory" >> $GITHUB_ENV
+            elif [[ "${FIRMWARE_NAME}" == *"sysupgrade"* ]]; then
+              echo "📦 Found sysupgrade image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=sysupgrade" >> $GITHUB_ENV
+            else
+              echo "📦 Found image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=other" >> $GITHUB_ENV
+            fi
           else
             echo "❌ Error: No firmware file found!"
+            echo "📂 Contents of target directory:"
+            ls -la ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ || echo "Directory not found or empty"
             exit 1
           fi
 
