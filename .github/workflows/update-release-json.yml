@@ -105,7 +105,8 @@ jobs:
             
             if [[ -n "$MODULE" && -n "$ARCH" ]]; then
               # Create a unique key for this module/architecture
-              KEY="${MODULE}-${ARCH}"
+              # Sanitize the key to make it safe for filesystem paths
+              KEY=$(echo "${MODULE}-${ARCH}" | tr -c '[:alnum:]-' '_')
               
               # Create sorted filename (timestamp_key_eventid.json)
               # Zero-pad timestamp to ensure proper sorting
@@ -126,17 +127,19 @@ jobs:
           declare -A processed_keys
           counter=0
           
-          for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
-            # Extract key from filename
+          # Use find instead of ls to handle filenames with special characters better
+          for file in $(find sorted_events -name "*.json" -type f | sort -r 2>/dev/null || echo ""); do
+            # Extract key from filename without using sed (more robust)
             filename=$(basename "$file")
-            key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
+            # Split on underscore and get the middle part
+            key=$(echo "$filename" | awk -F_ '{for(i=2;i<NF-1;i++){if(i>2)printf "_"; printf "%s", $i}}')
             
             if [[ -z "${processed_keys[$key]}" ]]; then
               # This is the first (newest) occurrence of this key
               processed_keys[$key]=1
               # Use simple, sequential filenames that the action will recognize
               cp "$file" "newest_events/event_${counter}.json"
-              created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
+              created_at=$(echo "$filename" | awk -F_ '{gsub(/^0+/, "", $1); print $1}')
               echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
               # Display the hash of the event for verification
               HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
