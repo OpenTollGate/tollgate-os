@@ -389,10 +389,12 @@ jobs:
           sudo mkdir -p "${DOCKER_CONTEXT}"
           echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
-      # Setup Build Directory
+      # Setup Build Directory with proper permissions
       - name: Setup Build Directory
         run: |
-          mkdir -p $BUILDDIR
+          # Create build directory with proper permissions
+          sudo mkdir -p $BUILDDIR
+          sudo chown $USER:$USER $BUILDDIR
           
           # Define the imagebuilder name
           if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
@@ -437,7 +439,7 @@ jobs:
           echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
           
-          # Create Docker context directory
+          # Create Docker context directory with proper permissions
           DOCKER_CONTEXT="${BUILDDIR}/docker-context"
           mkdir -p "${DOCKER_CONTEXT}"
           echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
