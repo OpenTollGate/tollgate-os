@@ -98,24 +98,48 @@ runs:
         PV="${{ steps.version.outputs.openwrt_version }}"
         TG="${{ steps.overview.outputs.target }}"
         URL="https://downloads.openwrt.org/releases/$PV/targets/$TG/profiles.json"
-        echo "Downloading $URL"
+        echo "🔍 Downloading profiles.json from $URL"
         raw=$(curl -fsSL "$URL")
+        
+        # Debug: Show the structure of profiles.json
+        echo "📊 profiles.json structure:"
+        echo "$raw" | jq -r 'keys'
+        echo "📝 Checking for router ID: ${{ inputs.router_id }}"
+        
+        # Debug: Check if router ID exists in profiles
+        if echo "$raw" | jq -e --arg id "${{ inputs.router_id }}" '.profiles[$id]' >/dev/null; then
+          echo "✅ Router ID '${{ inputs.router_id }}' found in profiles.json"
+        else
+          echo "⚠️ Router ID not found with direct key access, trying to check all profile keys..."
+          echo "$raw" | jq -r '.profiles | keys[]' | grep -i "${{ inputs.router_id }}" || echo "No matching profile found"
+        fi
 
         # Pull out the overall top-level fields
         arch=$(echo "$raw" | jq -r '.arch_packages')
         defaults=$(echo "$raw" | jq -r '.default_packages | join(",")')
         meta=$(echo "$raw" | jq -r '.metadata_version')
-        lin_rel=$(echo "$raw" | jq -r '.linux_kernel.release')
-        lin_ver=$(echo "$raw" | jq -r '.linux_kernel.version')
-        lin_vmg=$(echo "$raw" | jq -r '.linux_kernel.vermagic')
-
-        # Pull the specific profile object
+        lin_rel=$(echo "$raw" | jq -r '.linux_kernel.release // "unknown"')
+        lin_ver=$(echo "$raw" | jq -r '.linux_kernel.version // "unknown"')
+        lin_vmg=$(echo "$raw" | jq -r '.linux_kernel.vermagic // "unknown"')
+        
+        # Fix: Access the specific profile using .profiles object key syntax
         prof=$(echo "$raw" \
           | jq -c --arg id "${{ inputs.router_id }}" \
-               '.profiles[$id]')
-
-        # And device_packages within it
-        dev_pkgs=$(echo "$prof" | jq -r '.device_packages | join(",")')
+               '.profiles[$id] // empty')
+               
+        # If the profile is empty, log error but don't fail
+        if [ -z "$prof" ] || [ "$prof" = "null" ]; then
+          echo "⚠️ Could not find profile for ${{ inputs.router_id }} in profiles.json"
+          echo "Available profiles:"
+          echo "$raw" | jq -r '.profiles | keys[]' | head -10
+          echo "...and more"
+          # Create empty object as fallback
+          prof="{}"
+          dev_pkgs=""
+        else
+          # Extract device packages as comma-separated list
+          dev_pkgs=$(echo "$prof" | jq -r '.device_packages | join(",") // ""')
+        fi
 
         # Export everything
         echo "arch_packages=$arch"       >> "$GITHUB_OUTPUT"
