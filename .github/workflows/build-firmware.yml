@@ -968,7 +968,24 @@ jobs:
         if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
         id: build-basic
         run: |
-          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
+          
+          cd ${IMAGEBUILDER_DIR}
           sudo make clean
           
           BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES}"
@@ -982,16 +999,16 @@ jobs:
               PROFILE="${PROFILE}" \
               ${DEVICE_EXTRA} \
               PACKAGES="${BASIC_PACKAGE_LIST}" \
-              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+              FILES="${IMAGEBUILDER_DIR}/files"
           else
             sudo make -j$(nproc) image V=s \
               PROFILE="${PROFILE}" \
               PACKAGES="${BASIC_PACKAGE_LIST}" \
-              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+              FILES="${IMAGEBUILDER_DIR}/files"
           fi
           
           # Check if build succeeded
-          if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          if find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
             echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
             echo "✅ Basic build succeeded!"
           else
