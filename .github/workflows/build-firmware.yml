@@ -1051,7 +1051,7 @@ jobs:
                 echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
                 # Use xfJ for .tar.xz as in the old code
                 tar xfJ "$(basename $DOWNLOAD_URL)"
-              fi
+              fi  # Properly close the if statement with fi
               
               # Check if extraction was successful
               if [ $? -ne 0 ]; then
