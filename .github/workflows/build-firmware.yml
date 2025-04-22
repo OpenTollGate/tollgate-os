@@ -453,9 +453,12 @@ jobs:
           echo "📂 BUILDDIR contents before download:"
           ls -la ./ || true
           
+          # Make sure docker-context is owned by the runner
+          sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
+          
           if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
             echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }}) from $DOWNLOAD_URL"
-            # Use the -O flag to save with original filename as in the old code
+            # Use the -O flag to save with original filename
             curl -L -C - -O "$DOWNLOAD_URL"
             
             # Verify download was successful
@@ -464,17 +467,23 @@ jobs:
               echo "📊 Downloaded file size: $(du -h $(basename $DOWNLOAD_URL) | cut -f1)"
               
               # Make sure the Docker context directory exists with proper permissions
-              mkdir -p "${DOCKER_CONTEXT}"
+              sudo mkdir -p "${DOCKER_CONTEXT}"
+              sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               echo "🔧 Created Docker context directory: ${DOCKER_CONTEXT}"
               
               echo "📦 Extracting OpenWRT ImageBuilder to ${DOCKER_CONTEXT}"
               if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
                 echo "Using zstd extraction for $(basename $DOWNLOAD_URL)"
-                tar --zstd -xf "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
+                # Use sudo for extraction
+                sudo tar --zstd -xf "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
+                # Fix ownership of extracted files
+                sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               else
                 echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
-                # Use xfJ as in the original code for .tar.xz files
-                tar xfJ "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
+                # Use sudo for extraction
+                sudo tar xfJ "$(basename $DOWNLOAD_URL)" -C "${DOCKER_CONTEXT}"
+                # Fix ownership of extracted files
+                sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               fi
               
               # Check if extraction was successful
