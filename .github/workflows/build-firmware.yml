@@ -591,7 +591,7 @@ jobs:
       - name: Generate Package Index
         run: |
           cd ${TARGET_DIR}
-          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+          sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; }; \
           export -f mkhash; \
           export MKHASH=mkhash; \
           ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
@@ -665,6 +665,12 @@ jobs:
                 echo "📄 $(basename "$file") ($(du -h "$file" | cut -f1))"
               done
               echo "build_status=success" >> $GITHUB_OUTPUT
+              
+              # Get the first firmware file path for compatibility with steps that expect a single file
+              FIRST_FIRMWARE=$(echo "$FIRMWARE_FILES" | head -1)
+              echo "firmware_path=$FIRST_FIRMWARE" >> $GITHUB_OUTPUT
+              
+              # And also store the full list for steps that can handle multiple files
               echo "firmware_files<<EOF" >> $GITHUB_OUTPUT
               echo "$FIRMWARE_FILES"
               echo "EOF" >> $GITHUB_OUTPUT
@@ -675,6 +681,32 @@ jobs:
           else
             echo "❌ No files found in build directory"
             echo "build_status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      # Calculate firmware hash and size
+      - name: Calculate Firmware Hash and Size
+        id: firmware-info
+        run: |
+          if [ -n "${{ steps.verify-build.outputs.firmware_path }}" ]; then
+            FIRMWARE_PATH="${{ steps.verify-build.outputs.firmware_path }}"
+            FIRMWARE_NAME=$(basename "$FIRMWARE_PATH")
+            FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
+            FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")
+            
+            echo "firmware_name=$FIRMWARE_NAME" >> $GITHUB_OUTPUT
+            echo "firmware_hash=$FIRMWARE_HASH" >> $GITHUB_OUTPUT
+            echo "firmware_size=$FIRMWARE_SIZE" >> $GITHUB_OUTPUT
+            
+            # Set environment variables for later steps
+            echo "FIRMWARE_HASH=$FIRMWARE_HASH" >> $GITHUB_ENV
+            echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
+            echo "FIRMWARE_NAME=$FIRMWARE_NAME" >> $GITHUB_ENV
+            
+            echo "✅ Firmware Hash: $FIRMWARE_HASH"
+            echo "📊 Firmware Size: $FIRMWARE_SIZE bytes"
+          else
+            echo "⚠️ No firmware path found, cannot calculate hash and size"
+            exit 1
           fi
 
       - name: Upload Firmware to Blossom
