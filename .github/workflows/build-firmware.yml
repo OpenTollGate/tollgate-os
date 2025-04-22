@@ -398,7 +398,7 @@ jobs:
               echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
               
               if curl -s -f -o "$OVERVIEW_FILE" "$URL"; then
-                if [ -s "$OVERVIEW_FILE" ] && grep -q "\"profiles\":" "$OVERVIEW_FILE" 2>/dev/null; then
+                if [ -s "$OVERVIEW_FILE" ] && grep -q "\"profiles\"" "$OVERVIEW_FILE" 2>/dev/null; then
                   SUCCESS=true
                   break
                 else
@@ -427,8 +427,17 @@ jobs:
           # Look up the router in the overview file
           echo "🔍 Finding router $ROUTER_ID in overview file..."
           
-          # Use jq to extract router data from overview.json
-          ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$OVERVIEW_FILE")
+          # First determine if profiles is an array (newer format) or object (older format)
+          # We check if the file contains "profiles": [ which indicates array format
+          if grep -q "\"profiles\": \[" "$OVERVIEW_FILE"; then
+            echo "📊 Detected array format for profiles in overview.json (newer format)"
+            # Use jq to find the router in the array by comparing id field
+            ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$OVERVIEW_FILE")
+          else
+            echo "📊 Detected object format for profiles in overview.json (older format)"
+            # Use jq to extract router data using object access (older format)
+            ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$OVERVIEW_FILE")
+          fi
           
           if [ -z "$ROUTER_DATA" ] || [ "$ROUTER_DATA" = "null" ]; then
             echo "❌ Router ID $ROUTER_ID not found in OpenWRT $VERSION overview"
@@ -476,7 +485,7 @@ jobs:
           mkdir -p "$PROFILE_DIR"
           
           # Check if profiles.json already exists and is valid
-          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
+          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\"" "$PROFILE_FILE" 2>/dev/null; then
             echo "✅ Using existing profile for ${TARGET}"
           else
             # Download the profiles.json if it doesn't exist
@@ -493,7 +502,7 @@ jobs:
               echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
               
               if curl -s -f -o "$PROFILE_FILE" "$PROFILE_URL"; then
-                if [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
+                if [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\"" "$PROFILE_FILE" 2>/dev/null; then
                   SUCCESS=true
                   break
                 else
@@ -517,7 +526,8 @@ jobs:
             echo "✅ Downloaded profiles for $TARGET (OpenWRT $VERSION)"
           fi
           
-          # Extract architecture-specific information
+          # Check if profiles.json has array or object format (similar to overview.json)
+          # First extract architecture-specific information
           ARCH_PACKAGES=$(jq -r '.arch_packages' "$PROFILE_FILE")
           echo "📦 Architecture packages: ${ARCH_PACKAGES}"
           
@@ -529,7 +539,15 @@ jobs:
           
           # Extract complete device profile
           echo "🔍 Full device profile for $ROUTER_ID from profiles.json:"
-          DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$PROFILE_FILE")
+          
+          # Check if profiles in profiles.json is an array or object
+          if grep -q "\"profiles\": \[" "$PROFILE_FILE"; then
+            echo "📊 Detected array format for profiles in profiles.json (newer format)"
+            DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$PROFILE_FILE")
+          else
+            echo "📊 Detected object format for profiles in profiles.json (older format)"
+            DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$PROFILE_FILE")
+          fi
           
           if [ -n "$DEVICE_PROFILE" ] && [ "$DEVICE_PROFILE" != "null" ]; then
             echo "$DEVICE_PROFILE" | jq '.'
