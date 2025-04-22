@@ -319,8 +319,8 @@ jobs:
           sudo chown $USER:$USER /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache key for caching
-          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          # Set cache key for caching - add run_id and matrix model for uniqueness
+          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}-${{ github.run_id }}-${{ matrix.model }}"
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
           
           # Create a work directory for temporary files (not actually using Docker)
