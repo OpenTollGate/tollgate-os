@@ -410,7 +410,7 @@ jobs:
                 echo "⚠️ Download attempt $ATTEMPT failed"
               fi
               
-              if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+              if [ "$ATTEMPT" -lt $MAX_RETRIES ]; then
                 sleep 3
               fi
             done
@@ -1498,6 +1498,58 @@ jobs:
           sudo make clean
           
           COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
+          
+          if [ -f "$FIRMWARE_PATH" ]; then
+            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
+            echo "✅ Found firmware file: ${FIRMWARE_NAME}"
+            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
+            echo "firmware_name=${FIRMWARE_NAME}" >> $GITHUB_OUTPUT
+            echo "FIRMWARE_PATH=${FIRMWARE_PATH}" >> $GITHUB_ENV
+            echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
+            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
+            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
+            
+            # Log which image type was found (factory, sysupgrade, etc.)
+            if [[ "${FIRMWARE_NAME}" == *"factory"* ]]; then
+              echo "📦 Found factory image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=factory" >> $GITHUB_ENV
+            elif [[ "${FIRMWARE_NAME}" == *"sysupgrade"* ]]; then
+              echo "📦 Found sysupgrade image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=sysupgrade" >> $GITHUB_ENV
+            else
+              echo "📦 Found image: ${FIRMWARE_NAME}"
+              echo "IMAGE_TYPE=other" >> $GITHUB_ENV
+            fi
+          else
+            echo "❌ Error: No firmware file found!"
+            echo "📂 Contents of target directory:"
+            ls -la ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ || echo "Directory not found or empty"
+            exit 1
+          fi
+
+      - name: Verify Firmware Build and Find Path
+        id: find-firmware
+        run: |
+          # Find the actual firmware file to upload
+          IMAGEBUILDER_DIR="${TARGET_DIR:-${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}}"
+          
+          # Check if build succeeded
+          FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+          
+          # If no sysupgrade file, try factory image
+          if [ -z "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*factory.bin" -type f | head -1)
+          fi
+          
+          # If still no file, try any .bin file
+          if [ -z "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+          fi
+          
+          # If still no file, try any .img file
+          if [ -z "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.img" -type f | head -1)
+          fi
           
           if [ -f "$FIRMWARE_PATH" ]; then
             FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
