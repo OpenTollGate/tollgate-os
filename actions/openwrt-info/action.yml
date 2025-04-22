@@ -87,12 +87,31 @@ runs:
         target=$(echo "$profile_entry" | jq -r '.target')
         echo "Found target: $target"
         
+        # Extract the architecture from target
+        # This is important as packages are now organized by architecture, not target board
+        arch=$(echo "$profile_entry" | jq -r '.arch // ""')
+        if [ -z "$arch" ]; then
+          # If arch isn't directly available, try to determine it from target
+          case "$target" in
+            *"x86"*) arch="x86_64" ;;
+            *"aarch64"*) arch="aarch64_generic" ;;
+            *"arm"*) arch="arm_generic" ;;
+            *"mips"*) arch="mips_24kc" ;;
+            *"mipsel"*) arch="mipsel_24kc" ;;
+            *) arch=$(echo "$target" | cut -d'/' -f1) ;;
+          esac
+          echo "Determined architecture from target: $arch"
+        else
+          echo "Found architecture: $arch"
+        fi
+        
         # Display just the relevant profile for our router_id
         echo "📱 Router profile information:"
         echo "$profile_entry" | jq '.'
         
         # Export
         echo "target=$target" >> "$GITHUB_OUTPUT"
+        echo "arch=$arch" >> "$GITHUB_OUTPUT"
         
         # Store the profile entry for future reference
         echo "profile_entry<<EOF" >> "$GITHUB_OUTPUT"
