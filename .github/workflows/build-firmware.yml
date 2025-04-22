@@ -174,14 +174,28 @@ jobs:
           router_id: ${{ matrix.model }}
           openwrt_version: ${{ needs.check-versions.outputs.openwrt_version }}
       
+      # Debug output of router info
+      - name: Debug Router Info
+        run: |
+          echo "Target: ${{ steps.router-info.outputs.target }}"
+          echo "Arch Packages: ${{ steps.router-info.outputs.arch_packages }}"
+          echo "Device Packages: ${{ steps.router-info.outputs.device_packages }}"
+      
       # Set Build Variables based on router info
       - name: Set Build Variables
         id: vars
         run: |
           # Extract target and split into platform/type
           TARGET="${{ steps.router-info.outputs.target }}"
-          PLATFORM=$(echo $TARGET | cut -d'/' -f1)
-          TYPE=$(echo $TARGET | cut -d'/' -f2)
+          if [[ "$TARGET" == *"/"* ]]; then
+            PLATFORM=$(echo "$TARGET" | cut -d'/' -f1)
+            TYPE=$(echo "$TARGET" | cut -d'/' -f2)
+          else
+            echo "⚠️ Target format is unexpected: $TARGET"
+            # Default fallback values
+            PLATFORM="$TARGET"
+            TYPE="generic"
+          fi
           
           echo "TARGET=$TARGET" >> $GITHUB_ENV
           echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
@@ -189,8 +203,18 @@ jobs:
           echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
           echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
           
+          # Debug output
+          echo "✅ Set TARGET=$TARGET"
+          echo "✅ Set PLATFORM=$PLATFORM"
+          echo "✅ Set TYPE=$TYPE"
+          echo "✅ Set TARGET_DEVICE=${PLATFORM}-${TYPE}"
+          
           # Extract architecture packages
           ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
+          if [ -z "$ARCH_PACKAGES" ]; then
+            echo "⚠️ No arch_packages found in router info, using platform as fallback"
+            ARCH_PACKAGES="$PLATFORM"
+          fi
           echo "ARCH_PACKAGES=$ARCH_PACKAGES" >> $GITHUB_ENV
           
           # Parse device packages (comes as comma-separated list)
@@ -209,7 +233,10 @@ jobs:
             echo "🔍 Using architecture mapping from: ${ARCH_MAPPING_PATH}"
             
             # First try direct mapping from architecture name
-            BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
+            BLOSSOM_ARCH=""
+            if [ -n "$ARCH_PACKAGES" ]; then
+              BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
+            fi
             
             # If not found in direct mappings, use platform+type mapping
             if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
@@ -230,6 +257,9 @@ jobs:
                 # Set default based on platform type
                 PLATFORM_TYPE="${PLATFORM}_${TYPE}"
                 case "${PLATFORM_TYPE}" in
+                  "ramips_mt7621")
+                    BLOSSOM_ARCH="mipsel_24kc"
+                    ;;
                   "ath79_generic"|"ath79_nand")
                     BLOSSOM_ARCH="mips_24kc"
                     ;;
