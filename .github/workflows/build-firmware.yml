@@ -316,28 +316,32 @@ jobs:
           
           # Set up build directory
           sudo mkdir -p /tmp/openwrt-build
+          sudo chown $USER:$USER /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache key for Docker layer caching
+          # Set cache key for caching
           CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
           
-          # Create a stable, consistent directory path for the Docker context
-          DOCKER_CONTEXT="/tmp/openwrt-build/docker-context"
-          sudo mkdir -p "${DOCKER_CONTEXT}"
-          echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
+          # Create a work directory for temporary files (not actually using Docker)
+          WORK_DIR="/tmp/openwrt-build/work-dir"
+          sudo mkdir -p "${WORK_DIR}"
+          sudo chown $USER:$USER "${WORK_DIR}"
+          echo "WORK_DIR=${WORK_DIR}" >> $GITHUB_ENV
 
-      # Create a stable, consistent directory path for the Docker context with correct permissions
-      - name: Create Docker Context with Correct Permissions
+      # Remove Docker-related step that was causing permission issues
+      - name: Setup Temporary Work Directory
         run: |
-          # Remove the old Docker context if it exists (to avoid permission issues)
-          sudo rm -rf /tmp/openwrt-build/docker-context || true
+          # Verify permissions and access to the build directory
+          echo "🔍 Checking build directory permissions:"
+          ls -la /tmp/openwrt-build/
           
-          # Create a new Docker context directory with correct permissions
-          mkdir -p /tmp/openwrt-build/docker-context
-          chmod 755 /tmp/openwrt-build/docker-context
+          # Ensure the work directory exists with proper permissions
+          mkdir -p $WORK_DIR
+          chmod 755 $WORK_DIR
           
-          echo "DOCKER_CONTEXT=/tmp/openwrt-build/docker-context" >> $GITHUB_ENV
+          echo "✅ Work directory is ready: $WORK_DIR"
+          ls -la $WORK_DIR/
 
       # Setup Build Directory with proper permissions
       - name: Setup Build Directory
