@@ -1302,11 +1302,34 @@ jobs:
           mkdir -p "${PACKAGES_DIR}"
           echo "PACKAGES_DIR=${PACKAGES_DIR}" >> $GITHUB_ENV
           
-          # Convert BLOSSOM_ARCH (if needed)
-          if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
-            TARGET_ARCH="mips_24kc"
-          else
+          # Load architecture mapping from the architecture_mapping.json file
+          ARCH_MAPPING_FILE="${GITHUB_WORKSPACE}/files/etc/tollgate/architecture_mapping.json"
+          echo "🔍 Using architecture mapping from: $ARCH_MAPPING_FILE"
+          
+          # Get the target architecture - default to BLOSSOM_ARCH if can't map
+          if [ -f "$ARCH_MAPPING_FILE" ]; then
+            # First try platform mapping
+            PLATFORM_TYPE="${PLATFORM}/${TYPE}"
+            TARGET_ARCH=$(jq -r --arg platform "$PLATFORM_TYPE" '.platform_mappings[$platform] // ""' "$ARCH_MAPPING_FILE")
+            
+            # If no platform mapping, try direct mapping
+            if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
+              TARGET_ARCH=$(jq -r --arg arch "$BLOSSOM_ARCH" '.mappings[$arch] // ""' "$ARCH_MAPPING_FILE")
+            fi
+            
+            # If still no mapping, use default
+            if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
+              TARGET_ARCH=$(jq -r '.default // ""' "$ARCH_MAPPING_FILE")
+              echo "⚠️ Using default architecture mapping: ${TARGET_ARCH}"
+            else
+              echo "✅ Mapped architecture ${BLOSSOM_ARCH} to ${TARGET_ARCH}"
+            fi
+          fi
+          
+          # If mapping failed or file missing, fallback to BLOSSOM_ARCH
+          if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
             TARGET_ARCH="${BLOSSOM_ARCH}"
+            echo "⚠️ No architecture mapping found, using original: ${TARGET_ARCH}"
           fi
           
           echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
@@ -1324,7 +1347,7 @@ jobs:
               '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
               
             # Skip placeholder URLs
-            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
+            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
               echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
               continue
             fi
@@ -1531,35 +1554,104 @@ jobs:
         id: find-firmware
         run: |
           # Find the actual firmware file to upload
+          PLATFORM="${{ steps.lookup-router.outputs.platform }}"
+          TYPE="${{ steps.lookup-router.outputs.type }}"
+          BLOSSOM_ARCH="${{ steps.lookup-router.outputs.blossom_arch }}"
           IMAGEBUILDER_DIR="${TARGET_DIR:-${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}}"
           
-          # Check if build succeeded
-          FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+          echo "🔍 Checking for firmware files in potential locations..."
+          echo "PLATFORM: $PLATFORM"
+          echo "TYPE: $TYPE"
+          echo "BLOSSOM_ARCH: $BLOSSOM_ARCH"
+          echo "IMAGEBUILDER_DIR: $IMAGEBUILDER_DIR"
+          
+          # First check IMAGEBUILDER_DIR/bin/targets/${PLATFORM}/${TYPE}/
+          FIRMWARE_DIR="${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}"
+          
+          if [ -d "$FIRMWARE_DIR" ]; then
+            echo "📂 Found firmware directory at standard path: $FIRMWARE_DIR"
+          else 
+            echo "⚠️ Standard firmware path not found, searching recursively..."
+            
+            # Try to find the bin directory recursively
+            BIN_DIRS=$(find "${IMAGEBUILDER_DIR}" -type d -name "bin" 2>/dev/null)
+            if [ -n "$BIN_DIRS" ]; then
+              echo "📂 Found bin directories:"
+              echo "$BIN_DIRS"
+              
+              # Use the first bin directory found
+              FIRMWARE_DIR=$(echo "$BIN_DIRS" | head -1)
+              echo "Using directory: $FIRMWARE_DIR"
+              
+              # Look for target-specific directories
+              TARGET_DIRS=$(find "$FIRMWARE_DIR" -type d -path "*${PLATFORM}*${TYPE}*" 2>/dev/null)
+              if [ -n "$TARGET_DIRS" ]; then
+                echo "📂 Found target directories for ${PLATFORM}/${TYPE}:"
+                echo "$TARGET_DIRS"
+                FIRMWARE_DIR=$(echo "$TARGET_DIRS" | head -1)
+                echo "Using target directory: $FIRMWARE_DIR"
+              fi
+            else
+              # If we still can't find the bin directory, look for any directory with bin files
+              echo "⚠️ No bin directory found, searching for .bin files..."
+              FIRMWARE_DIR="${IMAGEBUILDER_DIR}"
+            fi
+          fi
+          
+          # Now find firmware files in the firmware directory
+          echo "🔍 Searching for firmware files in $FIRMWARE_DIR..."
+          
+          # First look for sysupgrade files
+          FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" -type f | head -1)
           
           # If no sysupgrade file, try factory image
-          if [ -z "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*factory.bin" -type f | head -1)
+          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*factory.bin" -type f | head -1)
           fi
           
           # If still no file, try any .bin file
-          if [ -z "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*.bin" -type f | head -1)
           fi
           
           # If still no file, try any .img file
-          if [ -z "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.img" -type f | head -1)
+          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
+            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*.img" -type f | head -1)
+          fi
+          
+          # If still no file, try searching the entire workspace
+          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
+            echo "⚠️ No firmware file found in the expected directories, searching the entire workspace..."
+            FIRMWARE_PATH=$(find "${GITHUB_WORKSPACE}" -name "*.bin" -o -name "*.img" | grep -v "/dl/" | head -1)
+          fi
+          
+          # Get the package URL from release.json based on architecture
+          RELEASE_JSON="${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
+          if [ -f "$RELEASE_JSON" ]; then
+            echo "📋 Found release.json at $RELEASE_JSON"
+            PACKAGE_URL=$(jq -r --arg arch "$BLOSSOM_ARCH" '.modules[] | select(.name == "basic") | .versions[0].architectures[$arch].url' "$RELEASE_JSON")
+            PACKAGE_HASH=$(jq -r --arg arch "$BLOSSOM_ARCH" '.modules[] | select(.name == "basic") | .versions[0].architectures[$arch].hash' "$RELEASE_JSON")
+            
+            echo "📦 Package URL for $BLOSSOM_ARCH: $PACKAGE_URL"
+            echo "📦 Package hash: $PACKAGE_HASH"
+            
+            echo "package_url=$PACKAGE_URL" >> $GITHUB_OUTPUT
+            echo "package_hash=$PACKAGE_HASH" >> $GITHUB_OUTPUT
+            echo "PACKAGE_URL=$PACKAGE_URL" >> $GITHUB_ENV
+            echo "PACKAGE_HASH=$PACKAGE_HASH" >> $GITHUB_ENV
+          else
+            echo "⚠️ Could not find release.json file"
           fi
           
           if [ -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
-            echo "✅ Found firmware file: ${FIRMWARE_NAME}"
+            FIRMWARE_NAME=$(basename "$FIRMWARE_PATH")
+            echo "✅ Found firmware file: ${FIRMWARE_PATH}"
             echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
             echo "firmware_name=${FIRMWARE_NAME}" >> $GITHUB_OUTPUT
             echo "FIRMWARE_PATH=${FIRMWARE_PATH}" >> $GITHUB_ENV
             echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
-            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
-            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
+            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH" 2>/dev/null || stat -f%z "$FIRMWARE_PATH")" >> $GITHUB_ENV
+            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" 2>/dev/null || shasum -a 256 "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
             
             # Log which image type was found (factory, sysupgrade, etc.)
             if [[ "${FIRMWARE_NAME}" == *"factory"* ]]; then
@@ -1574,8 +1666,14 @@ jobs:
             fi
           else
             echo "❌ Error: No firmware file found!"
-            echo "📂 Contents of target directory:"
-            ls -la ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ || echo "Directory not found or empty"
+            
+            # List the directory structure for debugging
+            echo "📂 Directory structure of target directory:"
+            find "${IMAGEBUILDER_DIR}" -type d | sort
+            
+            echo "📂 All potential firmware files (.bin and .img):"
+            find "${GITHUB_WORKSPACE}" -name "*.bin" -o -name "*.img" | grep -v "/dl/"
+            
             exit 1
           fi
 
