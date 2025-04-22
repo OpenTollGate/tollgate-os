@@ -1010,8 +1010,14 @@ jobs:
           fi
           
           if [ -f "$FIRMWARE_PATH" ]; then
-            echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
+            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
+            echo "✅ Found firmware file: ${FIRMWARE_NAME}"
+            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
+            echo "firmware_name=${FIRMWARE_NAME}" >> $GITHUB_OUTPUT
+            echo "FIRMWARE_PATH=${FIRMWARE_PATH}" >> $GITHUB_ENV
+            echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
             echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
+            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
           else
             echo "❌ Error: No firmware file found!"
             exit 1
