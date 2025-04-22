@@ -165,9 +165,9 @@ jobs:
           path: |
             /var/cache/apt/archives
             ~/.cache/pip
-          key: ${{ runner.os }}-deps-${{ hashFiles('**/build-firmware.yml') }}
+          key: ${{ runner.os }}-deps-v1-${{ hashFiles('files/etc/tollgate/release.json') }}
           restore-keys: |
-            ${{ runner.os }}-deps-
+            ${{ runner.os }}-deps-v1-
 
       # Install system dependencies
       - name: Install System Dependencies
