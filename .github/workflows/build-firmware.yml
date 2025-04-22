@@ -726,7 +726,7 @@ jobs:
           mimeType: "application/octet-stream"
           fileHash: ${{ steps.upload_firmware.outputs.hash }}
           originalHash: ${{ env.FIRMWARE_HASH }}
-          filename: ${{ steps.verify-build.outputs.firmware_files }}
+          filename: ${{ steps.firmware-info.outputs.firmware_name }}
           content: "TollGate OS Firmware for ${{ matrix.model }}"
           nsec: ${{ secrets.NSEC }}
           size: ${{ env.FIRMWARE_SIZE }}
