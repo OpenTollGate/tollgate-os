@@ -472,18 +472,22 @@ jobs:
               echo "✅ Successfully downloaded ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
               echo "📊 Downloaded file size: $(du -h ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT} | cut -f1)"
               
-              # Make sure the target directory exists
-              mkdir -p "${DOCKER_CONTEXT}"
+              # Make sure the target directory exists with proper permissions
+              sudo mkdir -p "${DOCKER_CONTEXT}"
+              sudo chown $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               echo "🔧 Created Docker context directory: ${DOCKER_CONTEXT}"
               
               echo "📦 Extracting OpenWRT ImageBuilder to ${DOCKER_CONTEXT}"
               if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
                 echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+                sudo tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
               else
                 echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
+                sudo tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
               fi
+              
+              # Ensure proper ownership
+              sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}"
               
               # Check if extraction was successful
               if [ $? -ne 0 ]; then
@@ -504,7 +508,7 @@ jobs:
                 if [ -n "${EXTRACTED_DIR}" ]; then
                   echo "✅ Found extracted directory: ${EXTRACTED_DIR}"
                   echo "Creating symlink from ${EXTRACTED_DIR} to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-                  ln -sf "${EXTRACTED_DIR}" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                  sudo ln -sf "${EXTRACTED_DIR}" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
                 else
                   echo "❌ Could not find any openwrt-imagebuilder directory in ${DOCKER_CONTEXT}"
                   echo "Available directories:"
@@ -516,6 +520,8 @@ jobs:
               # Final verification
               if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
                 echo "✅ Successfully extracted to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+                # Ensure proper ownership of the extracted directory
+                sudo chown -R $(whoami):$(whoami) "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
               else
                 echo "❌ Failed to locate extracted directory at ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
                 exit 1
