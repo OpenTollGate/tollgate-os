@@ -803,7 +803,24 @@ jobs:
 
       - name: Generate Package Index
         run: |
-          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
+          
+          cd ${IMAGEBUILDER_DIR}
           sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
           export -f mkhash; \
           export MKHASH=mkhash; \
@@ -813,24 +830,40 @@ jobs:
       - name: Analyze Package Sizes
         run: |
           echo "📊 Analyzing TollGate package sizes:"
-          cd ${BUILDDIR}/${IMAGEBUILDER_NAME}
+          
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
           
           # Check if packages directory has .ipk files 
-          if ls packages/local/*.ipk 1> /dev/null 2>&1; then
+          if ls ${IMAGEBUILDER_DIR}/packages/local/*.ipk 1> /dev/null 2>&1; then
             # Get total size of all packages
-            TOTAL_SIZE=$(du -ch packages/local/*.ipk | grep total | cut -f1)
+            TOTAL_SIZE=$(du -ch ${IMAGEBUILDER_DIR}/packages/local/*.ipk | grep total | cut -f1)
             echo "Total size of all packages: ${TOTAL_SIZE}"
             
             # List packages by size
             echo "Packages ordered by size (largest first):"
-            du -h packages/local/*.ipk | sort -hr
+            du -h ${IMAGEBUILDER_DIR}/packages/local/*.ipk | sort -hr
           else
             echo "⚠️ No .ipk packages found in packages/local/"
           fi
           
           # Check device specs
-          if grep -q "Flash" "${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
-            FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${IMAGEBUILDER_NAME}/target/linux/${PLATFORM}/image/Makefile)
+          if grep -q "Flash" "${IMAGEBUILDER_DIR}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
+            FLASH_INFO=$(grep "Flash" ${IMAGEBUILDER_DIR}/target/linux/${PLATFORM}/image/Makefile)
             echo "Device flash information: ${FLASH_INFO}"
           else
             echo "⚠️ Flash information not found in Makefile"
@@ -844,8 +877,25 @@ jobs:
         continue-on-error: true
         id: build-all
         run: |
+          # Use TARGET_DIR if available, or find the right ImageBuilder directory
+          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
+            IMAGEBUILDER_DIR="${TARGET_DIR}"
+          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
+          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
+          else
+            # Last resort - find any ImageBuilder directory
+            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
+            if [ -z "${IMAGEBUILDER_DIR}" ]; then
+              echo "❌ Could not locate ImageBuilder directory!"
+              exit 1
+            fi
+          fi
+          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
+          
           COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-          cd ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}
+          cd ${IMAGEBUILDER_DIR}
           
           echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
           
@@ -856,24 +906,24 @@ jobs:
               PROFILE="${PROFILE}" \
               ${DEVICE_EXTRA} \
               PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+              FILES="${IMAGEBUILDER_DIR}/files"
           else
             # Original command
             sudo make -j$(nproc) image V=s \
               PROFILE="${PROFILE}" \
               PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/files"
+              FILES="${IMAGEBUILDER_DIR}/files"
           fi
           
           # Check if build succeeded
-          if find ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          if find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
             echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
             echo "✅ Build with ALL packages succeeded!"
             exit 0
           else
             echo "❌ Build with ALL packages failed, will try with fewer packages"
             # Show logs or errors
-            cat ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+            cat ${IMAGEBUILDER_DIR}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
             exit 1
           fi
 
