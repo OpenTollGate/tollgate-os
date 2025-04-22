@@ -14,7 +14,7 @@ on:
         description: 'Enable Docker layer caching'
         required: false
         type: boolean
-        default: true
+        default: false
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
@@ -120,7 +120,7 @@ jobs:
         ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
         uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
       # Default settings for Docker cache
-      CACHE_KEY_PREFIX: openwrt-builder
+      CACHE_KEY_PREFIX: openwrt-builder-1
       ENABLE_CACHE: ${{ github.event.inputs.enable_cache || 'true' }}
       # Nostr relay configuration
       NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
