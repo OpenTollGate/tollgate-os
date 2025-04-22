@@ -144,25 +144,50 @@ jobs:
           path: |
             /var/cache/apt/archives
             ~/.cache/pip
-          key: ${{ runner.os }}-deps-v1-${{ hashFiles('files/etc/tollgate/release.json') }}
+            /usr/local/lib/
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-system-deps-v2-${{ hashFiles('files/etc/tollgate/release.json') }}
           restore-keys: |
-            ${{ runner.os }}-deps-v1-
+            ${{ runner.os }}-system-deps-v2-
+            ${{ runner.os }}-system-deps-
 
       # Install system dependencies
       - name: Install System Dependencies
         run: |
-          sudo apt-get update
-          # Use the cache if available
-          if [ "${{ steps.deps-cache.outputs.cache-hit }}" == "true" ]; then
-            echo "✅ Using cached dependencies"
+          # Check if apt package lists are in cache
+          if [ "${{ steps.deps-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "/var/lib/apt/lists" ] || [ -z "$(ls -A /var/lib/apt/lists)" ]; then
+            echo "📦 Updating APT package lists..."
+            sudo apt-get update
+          else
+            echo "✅ Using cached APT package lists"
           fi
-          sudo apt-get install -y \
-            gawk \
-            build-essential \
-            curl \
-            zstd \
-            libssl-dev \
-            jq
+          
+          # Get a list of already installed packages
+          INSTALLED_PKGS=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | sort)
+          NEEDED_PKGS="gawk build-essential curl zstd libssl-dev jq"
+          PKGS_TO_INSTALL=""
+          
+          # Check which packages need to be installed
+          for pkg in $NEEDED_PKGS; do
+            if ! echo "$INSTALLED_PKGS" | grep -q "^$pkg$"; then
+              PKGS_TO_INSTALL="$PKGS_TO_INSTALL $pkg"
+            fi
+          done
+          
+          # Install only missing packages
+          if [ -n "$PKGS_TO_INSTALL" ]; then
+            echo "📦 Installing missing packages: $PKGS_TO_INSTALL"
+            sudo apt-get install -y $PKGS_TO_INSTALL
+          else
+            echo "✅ All required APT packages already installed"
+          fi
+          
+          # Use cached pip if available
+          if [ -d "~/.cache/pip" ] && [ -n "$(ls -A ~/.cache/pip 2>/dev/null)" ]; then
+            echo "✅ Using cached PIP packages"
+          fi
+          
+          # Install Python dependencies
           python -m pip install --upgrade pip
           pip install nostr
       
