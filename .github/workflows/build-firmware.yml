@@ -714,7 +714,7 @@ jobs:
         uses: c03rad0r/cli-blossom-uploader-go@main
         with:
           host: "https://blossom.swissdash.site"
-          filePath: ${{ steps.verify-build.outputs.firmware_files }}
+          filePath: ${{ steps.verify-build.outputs.firmware_path }}
           nostrPrivateKey: ${{ secrets.NSECBECH }}
 
       - name: Publish Firmware NIP-94 Metadata
