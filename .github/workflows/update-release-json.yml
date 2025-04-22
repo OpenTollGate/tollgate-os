@@ -129,9 +129,9 @@ jobs:
             
             if [[ -n "$MODULE" && -n "$ARCH" ]]; then
               # Sanitize module and architecture to ensure they don't contain invalid characters for filenames
-              # Replace any slashes, spaces, and template variables with underscores
+              # Replace any slashes or other problematic characters with underscores
               SAFE_MODULE=$(echo "$MODULE" | tr -c '[:alnum:]-' '_' | tr -s '_')
-              SAFE_ARCH=$(echo "$ARCH" | tr -c '[:alnum:]-' '_' | tr -s '_' | sed 's/{{[^}]*}}/_/g')
+              SAFE_ARCH=$(echo "$ARCH" | tr -c '[:alnum:]-' '_' | tr -s '_')
               
               # Create a unique key for this module/architecture using the sanitized values
               KEY="${SAFE_MODULE}-${SAFE_ARCH}"
