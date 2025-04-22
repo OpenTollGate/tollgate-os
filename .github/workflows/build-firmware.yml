@@ -327,6 +327,18 @@ jobs:
           sudo mkdir -p "${DOCKER_CONTEXT}"
           echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
+      # Create a stable, consistent directory path for the Docker context with correct permissions
+      - name: Create Docker Context with Correct Permissions
+        run: |
+          # Remove the old Docker context if it exists (to avoid permission issues)
+          sudo rm -rf /tmp/openwrt-build/docker-context || true
+          
+          # Create a new Docker context directory with correct permissions
+          mkdir -p /tmp/openwrt-build/docker-context
+          chmod 755 /tmp/openwrt-build/docker-context
+          
+          echo "DOCKER_CONTEXT=/tmp/openwrt-build/docker-context" >> $GITHUB_ENV
+
       # Setup Build Directory with proper permissions
       - name: Setup Build Directory
         run: |
@@ -377,12 +389,14 @@ jobs:
           echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
 
-      # Try to restore from cache
+      # Try to restore from cache - with fixed permissions
       - name: Restore ImageBuilder from Cache
         id: cache-imagebuilder
         uses: actions/cache/restore@v3
         with:
-          path: ${{ env.BUILDDIR }}
+          path: |
+            ${{ env.BUILDDIR }}/*
+            !${{ env.BUILDDIR }}/docker-context
           key: ${{ env.CACHE_KEY }}
           restore-keys: |
             ${{ env.CACHE_KEY_PREFIX }}-${{ needs.check-versions.outputs.openwrt_version }}-
