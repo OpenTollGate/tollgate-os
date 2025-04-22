@@ -39,64 +39,6 @@ runs:
         echo "Looking for NIP-94 events in ${{ inputs.artifacts_path }}"
         ls -la ${{ inputs.artifacts_path }}
         
-        # Create sorted events directory
-        SORTED_DIR="${{ github.workspace }}/sorted_events"
-        mkdir -p "${SORTED_DIR}"
-        
-        # Set up architecture mapping
-        ARCH_MAPPING_FILE="${{ github.workspace }}/files/etc/tollgate/architecture_mapping.json"
-        bash ${{ github.action_path }}/setup-arch-mapping.sh "${ARCH_MAPPING_FILE}" "${SORTED_DIR}"
-        
-        # Process all event files
-        echo "Extracting and sorting NIP-94 events by timestamp..."
-        for event_file in ${{ inputs.artifacts_path }}/*.json; do
-          if [ ! -f "$event_file" ]; then
-            echo "No JSON files found"
-            break
-          fi
-          
-          # Extract timestamp and event ID
-          TIMESTAMP=$(jq -r '.created_at' "$event_file")
-          EVENT_ID=$(jq -r '.id' "$event_file")
-          
-          # Extract filename and architecture from event tags
-          FILENAME=""
-          ARCH=""
-          
-          while read -r tag_type tag_value; do
-            if [ "$tag_type" = "filename" ]; then
-              FILENAME="$tag_value"
-            elif [ "$tag_type" = "arch" ]; then
-              ARCH="${tag_value}"
-            fi
-          done < <(jq -r '.tags[] | select(.[0] == "filename" or .[0] == "arch") | .[0] + " " + .[1]' "$event_file")
-          
-          if [ -z "$FILENAME" ] || [ -z "$ARCH" ]; then
-            echo "Warning: Missing filename or architecture in event $EVENT_ID, skipping"
-            continue
-          fi
-          
-          # Map the architecture to a standard format
-          # Replace any "/" in arch with "_" to avoid path issues
-          ARCH_SAFE=$(echo "$ARCH" | tr '/' '_')
-          MAPPED_ARCH=$("${SORTED_DIR}/get_arch_mapping.sh" "$ARCH")
-          
-          echo "Architecture: $ARCH → $MAPPED_ARCH (safe name: $ARCH_SAFE)"
-          
-          # Create directory for this event using timestamp and filename
-          EVENT_DIR="${SORTED_DIR}/$(printf "%020d" "$TIMESTAMP")_${FILENAME%.*}"
-          mkdir -p "$EVENT_DIR"
-          
-          # Copy event file to sorted directory with mapped architecture
-          cp "$event_file" "$EVENT_DIR/${MAPPED_ARCH}_${EVENT_ID}.json"
-          
-          echo "Processed event $EVENT_ID with timestamp $TIMESTAMP for $FILENAME ($ARCH → $MAPPED_ARCH)"
-        done
-        
-        # Display the organized events
-        echo "Organized events:"
-        find "${SORTED_DIR}" -type f -name "*.json" | sort
-        
         # Create a backup of the original file
         cp ${{ inputs.release_json_path }} ${{ inputs.release_json_path }}.bak
         
