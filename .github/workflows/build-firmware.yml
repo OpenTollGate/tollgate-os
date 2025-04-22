@@ -748,3 +748,12 @@ jobs:
           name: firmware-${{ matrix.model }}.img
           path: ${{ steps.verify-build.outputs.firmware_files }}
           retention-days: 5
+          
+      # Upload x1860 firmware as a specifically named artifact for easy access
+      - name: Upload x1860 Firmware Artifact (if applicable)
+        if: contains(steps.verify-build.outputs.firmware_path, 'covr-x1860')
+        uses: actions/upload-artifact@v4
+        with:
+          name: dlink-covr-x1860-firmware
+          path: ${{ steps.verify-build.outputs.firmware_path }}
+          retention-days: 10
