@@ -15,24 +15,34 @@ inputs:
 outputs:
   openwrt_version:
     description: 'The OpenWrt release used (e.g. 24.10.1)'
+    value: ${{ steps.version.outputs.openwrt_version }}
   target:
     description: 'The download target triple (e.g. kirkwood/generic)'
+    value: ${{ steps.overview.outputs.target }}
   arch_packages:
     description: 'arch_packages from profiles.json'
+    value: ${{ steps.profiles.outputs.arch_packages }}
   default_packages:
     description: 'default_packages from profiles.json'
+    value: ${{ steps.profiles.outputs.default_packages }}
   metadata_version:
     description: 'metadata_version from profiles.json'
+    value: ${{ steps.profiles.outputs.metadata_version }}
   linux_kernel_release:
     description: 'linux_kernel.release'
+    value: ${{ steps.profiles.outputs.linux_kernel_release }}
   linux_kernel_version:
     description: 'linux_kernel.version'
+    value: ${{ steps.profiles.outputs.linux_kernel_version }}
   linux_kernel_vermagic:
     description: 'linux_kernel.vermagic'
+    value: ${{ steps.profiles.outputs.linux_kernel_vermagic }}
   profile_json:
     description: 'Full profile object for router_id (JSON‑encoded)'
+    value: ${{ steps.profiles.outputs.profile_json }}
   device_packages:
     description: 'device_packages array for router_id'
+    value: ${{ steps.profiles.outputs.device_packages }}
 
 runs:
   using: 'composite'
@@ -109,22 +119,36 @@ runs:
         echo "📱 Router profile information:"
         echo "$profile_entry" | jq '.'
         
-        # Export
+        # Export to GitHub Action outputs
         echo "target=$target" >> "$GITHUB_OUTPUT"
         echo "arch=$arch" >> "$GITHUB_OUTPUT"
         
-        # Store the profile entry for future reference
+        # Store the profile entry for future reference in a way that's compatible with multiline outputs
         echo "profile_entry<<EOF" >> "$GITHUB_OUTPUT"
         echo "$profile_entry"
         echo "EOF" >> "$GITHUB_OUTPUT"
+        
+        # Debug - print to verify what's being set
+        echo "DEBUG: Set target output to: $target"
+        
+        # Make sure this information is available for later steps
+        echo "$target" > /tmp/openwrt_target.txt
+        echo "$arch" > /tmp/openwrt_arch.txt
 
     - name: Fetch profiles.json and extract all fields
       id: profiles
       shell: bash
       run: |
         set -euo pipefail
+        
+        # Ensure we can retrieve values set by previous steps
+        if [ -f /tmp/openwrt_target.txt ]; then
+          TG=$(cat /tmp/openwrt_target.txt)
+        else
+          TG="${{ steps.overview.outputs.target }}"
+        fi
+        
         PV="${{ steps.version.outputs.openwrt_version }}"
-        TG="${{ steps.overview.outputs.target }}"
         URL="https://downloads.openwrt.org/releases/$PV/targets/$TG/profiles.json"
         echo "🔍 Downloading profiles.json from $URL"
         raw=$(curl -fsSL "$URL")
@@ -173,16 +197,30 @@ runs:
           echo "$prof" | jq '.'
         fi
 
-        # Export everything
-        echo "arch_packages=$arch"       >> "$GITHUB_OUTPUT"
-        echo "default_packages=$defaults">> "$GITHUB_OUTPUT"
-        echo "metadata_version=$meta"    >> "$GITHUB_OUTPUT"
-        echo "linux_kernel_release=$lin_rel"  >> "$GITHUB_OUTPUT"
-        echo "linux_kernel_version=$lin_ver"  >> "$GITHUB_OUTPUT"
+        # Export to GitHub Actions outputs
+        echo "arch_packages=$arch" >> "$GITHUB_OUTPUT"
+        echo "default_packages=$defaults" >> "$GITHUB_OUTPUT"
+        echo "metadata_version=$meta" >> "$GITHUB_OUTPUT"
+        echo "linux_kernel_release=$lin_rel" >> "$GITHUB_OUTPUT"
+        echo "linux_kernel_version=$lin_ver" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
         echo "device_packages=$dev_pkgs" >> "$GITHUB_OUTPUT"
-
-        # Store only the profile information we need
+        
+        # Store profile JSON in a way that's compatible with multiline outputs
         echo "profile_json<<EOF" >> "$GITHUB_OUTPUT"
         echo "$prof"
         echo "EOF" >> "$GITHUB_OUTPUT"
+        
+        # Debug - print to verify what's being set
+        echo "DEBUG: Set arch_packages output to: $arch"
+        echo "DEBUG: Set device_packages output to: $dev_pkgs"
+        
+        # Make sure this information is available for later steps
+        mkdir -p /tmp/openwrt_info/
+        echo "$arch" > /tmp/openwrt_info/arch_packages.txt
+        echo "$defaults" > /tmp/openwrt_info/default_packages.txt
+        echo "$dev_pkgs" > /tmp/openwrt_info/device_packages.txt
+        echo "$prof" > /tmp/openwrt_info/profile.json
+        
+        # Also write out combined outputs file for debugging
+        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"device_packages\":\"$dev_pkgs\"}" > /tmp/openwrt_info/outputs.json
