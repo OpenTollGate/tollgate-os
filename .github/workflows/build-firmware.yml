@@ -84,205 +84,10 @@ jobs:
           # Output the final VERSION
           echo "version=$OPENWRT_VERSION" >> $GITHUB_OUTPUT
           echo "🔧 Final OpenWRT version: $OPENWRT_VERSION"
-  
-  # Step 2: Optimized Router Data Management - Fetch overview and build database
-  manage-router-data:
-    needs: check-versions
-    runs-on: ubuntu-latest
-    outputs:
-      overview-path: ${{ steps.fetch-overview.outputs.overview_path }}
-      database-path: ${{ steps.generate-database.outputs.database_path }}
-      target-count: ${{ steps.fetch-overview.outputs.target_count }}
-      profile-count: ${{ steps.fetch-overview.outputs.profile_count }}
-      cache-hit: ${{ steps.cache-overview.outputs.cache-hit }}
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      # Install dependencies
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
 
-      # Set up Cache variables
-      - name: Set up Cache variables
-        id: cache-vars
-        run: |
-          VERSION="${{ needs.check-versions.outputs.openwrt_version }}"
-          CACHE_KEY="openwrt-overview-$VERSION"
-          WORKSPACE_DIR="${GITHUB_WORKSPACE}"
-          OUTPUT_DIR="${WORKSPACE_DIR}/external_profiles"
-          VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
-          
-          # Create version directory
-          mkdir -p "$VERSION_DIR"
-          
-          # Set output variables
-          echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
-          echo "overview-file=$VERSION_DIR/.overview.json" >> $GITHUB_OUTPUT
-          echo "database-file=$VERSION_DIR/router-database.json" >> $GITHUB_OUTPUT
-          echo "version-dir=$VERSION_DIR" >> $GITHUB_OUTPUT
-      
-      # Try to restore the .overview.json from cache first
-      - name: Restore .overview.json from cache
-        id: cache-overview
-        uses: actions/cache/restore@v3
-        with:
-          path: ${{ steps.cache-vars.outputs.overview-file }}
-          key: ${{ steps.cache-vars.outputs.cache-key }}
-          restore-keys: |
-            openwrt-overview-${{ needs.check-versions.outputs.openwrt_version }}
-      
-      # Fetch the .overview.json file
-      - name: Fetch .overview.json
-        id: fetch-overview
-        run: |
-          WORKSPACE_DIR="${GITHUB_WORKSPACE}"
-          VERSION="${{ needs.check-versions.outputs.openwrt_version }}"
-          OVERVIEW_FILE="${{ steps.cache-vars.outputs.overview-file }}"
-          CACHE_HIT="${{ steps.cache-overview.outputs.cache-hit }}"
-          
-          # Check if we need to download or can use cache
-          if [ "$CACHE_HIT" == "true" ] && [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ]; then
-            echo "✅ Using cached .overview.json for OpenWRT $VERSION"
-          else
-            echo "🔍 Downloading .overview.json for OpenWRT $VERSION..."
-            
-            # URL for the overview file
-            URL="https://downloads.openwrt.org/releases/${VERSION}/.overview.json"
-            
-            # Try to download with retries
-            MAX_RETRIES=3
-            SUCCESS=false
-            
-            for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-              echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
-              
-              if curl -s -f -o "$OVERVIEW_FILE" "$URL"; then
-                if [ -s "$OVERVIEW_FILE" ] && grep -q "\"profiles\":" "$OVERVIEW_FILE" 2>/dev/null; then
-                  SUCCESS=true
-                  break
-                else
-                  echo "⚠️ Downloaded file is invalid. Retrying..."
-                  rm -f "$OVERVIEW_FILE"
-                fi
-              else
-                echo "⚠️ Download attempt $ATTEMPT failed"
-              fi
-              
-              if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
-                sleep 3
-              fi
-            done
-            
-            if [ "$SUCCESS" != "true" ]; then
-              echo "❌ Failed to download .overview.json for OpenWRT $VERSION after $MAX_RETRIES attempts"
-              exit 1
-            fi
-            
-            echo "✅ Downloaded .overview.json for OpenWRT $VERSION"
-          fi
-          
-          # Validate and extract stats from overview file
-          if [ -f "$OVERVIEW_FILE" ] && [ -s "$OVERVIEW_FILE" ]; then
-            # Count unique targets and profiles
-            TARGET_COUNT=$(jq '.profiles | map(.target) | unique | length' "$OVERVIEW_FILE")
-            PROFILE_COUNT=$(jq '.profiles | length' "$OVERVIEW_FILE")
-            
-            echo "📊 OpenWRT $VERSION has $PROFILE_COUNT device profiles across $TARGET_COUNT unique targets"
-            
-            # Set outputs
-            echo "overview_path=$OVERVIEW_FILE" >> $GITHUB_OUTPUT
-            echo "target_count=$TARGET_COUNT" >> $GITHUB_OUTPUT
-            echo "profile_count=$PROFILE_COUNT" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Overview file is missing or invalid"
-            exit 1
-          fi
-      
-      # Save the .overview.json to cache for future use
-      - name: Save .overview.json to cache
-        id: save-cache
-        uses: actions/cache/save@v3
-        if: steps.cache-overview.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.cache-vars.outputs.overview-file }}
-          key: ${{ steps.cache-vars.outputs.cache-key }}
-      
-      # Generate a unified router database from the overview data
-      - name: Generate Unified Router Database
-        id: generate-database
-        run: |
-          VERSION="${{ needs.check-versions.outputs.openwrt_version }}"
-          OVERVIEW_FILE="${{ steps.cache-vars.outputs.overview-file }}"
-          VERSION_DIR="${{ steps.cache-vars.outputs.version-dir }}"
-          DB_FILE="${{ steps.cache-vars.outputs.database-file }}"
-          
-          echo "🔄 Creating unified router database for OpenWRT $VERSION..."
-          
-          # Check if overview file exists
-          if [ ! -f "$OVERVIEW_FILE" ] || [ ! -s "$OVERVIEW_FILE" ]; then
-            echo "❌ Overview file not found or empty: $OVERVIEW_FILE"
-            exit 1
-          fi
-          
-          # Extract key information from overview into new database format
-          jq '{
-            version: "'$VERSION'",
-            generated_at: "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'",
-            routers: (.profiles | map({
-              id: .id,
-              target: .target,
-              vendor: .titles[0].vendor,
-              model: .titles[0].model,
-              variant: .titles[0].variant,
-              full_name: (
-                if .titles[0].variant and .titles[0].variant != null then 
-                  .titles[0].vendor + " " + .titles[0].model + " (" + .titles[0].variant + ")" 
-                else 
-                  .titles[0].vendor + " " + .titles[0].model 
-                end
-              ),
-              has_full_profile: false,
-              profile_path: (
-                .target + "/profiles.json"
-              )
-            }))
-          }' "$OVERVIEW_FILE" > "$DB_FILE"
-          
-          echo "✅ Created router database with $(jq '.routers | length' "$DB_FILE") routers"
-          
-          # Find existing profile files and mark them in the database
-          for PROFILE_FILE in $(find "${VERSION_DIR}" -name "profiles.json"); do
-            # Extract platform/target from path
-            REL_PATH=${PROFILE_FILE#${VERSION_DIR}/}
-            # Extract just the platform/target part (remove /profiles.json)
-            TARGET=${REL_PATH%/profiles.json}
-            
-            if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ]; then
-              echo "🔍 Found profile for $TARGET, marking routers in database..."
-              
-              # Update database to mark routers with this target as having a profile available
-              jq --arg target "$TARGET" '.routers = (.routers | map(
-                if .target == $target then 
-                  . + {has_full_profile: true} 
-                else 
-                  . 
-                end
-              ))' "$DB_FILE" > "${DB_FILE}.tmp" && mv "${DB_FILE}.tmp" "$DB_FILE"
-            fi
-          done
-          
-          echo "✨ Done! Router database creation complete"
-          
-          # Set outputs
-          echo "database_path=$DB_FILE" >> $GITHUB_OUTPUT
-          echo "router_count=$(jq '.routers | length' "$DB_FILE")" >> $GITHUB_OUTPUT
-
-  # Step 3: Build firmware for each router model in the matrix
+  # Step 2: Build firmware for each router model in the matrix
   build:
-    needs: [check-versions, manage-router-data]
+    needs: [check-versions]
     strategy:
       matrix:
         model: [
@@ -319,6 +124,8 @@ jobs:
       ENABLE_CACHE: ${{ github.event.inputs.enable_cache || 'true' }}
       # Nostr relay configuration
       NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
+      # Default removed packages
+      REMOVED_PACKAGES: -odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini
 
     steps:
       - uses: actions/checkout@v4
@@ -359,227 +166,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install nostr
       
-      # Look up router details directly from OpenWRT overview and profiles JSON
-      - name: Lookup Router Details
-        id: lookup-router
+      # Use our openwrt-info action to get router details
+      - name: Get Router Info
+        id: router-info
+        uses: ./actions/openwrt-info
+        with:
+          router_id: ${{ matrix.model }}
+          openwrt_version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      # Set Build Variables based on router info
+      - name: Set Build Variables
+        id: vars
         run: |
-          VERSION="${{ needs.check-versions.outputs.openwrt_version }}"
-          ROUTER_ID="${{ matrix.model }}"
-          WORKSPACE_DIR="${GITHUB_WORKSPACE}"
-          OUTPUT_DIR="${WORKSPACE_DIR}/external_profiles"
-          VERSION_DIR="${OUTPUT_DIR}/${VERSION}"
-          OVERVIEW_FILE="${VERSION_DIR}/.overview.json"
-          
-          echo "🔍 Looking up router ID: $ROUTER_ID in OpenWRT $VERSION overview"
-          
-          # First check if overview file exists, if not download it
-          if [ ! -f "$OVERVIEW_FILE" ] || [ ! -s "$OVERVIEW_FILE" ]; then
-            echo "🔄 Overview file not found, downloading it now..."
-            
-            # Create version directory
-            mkdir -p "$(dirname "$OVERVIEW_FILE")"
-            
-            # URL for the overview file
-            URL="https://downloads.openwrt.org/releases/${VERSION}/.overview.json"
-            
-            # Try to download with retries
-            MAX_RETRIES=3
-            SUCCESS=false
-            
-            for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-              echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
-              
-              if curl -s -f -o "$OVERVIEW_FILE" "$URL"; then
-                # Use jq to validate JSON instead of grep - much more reliable
-                if [ -s "$OVERVIEW_FILE" ] && jq -e . "$OVERVIEW_FILE" > /dev/null 2>&1; then
-                  SUCCESS=true
-                  break
-                else
-                  echo "⚠️ Downloaded file is invalid JSON. Retrying..."
-                  rm -f "$OVERVIEW_FILE"
-                fi
-              else
-                echo "⚠️ Download attempt $ATTEMPT failed"
-              fi
-              
-              if [ "$ATTEMPT" -lt $MAX_RETRIES ]; then
-                sleep 3
-              fi
-            done
-            
-            if [ "$SUCCESS" != "true" ]; then
-              echo "❌ Failed to download overview file. Cannot proceed."
-              exit 1
-            fi
-            
-            echo "✅ Downloaded overview file successfully"
-          else
-            echo "✅ Found existing overview file at $OVERVIEW_FILE"
-          fi
-          
-          # Look up the router in the overview file
-          echo "🔍 Finding router $ROUTER_ID in overview file..."
-          
-          # First determine if profiles is an array (newer format) or object (older format)
-          # Use jq to check data structure (more reliable than grep)
-          if jq -e 'has("profiles") and (.profiles | type == "array")' "$OVERVIEW_FILE" > /dev/null; then
-            echo "📊 Detected array format for profiles in overview.json (newer format)"
-            # Use jq to find the router in the array by comparing id field
-            ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$OVERVIEW_FILE")
-          elif jq -e 'has("profiles") and (.profiles | type == "object")' "$OVERVIEW_FILE" > /dev/null; then
-            echo "📊 Detected object format for profiles in overview.json (older format)"
-            # Use jq to extract router data using object access (older format)
-            ROUTER_DATA=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$OVERVIEW_FILE")
-          else
-            echo "❌ Could not determine profiles format in overview.json"
-            exit 1
-          fi
-          
-          if [ -z "$ROUTER_DATA" ] || [ "$ROUTER_DATA" = "null" ]; then
-            echo "❌ Router ID $ROUTER_ID not found in OpenWRT $VERSION overview"
-            exit 1
-          fi
-          
-          # Print the router JSON for debugging
-          echo "📊 Router data from overview.json:"
-          echo "$ROUTER_DATA" | jq '.'
-          
-          # Extract basic router information
-          TARGET=$(echo "$ROUTER_DATA" | jq -r '.target')
-          VENDOR=$(echo "$ROUTER_DATA" | jq -r '.titles[0].vendor // "Unknown"')
-          MODEL=$(echo "$ROUTER_DATA" | jq -r '.titles[0].model // "Unknown"')
-          VARIANT=$(echo "$ROUTER_DATA" | jq -r '.titles[0].variant // ""')
-          
-          if [ -n "$VARIANT" ] && [ "$VARIANT" != "null" ]; then
-            FULL_NAME="${VENDOR} ${MODEL} (${VARIANT})"
-          else
-            FULL_NAME="${VENDOR} ${MODEL}"
-          fi
-          
-          echo "✅ Found router in overview: $FULL_NAME"
-          echo "📊 Target architecture: $TARGET"
-          
-          # Split target into platform and type
+          # Extract target and split into platform/type
+          TARGET="${{ steps.router-info.outputs.target }}"
           PLATFORM=$(echo $TARGET | cut -d'/' -f1)
           TYPE=$(echo $TARGET | cut -d'/' -f2)
           
-          # Set outputs
-          echo "found=true" >> $GITHUB_OUTPUT
-          echo "target=$TARGET" >> $GITHUB_OUTPUT
-          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
-          echo "type=$TYPE" >> $GITHUB_OUTPUT
-          echo "vendor=$VENDOR" >> $GITHUB_OUTPUT
-          echo "model=$MODEL" >> $GITHUB_OUTPUT
-          echo "variant=$VARIANT" >> $GITHUB_OUTPUT
-          echo "full_name=$FULL_NAME" >> $GITHUB_OUTPUT
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
+          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+          echo "TYPE=$TYPE" >> $GITHUB_ENV
+          echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
+          echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
           
-          # Now load the detailed profile information
-          PROFILE_DIR="${VERSION_DIR}/${PLATFORM}/${TYPE}"
-          PROFILE_FILE="${PROFILE_DIR}/profiles.json"
+          # Extract architecture packages
+          ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
+          echo "ARCH_PACKAGES=$ARCH_PACKAGES" >> $GITHUB_ENV
           
-          # Create profile directory if needed
-          mkdir -p "$PROFILE_DIR"
+          # Parse device packages (comes as comma-separated list)
+          DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
+          echo "DEVICE_PACKAGES=$DEVICE_PACKAGES" >> $GITHUB_ENV
           
-          # Check if profiles.json already exists and is valid
-          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ] && jq -e . "$PROFILE_FILE" > /dev/null 2>&1; then
-            echo "✅ Using existing profile for ${TARGET}"
-          else
-            # Download the profiles.json if it doesn't exist
-            echo "🔄 Downloading profiles.json for ${TARGET} (OpenWRT $VERSION)..."
-            
-            # URL for profile
-            PROFILE_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/profiles.json"
-            
-            # Try to download with retries
-            MAX_RETRIES=3
-            SUCCESS=false
-            
-            for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-              echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
-              
-              if curl -s -f -o "$PROFILE_FILE" "$PROFILE_URL"; then
-                if [ -s "$PROFILE_FILE" ] && jq -e . "$PROFILE_FILE" > /dev/null 2>&1; then
-                  SUCCESS=true
-                  break
-                else
-                  echo "⚠️ Downloaded file is invalid JSON. Retrying..."
-                  rm -f "$PROFILE_FILE"
-                fi
-              else
-                echo "⚠️ Download attempt $ATTEMPT failed"
-              fi
-              
-              if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
-                sleep 3
-              fi
-            done
-            
-            if [ "$SUCCESS" != "true" ]; then
-              echo "❌ Failed to download profiles for $TARGET (OpenWRT $VERSION)"
-              exit 1
-            fi
-            
-            echo "✅ Downloaded profiles for $TARGET (OpenWRT $VERSION)"
-          fi
+          # Parse default packages (comes as comma-separated list)
+          DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
+          echo "DEFAULT_PACKAGES=$DEFAULT_PACKAGES" >> $GITHUB_ENV
           
-          # Extract architecture-specific information
-          ARCH_PACKAGES=$(jq -r '.arch_packages' "$PROFILE_FILE")
-          echo "📦 Architecture packages: ${ARCH_PACKAGES}"
-          
-          # Extract default packages for this architecture
-          DEFAULT_ARCH_PACKAGES=$(jq -r '.default_packages | join(" ")' "$PROFILE_FILE")
-          echo "📦 Default packages for architecture ${ARCH_PACKAGES}:"
-          echo "${DEFAULT_ARCH_PACKAGES}" | fold -sw 80
-          echo "DEFAULT_ARCH_PACKAGES=${DEFAULT_ARCH_PACKAGES}" >> $GITHUB_ENV
-          
-          # Extract complete device profile
-          echo "🔍 Full device profile for $ROUTER_ID from profiles.json:"
-          
-          # Check if profiles in profiles.json is an array or object 
-          # using jq type checking (more reliable than grep)
-          if jq -e 'has("profiles") and (.profiles | type == "array")' "$PROFILE_FILE" > /dev/null; then
-            echo "📊 Detected array format for profiles in profiles.json (newer format)"
-            DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[] | select(.id == $id)' "$PROFILE_FILE")
-          elif jq -e 'has("profiles") and (.profiles | type == "object")' "$PROFILE_FILE" > /dev/null; then
-            echo "📊 Detected object format for profiles in profiles.json (older format)"
-            DEVICE_PROFILE=$(jq --arg id "$ROUTER_ID" '.profiles[$id]' "$PROFILE_FILE")
-          else
-            echo "⚠️ Could not determine profiles format in profiles.json"
-            DEVICE_PROFILE=""
-          fi
-          
-          if [ -n "$DEVICE_PROFILE" ] && [ "$DEVICE_PROFILE" != "null" ]; then
-            echo "$DEVICE_PROFILE" | jq '.'
-            
-            # Extract image prefix
-            IMAGE_PREFIX=$(echo "$DEVICE_PROFILE" | jq -r '.image_prefix')
-            echo "📄 Image prefix: ${IMAGE_PREFIX}"
-            echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
-            
-            # Extract device packages
-            DEVICE_PACKAGES=$(echo "$DEVICE_PROFILE" | jq -r '.device_packages | join(" ")')
-            echo "📦 Device-specific packages: ${DEVICE_PACKAGES}"
-            echo "DEVICE_PACKAGES=${DEVICE_PACKAGES}" >> $GITHUB_ENV
-            
-            # Extract supported device information
-            SUPPORTED_DEVICES=$(echo "$DEVICE_PROFILE" | jq -r '.supported_devices | join(", ")')
-            echo "🔌 Supported devices: ${SUPPORTED_DEVICES}"
-            
-            # Extract available image types
-            echo "📀 Available image types:"
-            echo "$DEVICE_PROFILE" | jq -r '.images[] | "- \(.type) (\(.filesystem)): \(.name)"'
-            
-            # Check if this is a profile that needs special handling
-            HAS_PROFILE=true
-            echo "has_profile=$HAS_PROFILE" >> $GITHUB_OUTPUT
-            echo "arch_packages=$ARCH_PACKAGES" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Router profile not found in ${PROFILE_FILE}, using basic information only"
-            HAS_PROFILE=false
-            echo "has_profile=$HAS_PROFILE" >> $GITHUB_OUTPUT
-          fi
-          
-          # Set architecture based on profile
+          # Set up proper architecture mapping for Blossom
           ARCH_MAPPING_PATH="${GITHUB_WORKSPACE}/files/etc/tollgate/architecture_mapping.json"
           
           # Map OpenWRT arch to Blossom arch if the mapping file exists
@@ -634,334 +256,36 @@ jobs:
             esac
           fi
           
-          # Set architecture outputs
-          echo "arch_packages=${ARCH_PACKAGES}" >> $GITHUB_OUTPUT
-          echo "blossom_arch=${BLOSSOM_ARCH}" >> $GITHUB_OUTPUT
+          # Set the architecture for downloads
           echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
-      
-      # Fetch specific router profile if needed - only when it's not already available
-      - name: Fetch Router Profile
-        id: fetch-profile
-        run: |
-          VERSION="${{ needs.check-versions.outputs.openwrt_version }}"
-          TARGET="${{ steps.lookup-router.outputs.target }}"
-          PLATFORM="${{ steps.lookup-router.outputs.platform }}"
-          TYPE="${{ steps.lookup-router.outputs.type }}"
-          WORKSPACE_DIR="${GITHUB_WORKSPACE}"
-          OUTPUT_DIR="${WORKSPACE_DIR}/external_profiles"
-          TARGET_DIR="${OUTPUT_DIR}/${VERSION}/${PLATFORM}/${TYPE}"
-          
-          # Create target directory if it doesn't exist
-          mkdir -p "$TARGET_DIR"
-          
-          # Path for profile file
-          PROFILE_FILE="${TARGET_DIR}/profiles.json"
-          MAPPING_FILE="${TARGET_DIR}/profiles-mapping.txt"
-          
-          # Check if profile already exists
-          if [ -f "$PROFILE_FILE" ] && [ -s "$PROFILE_FILE" ]; then
-            if grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
-              echo "✅ Using existing profile for ${TARGET}"
-              echo "profile_path=$PROFILE_FILE" >> $GITHUB_OUTPUT
-              
-              # Count the number of devices
-              DEVICE_COUNT=$(jq '.profiles | length' "$PROFILE_FILE" 2>/dev/null || echo 0)
-              echo "📊 Found $DEVICE_COUNT device profiles for $TARGET"
-              echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
-              
-              # If mapping file exists, use it
-              if [ -f "$MAPPING_FILE" ] && [ -s "$MAPPING_FILE" ]; then
-                echo "mapping_path=$MAPPING_FILE" >> $GITHUB_OUTPUT
-                exit 0
-              else
-                # Generate mapping file if it doesn't exist
-                echo "📝 Generating device mapping for $TARGET..."
-              fi
-            else
-              echo "⚠️ Existing profile file for ${TARGET} appears invalid. Will download again."
-            fi
-          else
-            echo "🔄 Downloading profile for ${TARGET} (OpenWRT $VERSION)..."
-            
-            # Create URL for profile
-            URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/profiles.json"
-            
-            # Try to download with retries
-            MAX_RETRIES=3
-            SUCCESS=false
-            
-            for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-              echo "  • Download attempt $ATTEMPT of $MAX_RETRIES"
-              
-              if curl -s -f -o "$PROFILE_FILE" "$URL"; then
-                if [ -s "$PROFILE_FILE" ] && grep -q "\"profiles\":" "$PROFILE_FILE" 2>/dev/null; then
-                  SUCCESS=true
-                  break
-                else
-                  echo "⚠️ Downloaded file is invalid. Retrying..."
-                  rm -f "$PROFILE_FILE"
-                fi
-              else
-                echo "⚠️ Download attempt $ATTEMPT failed"
-              fi
-              
-              if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
-                sleep 3
-              fi
-            done
-            
-            if [ "$SUCCESS" != "true" ]; then
-              echo "❌ Failed to download profiles for $TARGET (OpenWRT $VERSION)"
-              exit 1
-            fi
-            
-            echo "✅ Downloaded profiles for $TARGET (OpenWRT $VERSION)"
-          fi
-          
-          # Generate mapping file
-          echo "📝 Generating device mapping for $TARGET..."
-          
-          echo "# Device ID to Name mapping" > "$MAPPING_FILE"
-          echo "# Format: device_id | vendor | model | full_name" >> "$MAPPING_FILE"
-          echo "# Generated from: $PROFILE_FILE" >> "$MAPPING_FILE"
-          echo "# Generated on: $(date)" >> "$MAPPING_FILE"
-          echo "" >> "$MAPPING_FILE"
-          
-          # Extract all profile IDs and details
-          jq -r '.profiles | keys[]' "$PROFILE_FILE" 2>/dev/null | while read id; do
-            vendor=$(jq -r --arg id "$id" '.profiles[$id].titles[0].vendor // "Unknown"' "$PROFILE_FILE")
-            model=$(jq -r --arg id "$id" '.profiles[$id].titles[0].model // "Unknown"' "$PROFILE_FILE")
-            variant=$(jq -r --arg id "$id" '.profiles[$id].titles[0].variant // ""' "$PROFILE_FILE")
-            
-            # Construct full name
-            if [ -n "$variant" ] && [ "$variant" != "null" ]; then
-              full_name="$vendor $model ($variant)"
-            else
-              full_name="$vendor $model"
-            fi
-            
-            # Add to mapping file
-            echo "$id | $vendor | $model | $full_name" >> "$MAPPING_FILE"
-          done
-          
-          # Count the number of devices
-          DEVICE_COUNT=$(jq '.profiles | length' "$PROFILE_FILE" 2>/dev/null || echo 0)
-          echo "📊 Found $DEVICE_COUNT device profiles for $TARGET"
-          
-          # Update the database to mark this target as having a profile
-          DB_FILE="${OUTPUT_DIR}/${VERSION}/router-database.json"
-          if [ -f "$DB_FILE" ] && [ -s "$DB_FILE" ]; then
-            jq --arg target "$TARGET" '.routers = (.routers | map(
-              if .target == $target then 
-                . + {has_full_profile: true} 
-              else 
-                . 
-              end
-            ))' "$DB_FILE" > "${DB_FILE}.tmp" && mv "${DB_FILE}.tmp" "$DB_FILE"
-          fi
-          
-          # Set outputs
-          echo "profile_path=$PROFILE_FILE" >> $GITHUB_OUTPUT
-          echo "mapping_path=$MAPPING_FILE" >> $GITHUB_OUTPUT
-          echo "device_count=$DEVICE_COUNT" >> $GITHUB_OUTPUT
-      
-      # Set Build Variables
-      - name: Set Build Variables
-        id: vars
-        run: |
-          # Create build directory first (using sudo to ensure proper permissions)
-          sudo mkdir -p /tmp/openwrt-build
-          
-          # Use variables from lookup-router
-          PLATFORM="${{ steps.lookup-router.outputs.platform }}"
-          TYPE="${{ steps.lookup-router.outputs.type }}"
-          
-          echo "PLATFORM=${PLATFORM}" >> $GITHUB_ENV
-          echo "TYPE=${TYPE}" >> $GITHUB_ENV
-          echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
-          echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
-          
-          # Set default packages (will be overridden from profiles.json if available)
-          DEFAULT_PACKAGES="luci luci-ssl iwinfo wpad-wolfssl"
-          
-          # Extract architecture and device-specific packages from profiles.json
-          PROFILES_JSON_PATH="${GITHUB_WORKSPACE}/external_profiles/${{ needs.check-versions.outputs.openwrt_version }}/${PLATFORM}/${TYPE}/profiles.json"
-          ARCH_MAPPING_PATH="${GITHUB_WORKSPACE}/files/etc/tollgate/architecture_mapping.json"
-          
-          if [ -f "${PROFILES_JSON_PATH}" ]; then
-            echo "🔍 Extracting information from profiles.json: ${PROFILES_JSON_PATH}"
-            
-            # Extract arch_packages from profiles.json
-            ARCH_PACKAGES=$(jq -r '.arch_packages' "${PROFILES_JSON_PATH}")
-            echo "📦 Architecture packages: ${ARCH_PACKAGES}"
-            
-            # Get default packages for this architecture
-            echo "📦 Default packages for architecture ${ARCH_PACKAGES}:"
-            DEFAULT_ARCH_PACKAGES=$(jq -r '.default_packages | join(" ")' "${PROFILES_JSON_PATH}")
-            echo "${DEFAULT_ARCH_PACKAGES}" | fold -sw 80
-            
-            # Extract complete device profile as JSON
-            echo "🔍 Full device profile for ${{ matrix.model }}:"
-            if jq -e --arg profile "${{ matrix.model }}" '.profiles[$profile]' "${PROFILES_JSON_PATH}" > /dev/null; then
-              echo "✅ Found profile ${{ matrix.model }} in profiles.json"
-              
-              # Pretty print the complete device profile JSON for better readability
-              jq --arg profile "${{ matrix.model }}" '.profiles[$profile]' "${PROFILES_JSON_PATH}" | jq '.'
-              
-              # Extract image_prefix for this device
-              IMAGE_PREFIX=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].image_prefix' "${PROFILES_JSON_PATH}")
-              echo "📄 Image prefix: ${IMAGE_PREFIX}"
-              echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
-              
-              # Extract device_packages array (this returns packages with + or - prefixes)
-              DEVICE_PACKAGES=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].device_packages | join(" ")' "${PROFILES_JSON_PATH}")
-              echo "📦 Device-specific packages from profiles.json: ${DEVICE_PACKAGES}"
-              echo "EXTRA_PACKAGES=${DEVICE_PACKAGES}" >> $GITHUB_ENV
-              
-              # Extract supported device information
-              SUPPORTED_DEVICES=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].supported_devices | join(", ")' "${PROFILES_JSON_PATH}")
-              echo "🔌 Supported devices: ${SUPPORTED_DEVICES}"
-              
-              # Get device title information
-              DEVICE_VENDOR=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].vendor // "Unknown"' "${PROFILES_JSON_PATH}")
-              DEVICE_MODEL=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].model // "Unknown"' "${PROFILES_JSON_PATH}")
-              DEVICE_VARIANT=$(jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].titles[0].variant // ""' "${PROFILES_JSON_PATH}")
-              
-              echo "📱 Device: ${DEVICE_VENDOR} ${DEVICE_MODEL} ${DEVICE_VARIANT}"
-              
-              # Extract available image types and filesystems
-              echo "📀 Available image types:"
-              jq -r --arg profile "${{ matrix.model }}" '.profiles[$profile].images[] | "- \(.type) (\(.filesystem)): \(.name)"' "${PROFILES_JSON_PATH}"
-            else
-              echo "⚠️ Profile ${{ matrix.model }} not found in profiles.json, using default packages"
-              echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
-            fi
-            
-            # Use architecture mapping file to map OpenWRT arch to Blossom arch
-            if [ -f "${ARCH_MAPPING_PATH}" ]; then
-              echo "🔍 Using architecture mapping from: ${ARCH_MAPPING_PATH}"
-              
-              # First try direct mapping from architecture name
-              BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
-              
-              # If not found in direct mappings, use platform+type mapping
-              if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
-                PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-                echo "⚠️ Architecture ${ARCH_PACKAGES} not found in direct mappings, trying platform mapping with ${PLATFORM_TYPE}"
-                BLOSSOM_ARCH=$(jq -r --arg platform "${PLATFORM_TYPE}" '.platform_mappings[$platform] // .default' "${ARCH_MAPPING_PATH}")
-              fi
-              
-              echo "✅ Set BLOSSOM_ARCH=${BLOSSOM_ARCH} based on architecture mapping"
-            else
-              echo "⚠️ Architecture mapping file not found at ${ARCH_MAPPING_PATH}, using default mapping"
-              # Use a simple default mapping for backward compatibility
-              case "${ARCH_PACKAGES}" in
-                "mipsel_24kc")
-                  BLOSSOM_ARCH="mips_24kc"
-                  ;;
-                *)
-                  # Set default based on platform type
-                  PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-                  case "${PLATFORM_TYPE}" in
-                    "ath79_generic"|"ath79_nand")
-                      BLOSSOM_ARCH="mips_24kc"
-                      ;;
-                    "mediatek_filogic")
-                      BLOSSOM_ARCH="aarch64_cortex-a53"
-                      ;;
-                    "ipq40xx_generic")
-                      BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
-                      ;;
-                    "ipq806x_generic")
-                      BLOSSOM_ARCH="arm_cortex-a15_neon-vfpv4"
-                      ;;
-                    "x86_64")
-                      BLOSSOM_ARCH="x86_64"
-                      ;;
-                    "bcm27xx_bcm2711")
-                      BLOSSOM_ARCH="aarch64_cortex-a72"
-                      ;;
-                    *)
-                      echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
-                      BLOSSOM_ARCH="aarch64_cortex-a53"
-                      ;;
-                  esac
-              esac
-            fi
-            echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
-          else
-            echo "⚠️ profiles.json not found at ${PROFILES_JSON_PATH}, using architecture mapping"
-            # Fall back to the architecture mapping file
-            if [ -f "${ARCH_MAPPING_PATH}" ]; then
-              echo "🔍 Using architecture mapping from: ${ARCH_MAPPING_PATH}"
-              
-              PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-              echo "Looking up platform mapping with ${PLATFORM_TYPE}"
-              
-              # Use platform+type mapping since we don't have profiles.json
-              BLOSSOM_ARCH=$(jq -r --arg platform "${PLATFORM_TYPE}" '.platform_mappings[$platform] // .default' "${ARCH_MAPPING_PATH}")
-              
-              echo "✅ Set BLOSSOM_ARCH=${BLOSSOM_ARCH} based on architecture mapping"
-              echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
-            else
-              echo "⚠️ Both profiles.json and architecture mapping are missing, using legacy mapping"
-              # Fall back to the legacy mapping when both files are missing
-              echo "EXTRA_PACKAGES=${DEFAULT_PACKAGES}" >> $GITHUB_ENV
-              
-              PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-              case "${PLATFORM_TYPE}" in
-                "ath79_generic"|"ath79_nand")
-                  BLOSSOM_ARCH="mips_24kc"
-                  ;;
-                "mediatek_filogic")
-                  BLOSSOM_ARCH="aarch64_cortex-a53"
-                  ;;
-                "ipq40xx_generic")
-                  BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
-                  ;;
-                "ipq806x_generic")
-                  BLOSSOM_ARCH="arm_cortex-a15_neon-vfpv4"
-                  ;;
-                "x86_64")
-                  BLOSSOM_ARCH="x86_64"
-                  ;;
-                "bcm27xx_bcm2711")
-                  BLOSSOM_ARCH="aarch64_cortex-a72"
-                  ;;
-                *)
-                  echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
-                  BLOSSOM_ARCH="aarch64_cortex-a53"
-                  ;;
-              esac
-            fi
-            echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
-          fi
           
           # Special case for uboot-envtools - check if it's already included in device packages
           if [[ "${{ matrix.model }}" == "glinet_gl-mt3000" || "${{ matrix.model }}" == "glinet_gl-mt6000" || "${{ matrix.model }}" == *"gl-ar300m"* ]]; then
-            if ! echo "${EXTRA_PACKAGES}" | grep -q "uboot-envtools"; then
+            if ! echo "${DEVICE_PACKAGES}" | grep -q "uboot-envtools"; then
               echo "👉 Adding uboot-envtools for ${{ matrix.model }}"
-              echo "EXTRA_PACKAGES=uboot-envtools ${EXTRA_PACKAGES}" >> $GITHUB_ENV
+              echo "DEVICE_PACKAGES=uboot-envtools ${DEVICE_PACKAGES}" >> $GITHUB_ENV
             fi
           fi
           
-          # Common settings for all models
-          echo "REMOVED_PACKAGES=-odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini" >> $GITHUB_ENV
+          # Extract profile JSON to get image_prefix
+          echo '${{ steps.router-info.outputs.profile_json }}' > profile.json
+          IMAGE_PREFIX=$(jq -r '.image_prefix' profile.json)
+          echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
+          
+          # Set up build directory
+          sudo mkdir -p /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache variables for Docker layer caching
-          # Use simpler and more consistent cache keys
+          # Set cache key for Docker layer caching
           CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
           
           # Create a stable, consistent directory path for the Docker context
-          BUILDDIR="/tmp/openwrt-build"  # Make sure BUILDDIR is set correctly
-          DOCKER_CONTEXT="${BUILDDIR}/docker-context"
-          # Use sudo to ensure we have permission to create the directory
+          DOCKER_CONTEXT="/tmp/openwrt-build/docker-context"
           sudo mkdir -p "${DOCKER_CONTEXT}"
           echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
-      # Setup Build Directory with proper permissions (simplified like older version)
+      # Setup Build Directory with proper permissions
       - name: Setup Build Directory
         run: |
           # Create build directory with proper permissions
@@ -1010,14 +334,20 @@ jobs:
           
           echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
-          
-          # Set up the Docker context directory (keep compatibility with rest of workflow)
-          DOCKER_CONTEXT="${BUILDDIR}"
-          echo "DOCKER_CONTEXT=${DOCKER_CONTEXT}" >> $GITHUB_ENV
 
-      # Download and Extract ImageBuilder if cache miss (simplified like older version)
-      - name: Download and Extract ImageBuilder (If cache miss)
-        if: steps.cache-docker.outputs.cache-hit != 'true'
+      # Try to restore from cache
+      - name: Restore ImageBuilder from Cache
+        id: cache-imagebuilder
+        uses: actions/cache/restore@v3
+        with:
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ env.CACHE_KEY_PREFIX }}-${{ needs.check-versions.outputs.openwrt_version }}-
+
+      # Download and Extract ImageBuilder if cache miss
+      - name: Download and Extract ImageBuilder
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         run: |
           cd $BUILDDIR
           echo "🔍 Current working directory: $(pwd)"
@@ -1026,7 +356,7 @@ jobs:
           
           if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
             echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }}) from $DOWNLOAD_URL"
-            # Use the -O flag to save with original filename (like older version)
+            # Use the -O flag to save with original filename
             curl -L -C - -O "$DOWNLOAD_URL"
             
             # Verify download was successful
@@ -1037,13 +367,11 @@ jobs:
               echo "📦 Extracting OpenWRT ImageBuilder"
               if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
                 echo "Using zstd extraction for $(basename $DOWNLOAD_URL)"
-                # Use the simple extraction approach from the older version
                 tar --zstd -xf "$(basename $DOWNLOAD_URL)"
               else
                 echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
-                # Use xfJ for .tar.xz as in the old code
                 tar xfJ "$(basename $DOWNLOAD_URL)"
-              fi  # Properly close the if statement with fi
+              fi
               
               # Check if extraction was successful
               if [ $? -ne 0 ]; then
@@ -1083,163 +411,23 @@ jobs:
             echo "❌ Error: URL $DOWNLOAD_URL does not exist"
             exit 1
           fi
+      
+      # Save to cache if downloaded fresh
+      - name: Save ImageBuilder to Cache
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}
 
-      # Use cached ImageBuilder
-      - name: Use cached ImageBuilder
-        if: steps.cache-docker.outputs.cache-hit == 'true'
-        run: |
-          echo "✅ Using cached OpenWRT ImageBuilder environment for ${{ env.PLATFORM }}/${{ env.TYPE }}"
-          echo "Cache hit: Using cached Docker environment from $(cat ${DOCKER_CONTEXT}/cache-status.txt 2>/dev/null || echo 'previous run')" > "${DOCKER_CONTEXT}/cache-status.txt"
-          
-          # Debug what we have in the cache
-          echo "📂 Docker context directory contents:"
-          ls -la "${DOCKER_CONTEXT}/" || true
-          
-          # Verify the cache contents
-          if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            echo "✅ Cached ImageBuilder found at ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-            ls -la "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" | head -10
-            echo "(showing only first 10 entries)"
-          else
-            echo "⚠️ Cached ImageBuilder directory not found at ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-            
-            # Look for any imagebuilder directories that might be present with a different name
-            FOUND_DIR=$(find "${DOCKER_CONTEXT}" -maxdepth 1 -type d -name "openwrt-imagebuilder*" | head -1)
-            
-            if [ -n "$FOUND_DIR" ]; then
-              echo "🔍 Found alternative ImageBuilder directory: $FOUND_DIR"
-              echo "Creating symlink from $FOUND_DIR to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-              ln -sf "$FOUND_DIR" "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-              
-              if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-                echo "✅ Successfully linked to ${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-                ls -la "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" | head -5
-              else
-                echo "⚠️ Symlink creation failed, proceeding with redownload"
-                # Force download since symlink failed
-                cd $BUILDDIR
-                echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
-                curl -L -C - -o "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" "$DOWNLOAD_URL"
-                
-                if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
-                  echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                  tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
-                else
-                  echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                  tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
-                fi
-                
-                if [ $? -ne 0 ]; then
-                  echo "❌ Failed to extract ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                  exit 1
-                else
-                  echo "✅ Successfully extracted to ${DOCKER_CONTEXT}"
-                  ls -la "${DOCKER_CONTEXT}"
-                fi
-              fi
-            else
-              echo "⚠️ No alternative ImageBuilder directories found, proceeding with redownload"
-              # Force download if no alternative directory found
-              cd $BUILDDIR
-              echo "🔄 Re-downloading OpenWRT ImageBuilder due to invalid cache"
-              curl -L -C - -o "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" "$DOWNLOAD_URL"
-              
-              if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
-                echo "Using zstd extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                tar --zstd -xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}" 
-              else
-                echo "Using xz extraction for ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                tar xvf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}" -C "${DOCKER_CONTEXT}"
-              fi
-              
-              if [ $? -ne 0 ]; then
-                echo "❌ Failed to extract ${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
-                exit 1
-              else
-                echo "✅ Successfully extracted to ${DOCKER_CONTEXT}"
-                ls -la "${DOCKER_CONTEXT}"
-              fi
-            fi
-          fi
-          
-          # Final verification
-          if [ ! -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            echo "❌ Critical error: ImageBuilder directory still not available after recovery attempts"
-            exit 1
-          fi
-
-      # Report on Docker image cache status
-      - name: Docker Build Environment Status
-        run: |
-          if [ "${{ steps.cache-docker.outputs.cache-hit }}" == "true" ]; then
-            echo "🚀 Used cached Docker build environment for ${{ steps.lookup-router.outputs.target }}"
-            echo "⚡ Build time reduction achieved through Docker layer caching"
-          else
-            echo "🔨 Set up fresh Docker build environment for ${{ steps.lookup-router.outputs.target }}"
-            echo "♻️ This environment will be cached for future builds"
-          fi
-
-      - name: Check Available Profiles
-        run: |
-          # Make sure the ImageBuilder directory exists
-          ACTUAL_PATH=""
-          
-          # First try the expected path
-          if [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            ACTUAL_PATH="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-            echo "✅ Found ImageBuilder at expected path: ${ACTUAL_PATH}"
-          # Then try the Docker context path
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            ACTUAL_PATH="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-            echo "✅ Found ImageBuilder in Docker context: ${ACTUAL_PATH}"
-          # Then search for any ImageBuilder directory
-          else
-            echo "🔍 ImageBuilder directory not found at expected locations. Searching..."
-            FOUND_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if ( -n "${FOUND_DIR}" ); then
-              ACTUAL_PATH="${FOUND_DIR}"
-              echo "✅ Found ImageBuilder at: ${ACTUAL_PATH}"
-              
-              # Create symlink to expected path for compatibility
-              echo "Creating symlink from ${FOUND_DIR} to ${BUILDDIR}/${IMAGEBUILDER_NAME}"
-              ln -sf "${FOUND_DIR}" "${BUILDDIR}/${IMAGEBUILDER_NAME}"
-            else
-              echo "❌ Could not find any ImageBuilder directory"
-              echo "Contents of BUILDDIR:"
-              ls -la "${BUILDDIR}" || echo "Failed to list BUILDDIR contents"
-              echo "Contents of Docker context:"
-              ls -la "${DOCKER_CONTEXT}" || echo "Failed to list Docker context contents"
-              exit 1
-            fi
-          fi
-          
-          # Now use the verified path
-          cd "${ACTUAL_PATH}"
-          echo "📋 Checking for available profiles..."
-          
-          # More reliable method to check profiles
-          if [ -f "profiles.json" ]; then
-            grep -q "${PROFILE}" profiles.json && \
-              echo "✅ Profile ${PROFILE} appears to be available" || \
-              echo "⚠️ Profile ${PROFILE} not found, checking with make info"
-          fi
-          
-          # Try to list all available profiles if grep fails
-          echo "Available profiles:"
-          make info || echo "⚠️ Could not run 'make info', but continuing anyway"
-          
-          # Always continue - we'll let the build fail if the profile is truly invalid
-          echo "🔄 Proceeding with profile: ${PROFILE}"
-
+      # Setup Custom Files and Packages
       - name: Setup Custom Files and Packages
         env:
           NOSTR_SECRET_KEY: ${{ secrets.NOSTR_SECRET_KEY }}
           NOSTR_PUBLIC_KEY: ${{ secrets.NOSTR_PUBLIC_KEY }}
         run: |
-          # First determine which path to use
-          if [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            TARGET_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
+          # Find the ImageBuilder directory
+          if [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
             TARGET_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
           else
             # Find any ImageBuilder directory as a fallback
@@ -1269,62 +457,19 @@ jobs:
           
           # Save for later use
           echo "TARGET_DIR=${TARGET_DIR}" >> $GITHUB_ENV
+          echo "PACKAGES_DIR=${PACKAGES_DIR}" >> $GITHUB_ENV
 
-      - name: Download TollGate Packages from release.json
+      # Download TollGate Packages from release.json
+      - name: Download TollGate Packages
         run: |
-          # Use TARGET_DIR if available, otherwise try to find the right directory
-          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
-            IMAGEBUILDER_DIR="${TARGET_DIR}"
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Last resort - find any ImageBuilder directory
-            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${IMAGEBUILDER_DIR}" ]; then
-              echo "❌ Could not locate ImageBuilder directory!"
-              exit 1
-            fi
+          # Ensure TARGET_DIR is properly set
+          if [ -z "${TARGET_DIR}" ] || [ ! -d "${TARGET_DIR}" ]; then
+            echo "❌ TARGET_DIR not properly set or directory doesn't exist!"
+            exit 1
           fi
-          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
           
           # Create packages directory if it doesn't exist
-          PACKAGES_DIR="${IMAGEBUILDER_DIR}/packages/local"
           mkdir -p "${PACKAGES_DIR}"
-          echo "PACKAGES_DIR=${PACKAGES_DIR}" >> $GITHUB_ENV
-          
-          # Load architecture mapping from the architecture_mapping.json file
-          ARCH_MAPPING_FILE="${GITHUB_WORKSPACE}/files/etc/tollgate/architecture_mapping.json"
-          echo "🔍 Using architecture mapping from: $ARCH_MAPPING_FILE"
-          
-          # Get the target architecture - default to BLOSSOM_ARCH if can't map
-          if [ -f "$ARCH_MAPPING_FILE" ]; then
-            # First try platform mapping
-            PLATFORM_TYPE="${PLATFORM}/${TYPE}"
-            TARGET_ARCH=$(jq -r --arg platform "$PLATFORM_TYPE" '.platform_mappings[$platform] // ""' "$ARCH_MAPPING_FILE")
-            
-            # If no platform mapping, try direct mapping
-            if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
-              TARGET_ARCH=$(jq -r --arg arch "$BLOSSOM_ARCH" '.mappings[$arch] // ""' "$ARCH_MAPPING_FILE")
-            fi
-            
-            # If still no mapping, use default
-            if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
-              TARGET_ARCH=$(jq -r '.default // ""' "$ARCH_MAPPING_FILE")
-              echo "⚠️ Using default architecture mapping: ${TARGET_ARCH}"
-            else
-              echo "✅ Mapped architecture ${BLOSSOM_ARCH} to ${TARGET_ARCH}"
-            fi
-          fi
-          
-          # If mapping failed or file missing, fallback to BLOSSOM_ARCH
-          if [ -z "$TARGET_ARCH" ] || [ "$TARGET_ARCH" = "null" ]; then
-            TARGET_ARCH="${BLOSSOM_ARCH}"
-            echo "⚠️ No architecture mapping found, using original: ${TARGET_ARCH}"
-          fi
-          
-          echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
           
           # Create an empty Packages file to prevent build failures if no packages are downloaded
           touch "${PACKAGES_DIR}/Packages"
@@ -1335,31 +480,31 @@ jobs:
             echo "📦 Processing module: ${MODULE_NAME}"
             
             # Extract URL for this module and architecture
-            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$BLOSSOM_ARCH" \
               '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
               
             # Skip placeholder URLs
             if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
-              echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+              echo "⚠️ No package available for ${MODULE_NAME} (${BLOSSOM_ARCH})"
               continue
             fi
             
             # Download the package with retry logic
-            PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+            PACKAGE_FILENAME="${MODULE_NAME}-${BLOSSOM_ARCH}.ipk"
             echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
             
             # Try up to 3 times with increasing timeouts
             for ATTEMPT in {1..3}; do
               echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
               if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-                echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
+                # If download successful, add to packages list
+                if [ -n "${DOWNLOADED_PACKAGES}" ]; then
+                  DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} ${MODULE_NAME}"
+                else
+                  DOWNLOADED_PACKAGES="${MODULE_NAME}"
+                fi
                 break
               else
-                echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
-                if [ $ATTEMPT -eq 3 ]; then
-                  echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
-                fi
                 sleep 5
               fi
             done
@@ -1377,333 +522,107 @@ jobs:
           # List the downloaded packages
           echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
           ls -la "${PACKAGES_DIR}" || true
+          
+          # Create package groups to try with fewer packages if full build fails
+          echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
+          echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
 
+      # Generate Package Index
       - name: Generate Package Index
         run: |
-          # Use TARGET_DIR if available, or find the right ImageBuilder directory
-          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
-            IMAGEBUILDER_DIR="${TARGET_DIR}"
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Last resort - find any ImageBuilder directory
-            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${IMAGEBUILDER_DIR}" ]; then
-              echo "❌ Could not locate ImageBuilder directory!"
-              exit 1
-            fi
-          fi
-          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
-          
-          cd ${IMAGEBUILDER_DIR}
+          cd ${TARGET_DIR}
           sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
           export -f mkhash; \
           export MKHASH=mkhash; \
           ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
           gzip -9c packages/local/Packages > packages/local/Packages.gz'
 
-      - name: Analyze Package Sizes
-        run: |
-          echo "📊 Analyzing TollGate package sizes:"
-          
-          # Use TARGET_DIR if available, or find the right ImageBuilder directory
-          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
-            IMAGEBUILDER_DIR="${TARGET_DIR}"
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Last resort - find any ImageBuilder directory
-            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${IMAGEBUILDER_DIR}" ]; then
-              echo "❌ Could not locate ImageBuilder directory!"
-              exit 1
-            fi
-          fi
-          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
-          
-          # Check if packages directory has .ipk files 
-          if ls ${IMAGEBUILDER_DIR}/packages/local/*.ipk 1> /dev/null 2>&1; then
-            # Get total size of all packages
-            TOTAL_SIZE=$(du -ch ${IMAGEBUILDER_DIR}/packages/local/*.ipk | grep total | cut -f1)
-            echo "Total size of all packages: ${TOTAL_SIZE}"
-            
-            # List packages by size
-            echo "Packages ordered by size (largest first):"
-            du -h ${IMAGEBUILDER_DIR}/packages/local/*.ipk | sort -hr
-          else
-            echo "⚠️ No .ipk packages found in packages/local/"
-          fi
-          
-          # Check device specs
-          if grep -q "Flash" "${IMAGEBUILDER_DIR}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
-            FLASH_INFO=$(grep "Flash" ${IMAGEBUILDER_DIR}/target/linux/${PLATFORM}/image/Makefile)
-            echo "Device flash information: ${FLASH_INFO}"
-          else
-            echo "⚠️ Flash information not found in Makefile"
-          fi
-          
-          # Create package groups to try with fewer packages
-          echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
-          echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
-
+      # Build Firmware with All Packages
       - name: Build Firmware with All Packages
         continue-on-error: true
         id: build-all
         run: |
-          # Use TARGET_DIR if available, or find the right ImageBuilder directory
-          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
-            IMAGEBUILDER_DIR="${TARGET_DIR}"
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Last resort - find any ImageBuilder directory
-            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${IMAGEBUILDER_DIR}" ]; then
-              echo "❌ Could not locate ImageBuilder directory!"
-              exit 1
-            fi
-          fi
-          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
+          cd ${TARGET_DIR}
           
-          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-          cd ${IMAGEBUILDER_DIR}
+          # Combine all packages
+          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
           
-          if [ -n "${DEVICE_EXTRA}" ]; then
-            echo "Adding device compatibility: ${DEVICE_EXTRA}"
-            # Use eval to properly handle the parameters
-            eval sudo make -j$(nproc) image V=s \
-              PROFILE="${PROFILE}" \
-              ${DEVICE_EXTRA} \
-              PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${IMAGEBUILDER_DIR}/files"
-          else
-            # Original command
-            sudo make -j$(nproc) image V=s \
-              PROFILE="${PROFILE}" \
-              PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${IMAGEBUILDER_DIR}/files"
-          fi
+          make image PROFILE="${PROFILE}" PACKAGES="${COMBINED_PACKAGE_LIST}" BIN_DIR="${BUILDDIR}/bin"
           
           # Check if build succeeded
-          if find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-            echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
-            echo "✅ Build with ALL packages succeeded!"
-            exit 0
+          BUILD_STATUS=$?
+          if [ $BUILD_STATUS -eq 0 ]; then
+            echo "✅ Build successful with ALL packages!"
+            echo "build_status=success" >> $GITHUB_OUTPUT
           else
-            echo "❌ Build with ALL packages failed, will try with fewer packages"
-            # Show logs or errors
-            cat ${IMAGEBUILDER_DIR}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
-            exit 1
+            echo "❌ Build failed with all packages. Will try with essential packages only."
+            echo "build_status=failed" >> $GITHUB_OUTPUT
           fi
 
+      # Build Firmware with Essential Packages Only if the full build failed
       - name: Build Firmware with Essential Packages Only
         if: steps.build-all.outcome == 'failure'
         continue-on-error: true
         id: build-essential
         run: |
-          # Use TARGET_DIR if available, or find the right ImageBuilder directory
-          if [ -n "${TARGET_DIR}" ] && [ -d "${TARGET_DIR}" ]; then
-            IMAGEBUILDER_DIR="${TARGET_DIR}"
-          elif [ -d "${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}"
-          elif [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            IMAGEBUILDER_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Last resort - find any ImageBuilder directory
-            IMAGEBUILDER_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${IMAGEBUILDER_DIR}" ]; then
-              echo "❌ Could not locate ImageBuilder directory!"
-              exit 1
-            fi
-          fi
+          cd ${TARGET_DIR}
           
-          echo "✅ Using ImageBuilder at: ${IMAGEBUILDER_DIR}"
-          cd ${IMAGEBUILDER_DIR}
+          # Combine essential packages only
+          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${ESSENTIAL_PACKAGES}"
           
-          # Clean only what's necessary without removing the output directory structure
-          rm -rf ${IMAGEBUILDER_DIR}/tmp ${IMAGEBUILDER_DIR}/dl ${IMAGEBUILDER_DIR}/build_dir/target-*
+          echo "📦 Attempting build with ESSENTIAL packages only: ${COMBINED_PACKAGE_LIST}"
           
-          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
-          
-          echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
-          
-          if [ -n "${DEVICE_EXTRA}" ]; then
-            echo "Adding device compatibility: ${DEVICE_EXTRA}"
-            # Use eval to properly handle the parameters
-            eval sudo make -j$(nproc) image V=s \
-              PROFILE="${PROFILE}" \
-              ${DEVICE_EXTRA} \
-              PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${IMAGEBUILDER_DIR}/files"
-          else
-            # Original command
-            sudo make -j$(nproc) image V=s \
-              PROFILE="${PROFILE}" \
-              PACKAGES="${COMBINED_PACKAGE_LIST}" \
-              FILES="${IMAGEBUILDER_DIR}/files"
-          fi
+          make image PROFILE="${PROFILE}" PACKAGES="${COMBINED_PACKAGE_LIST}" BIN_DIR="${BUILDDIR}/bin"
           
           # Check if build succeeded
-          if find ${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f -o -name "*factory.bin" -type f | grep -q .; then
-            echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
-            echo "✅ Build with ESSENTIAL packages succeeded!"
+          BUILD_STATUS=$?
+          if [ $BUILD_STATUS -eq 0 ]; then
+            echo "✅ Build successful with ESSENTIAL packages!"
+            echo "build_status=success" >> $GITHUB_OUTPUT
           else
-            echo "❌ Build failed even with essential packages!"
-            # Show logs or errors
-            cat ${IMAGEBUILDER_DIR}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
-            exit 1
+            echo "❌ Build failed with essential packages as well."
+            echo "build_status=failed" >> $GITHUB_OUTPUT
           fi
 
+      # Verify Firmware Build and Find Path
       - name: Verify Firmware Build and Find Path
-        id: find-firmware
+        id: verify-build
         run: |
-          # Find the actual firmware file to upload
-          PLATFORM="${{ steps.lookup-router.outputs.platform }}"
-          TYPE="${{ steps.lookup-router.outputs.type }}"
-          BLOSSOM_ARCH="${{ steps.lookup-router.outputs.blossom_arch }}"
-          IMAGEBUILDER_DIR="${TARGET_DIR:-${DOCKER_CONTEXT}/${IMAGEBUILDER_NAME}}"
+          BIN_DIR="${BUILDDIR}/bin"
           
-          echo "🔍 Checking for firmware files in potential locations..."
-          echo "PLATFORM: $PLATFORM"
-          echo "TYPE: $TYPE"
-          echo "BLOSSOM_ARCH: $BLOSSOM_ARCH"
-          echo "IMAGEBUILDER_DIR: $IMAGEBUILDER_DIR"
-          
-          # First check IMAGEBUILDER_DIR/bin/targets/${PLATFORM}/${TYPE}/
-          FIRMWARE_DIR="${IMAGEBUILDER_DIR}/bin/targets/${PLATFORM}/${TYPE}"
-          
-          if [ -d "$FIRMWARE_DIR" ]; then
-            echo "📂 Found firmware directory at standard path: $FIRMWARE_DIR"
-          else 
-            echo "⚠️ Standard firmware path not found, searching recursively..."
+          # Check if any files exist in the bin directory
+          if [ -d "$BIN_DIR" ] && [ "$(ls -A $BIN_DIR 2>/dev/null)" ]; then
+            echo "✅ Found files in build directory"
             
-            # Try to find the bin directory recursively
-            BIN_DIRS=$(find "${IMAGEBUILDER_DIR}" -type d -name "bin" 2>/dev/null)
-            if [ -n "$BIN_DIRS" ]; then
-              echo "📂 Found bin directories:"
-              echo "$BIN_DIRS"
-              
-              # Use the first bin directory found
-              FIRMWARE_DIR=$(echo "$BIN_DIRS" | head -1)
-              echo "Using directory: $FIRMWARE_DIR"
-              
-              # Look for target-specific directories
-              TARGET_DIRS=$(find "$FIRMWARE_DIR" -type d -path "*${PLATFORM}*${TYPE}*" 2>/dev/null)
-              if [ -n "$TARGET_DIRS" ]; then
-                echo "📂 Found target directories for ${PLATFORM}/${TYPE}:"
-                echo "$TARGET_DIRS"
-                FIRMWARE_DIR=$(echo "$TARGET_DIRS" | head -1)
-                echo "Using target directory: $FIRMWARE_DIR"
-              fi
+            # Find firmware files (squashfs or fit images)
+            FIRMWARE_FILES=$(find "$BIN_DIR" -name "*sysupgrade*.bin" -o -name "*.fit" -o -name "*.img.gz" | sort)
+            
+            if [ -n "$FIRMWARE_FILES" ]; then
+              echo "🎉 Found firmware files:"
+              echo "$FIRMWARE_FILES" | while read file; do
+                echo "📄 $(basename "$file") ($(du -h "$file" | cut -f1))"
+              done
+              echo "build_status=success" >> $GITHUB_OUTPUT
+              echo "firmware_files<<EOF" >> $GITHUB_OUTPUT
+              echo "$FIRMWARE_FILES"
+              echo "EOF" >> $GITHUB_OUTPUT
             else
-              # If we still can't find the bin directory, look for any directory with bin files
-              echo "⚠️ No bin directory found, searching for .bin files..."
-              FIRMWARE_DIR="${IMAGEBUILDER_DIR}"
-            fi
-          fi
-          
-          # Now find firmware files in the firmware directory
-          echo "🔍 Searching for firmware files in $FIRMWARE_DIR..."
-          
-          # First look for sysupgrade files
-          FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" -type f | head -1)
-          
-          # If no sysupgrade file, try factory image
-          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*factory.bin" -type f | head -1)
-          fi
-          
-          # If still no file, try any .bin file
-          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*.bin" -type f | head -1)
-          fi
-          
-          # If still no file, try any .img file
-          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_PATH=$(find "$FIRMWARE_DIR" -name "*.img" -type f | head -1)
-          fi
-          
-          # If still no file, try searching the entire workspace
-          if [ -z "$FIRMWARE_PATH" ] || [ ! -f "$FIRMWARE_PATH" ]; then
-            echo "⚠️ No firmware file found in the expected directories, searching the entire workspace..."
-            FIRMWARE_PATH=$(find "${GITHUB_WORKSPACE}" -name "*.bin" -o -name "*.img" | grep -v "/dl/" | head -1)
-          fi
-          
-          # Get the package URL from release.json based on architecture
-          RELEASE_JSON="${GITHUB_WORKSPACE}/files/etc/tollgate/release.json"
-          if [ -f "$RELEASE_JSON" ]; then
-            echo "📋 Found release.json at $RELEASE_JSON"
-            PACKAGE_URL=$(jq -r --arg arch "$BLOSSOM_ARCH" '.modules[] | select(.name == "basic") | .versions[0].architectures[$arch].url' "$RELEASE_JSON")
-            PACKAGE_HASH=$(jq -r --arg arch "$BLOSSOM_ARCH" '.modules[] | select(.name == "basic") | .versions[0].architectures[$arch].hash' "$RELEASE_JSON")
-            
-            echo "📦 Package URL for $BLOSSOM_ARCH: $PACKAGE_URL"
-            echo "📦 Package hash: $PACKAGE_HASH"
-            
-            echo "package_url=$PACKAGE_URL" >> $GITHUB_OUTPUT
-            echo "package_hash=$PACKAGE_HASH" >> $GITHUB_OUTPUT
-            echo "PACKAGE_URL=$PACKAGE_URL" >> $GITHUB_ENV
-            echo "PACKAGE_HASH=$PACKAGE_HASH" >> $GITHUB_ENV
-          else
-            echo "⚠️ Could not find release.json file"
-          fi
-          
-          if [ -f "$FIRMWARE_PATH" ]; then
-            FIRMWARE_NAME=$(basename "$FIRMWARE_PATH")
-            echo "✅ Found firmware file: ${FIRMWARE_PATH}"
-            echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
-            echo "firmware_name=${FIRMWARE_NAME}" >> $GITHUB_OUTPUT
-            echo "FIRMWARE_PATH=${FIRMWARE_PATH}" >> $GITHUB_ENV
-            echo "FIRMWARE_NAME=${FIRMWARE_NAME}" >> $GITHUB_ENV
-            echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH" 2>/dev/null || stat -f%z "$FIRMWARE_PATH")" >> $GITHUB_ENV
-            echo "FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" 2>/dev/null || shasum -a 256 "$FIRMWARE_PATH" | cut -d' ' -f1)" >> $GITHUB_ENV
-            
-            # Log which image type was found (factory, sysupgrade, etc.)
-            if [[ "${FIRMWARE_NAME}" == *"factory"* ]]; then
-              echo "📦 Found factory image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=factory" >> $GITHUB_ENV
-            elif [[ "${FIRMWARE_NAME}" == *"sysupgrade"* ]]; then
-              echo "📦 Found sysupgrade image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=sysupgrade" >> $GITHUB_ENV
-            else
-              echo "📦 Found image: ${FIRMWARE_NAME}"
-              echo "IMAGE_TYPE=other" >> $GITHUB_ENV
+              echo "❌ No firmware files found"
+              echo "build_status=failed" >> $GITHUB_OUTPUT
             fi
           else
-            echo "❌ Error: No firmware file found!"
-            
-            # List the directory structure for debugging
-            echo "📂 Directory structure of target directory:"
-            find "${IMAGEBUILDER_DIR}" -type d | sort
-            
-            echo "📂 All potential firmware files (.bin and .img):"
-            find "${GITHUB_WORKSPACE}" -name "*.bin" -o -name "*.img" | grep -v "/dl/"
-            
-            exit 1
+            echo "❌ No files found in build directory"
+            echo "build_status=failed" >> $GITHUB_OUTPUT
           fi
-
-      # Save the Docker image to cache (only if we built it from scratch)
-      - name: Save Docker image to cache
-        id: save-cache
-        uses: actions/cache/save@v3
-        if: env.ENABLE_CACHE == 'true' && steps.cache-docker.outputs.cache-hit != 'true'
-        with:
-          path: ${{ env.DOCKER_CONTEXT }}
-          key: ${{ env.CACHE_KEY }}
 
       - name: Upload Firmware to Blossom
         id: upload_firmware
         uses: c03rad0r/cli-blossom-uploader-go@main
         with:
           host: "https://blossom.swissdash.site"
-          filePath: ${{ steps.find-firmware.outputs.firmware_path }}
+          filePath: ${{ steps.verify-build.outputs.firmware_files }}
           nostrPrivateKey: ${{ secrets.NSECBECH }}
 
       - name: Publish Firmware NIP-94 Metadata
@@ -1715,7 +634,7 @@ jobs:
           mimeType: "application/octet-stream"
           fileHash: ${{ steps.upload_firmware.outputs.hash }}
           originalHash: ${{ env.FIRMWARE_HASH }}
-          filename: ${{ steps.find-firmware.outputs.firmware_name }}
+          filename: ${{ steps.verify-build.outputs.firmware_files }}
           content: "TollGate OS Firmware for ${{ matrix.model }}"
           nsec: ${{ secrets.NSEC }}
           size: ${{ env.FIRMWARE_SIZE }}
@@ -1735,5 +654,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.model }}.img
-          path: ${{ steps.find-firmware.outputs.firmware_path }}
+          path: ${{ steps.verify-build.outputs.firmware_files }}
           retention-days: 5
