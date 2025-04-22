@@ -594,7 +594,6 @@ jobs:
       - name: Generate Package Index
         run: |
           cd ${TARGET_DIR}
-          # Fix the mkhash function with proper escaping
           sudo bash -c '
             mkhash() {
               if [ "$1" = "sha256" ]; then 
