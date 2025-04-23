@@ -229,7 +229,7 @@ jobs:
           fi
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v2-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v3-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
