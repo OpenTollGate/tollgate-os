@@ -91,13 +91,30 @@ jobs:
         with:
           python-version: '3.x'
       
+      # Cache Python dependencies
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        id: python-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') || 'nostr' }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
       # Install essential dependencies needed for all paths (cache hit or miss)
       - name: Install Essential Dependencies
         run: |
           echo "📦 Installing essential dependencies..."
           sudo apt-get update
           sudo apt-get install -y curl jq
-          python -m pip install setuptools nostr
+          
+          # Only install Python packages if cache missed
+          if [ "${{ steps.python-cache.outputs.cache-hit }}" != "true" ]; then
+            echo "📦 Installing Python dependencies..."
+            python -m pip install setuptools nostr
+          else
+            echo "✓ Using cached Python dependencies"
+          fi
       
       # Use the openwrt-info action to get router details
       - name: Get Router Info
@@ -309,10 +326,29 @@ jobs:
             FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
             FORCE=1
           
-          # Check if build succeeded
-          if find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | grep -q .; then
-            echo "✅ Build succeeded!"
-            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+          # Debug - list all files in target directory to see what's available
+          echo "📋 Listing files in target directory:"
+          find bin/targets/$PLATFORM/$TYPE/ -type f | sort
+          
+          # Check if build succeeded with more robust file detection
+          # First try the standard pattern
+          FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+          
+          # If not found, look for any bin files
+          if [ -z "$FIRMWARE_PATH" ]; then
+            echo "⚠️ Standard sysupgrade*.bin not found, looking for other bin files..."
+            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.bin" | grep -v "initramfs" | head -1)
+          fi
+          
+          # If still not found, look for img files
+          if [ -z "$FIRMWARE_PATH" ]; then
+            echo "⚠️ No .bin files found, looking for .img files..."
+            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.img" | head -1)
+          fi
+          
+          # If we found a firmware file
+          if [ -n "$FIRMWARE_PATH" ]; then
+            echo "✅ Build succeeded! Found firmware at: $FIRMWARE_PATH"
             FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
             
             # Calculate firmware hash and size
@@ -327,7 +363,9 @@ jobs:
             echo "FIRMWARE_HASH=$FIRMWARE_HASH" >> $GITHUB_ENV
             echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
           else
-            echo "❌ Build failed"
+            echo "❌ Build succeeded but no firmware file found"
+            echo "Directory contents:"
+            find bin/targets/ -type f | sort
             exit 1
           fi
 
