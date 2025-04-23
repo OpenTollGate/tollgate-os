@@ -1,4 +1,4 @@
-name: Build OpenWRT Firmware
+name: Build OpenWRT Firmware (Simplified)
 
 on:
   push:
@@ -10,11 +10,6 @@ on:
         description: 'Override OpenWRT version (leave empty for latest)'
         required: false
         type: string
-      enable_cache:
-        description: 'Enable Docker layer caching'
-        required: false
-        type: boolean
-        default: false
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
@@ -23,70 +18,31 @@ jobs:
   check-versions:
     runs-on: ubuntu-latest
     outputs:
-      # openwrt_version: ${{ steps.get-version.outputs.version }}
-      openwrt_version: 23.05.5
+      openwrt_version: ${{ steps.get-version.outputs.version }}
     
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       
-      # Install jq for proper JSON parsing
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-      
       # Set version based on run type and available overrides
       - name: Get OpenWRT version
         id: get-version
         run: |
-          # Start with empty VERSION
-          OPENWRT_VERSION=""
+          # Start with hardcoded stable version as default
+          OPENWRT_VERSION="23.05.5"
           
-          # 1. Check for scheduled run - use hardcoded version
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            OPENWRT_VERSION="23.05.5"
-            echo "Using hardcoded version for scheduled run: $OPENWRT_VERSION"
-          fi
-          
-          # 2. Check for manual override if VERSION still not set
-          if [ -z "$OPENWRT_VERSION" ] && [ -n "${{ github.event.inputs.openwrt_version }}" ]; then
+          # Check for manual override
+          if [ -n "${{ github.event.inputs.openwrt_version }}" ]; then
             OPENWRT_VERSION="${{ github.event.inputs.openwrt_version }}"
             echo "Using manual override version: $OPENWRT_VERSION"
           fi
           
-          # 3. Get from API if VERSION still not set
-          if [ -z "$OPENWRT_VERSION" ]; then
-            echo "Checking latest version from endoflife.date API..."
-            API_RESPONSE=$(curl -s "https://endoflife.date/api/openwrt.json")
-            
-            if [ -n "$API_RESPONSE" ]; then
-              # Use jq to extract the latest version from the first entry in the array
-              # First entry is the newest OpenWRT release
-              OPENWRT_VERSION=$(echo "$API_RESPONSE" | jq -r '.[0].latest')
-              
-              if [ -n "$OPENWRT_VERSION" ] && [ "$OPENWRT_VERSION" != "null" ]; then
-                echo "Using latest version from API: $OPENWRT_VERSION"
-              else
-                echo "Failed to extract version from API response"
-              fi
-            else
-              echo "Failed to get API response from endoflife.date"
-            fi
-          fi
-          
-          # 4. Fallback if VERSION still not set
-          if [ -z "$OPENWRT_VERSION" ] || [ "$OPENWRT_VERSION" = "null" ]; then
-            OPENWRT_VERSION="23.05.5"  # Using a known stable version as fallback
-            echo "Using default fallback version: $OPENWRT_VERSION"
-          fi
-          
           # Output the final VERSION
           echo "version=$OPENWRT_VERSION" >> $GITHUB_OUTPUT
-          echo "🔧 Final OpenWRT version: $OPENWRT_VERSION"
+          echo "🔧 Using OpenWRT version: $OPENWRT_VERSION"
 
-  # Step 2: Build firmware for each router model in the matrix
+  # Step 2: Build firmware for each router model
   build:
     needs: [check-versions]
     strategy:
@@ -94,18 +50,11 @@ jobs:
         model: [
           # D-Link models
           'dlink_covr-x1860-a1',
-          #'dlink_covr-c1200-a1',
           
           # GL.iNet models
           'glinet_gl-mt3000',
           'glinet_gl-mt6000',
-          'glinet_gl-ar300m-nand',
-          # 'glinet_gl-ar300m-nor',
-          # 'glinet_gl-ar300m16',
-          # 'glinet_gl-ar300m-lite',
-          
-          # ZyXEL models
-          # 'zyxel_nr7101'
+          'glinet_gl-ar300m-nand'
         ]
       fail-fast: true
       max-parallel: 1
@@ -120,74 +69,31 @@ jobs:
         libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
         ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
         uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
-      # Default settings for Docker cache
-      CACHE_KEY_PREFIX: openwrt-builder-1
-      ENABLE_CACHE: ${{ github.event.inputs.enable_cache || 'true' }}
       # Nostr relay configuration
       NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
       # Default removed packages
       REMOVED_PACKAGES: -odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini
+      # Force flag to bypass distutils check on newer Ubuntu runners
+      FORCE: 1
 
     steps:
       - uses: actions/checkout@v4
       
-      # Set up Python for Nostr operations
+      # Set up Python for package operations
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-          
-      # Install critical system dependencies first - before any cache operations
+      
+      # Install critical build dependencies first
       - name: Install Critical Build Dependencies
         run: |
-          echo "📦 Installing critical build dependencies for OpenWRT Builder..."
+          echo "📦 Installing critical build dependencies..."
           sudo apt-get update
           sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
-          
-          # Install setuptools directly with pip for the Python environment
-          python -m pip install setuptools
-          
-          echo "✅ Checking Python setuptools installation..."
-          python -m pip list | grep setuptools
-          
-          # Set FORCE=1 for the OpenWrt build to bypass distutils check
-          echo "FORCE=1" >> $GITHUB_ENV
-
-      # Cache for apt packages and pip dependencies with bumped version
-      - name: Cache Dependencies
-        uses: actions/cache@v3
-        id: deps-cache
-        with:
-          path: |
-            /var/cache/apt/archives
-            ~/.cache/pip
-            /usr/local/lib/
-            /var/lib/apt/lists
-          key: ${{ runner.os }}-system-deps-v5-${{ hashFiles('files/etc/tollgate/release.json') }}
-          restore-keys: |
-            ${{ runner.os }}-system-deps-v5-
-            ${{ runner.os }}-system-deps-
-
-      # Install system dependencies only if cache miss
-      - name: Install System Dependencies
-        if: steps.deps-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "📦 Cache miss - Installing system dependencies..."
-          sudo apt-get update
-          sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
-          python -m pip install --upgrade pip
-          pip install nostr
-          echo "✅ System dependencies installed"
+          python -m pip install setuptools nostr
       
-      # Only update pip if cache hit (dependencies should already be installed)
-      - name: Ensure Python Dependencies
-        if: steps.deps-cache.outputs.cache-hit == 'true'
-        run: |
-          echo "✅ Using cached system dependencies"
-          # Just ensure pip is up to date and packages are installed
-          python -m pip install --no-cache-dir --quiet nostr
-      
-      # Use our openwrt-info action to get router details
+      # Use the openwrt-info action to get router details
       - name: Get Router Info
         id: router-info
         uses: ./actions/openwrt-info
@@ -195,157 +101,17 @@ jobs:
           router_id: ${{ matrix.model }}
           openwrt_version: ${{ needs.check-versions.outputs.openwrt_version }}
       
-      # Debug output of router info
-      - name: Debug Router Info
-        run: |
-          echo "Target: ${{ steps.router-info.outputs.target }}"
-          echo "Arch Packages: ${{ steps.router-info.outputs.arch_packages }}"
-          echo "Device Packages: ${{ steps.router-info.outputs.device_packages }}"
-      
-      # Set Build Variables based on router info
       - name: Set Build Variables
         id: vars
         run: |
           # Extract target and split into platform/type
           TARGET="${{ steps.router-info.outputs.target }}"
-          if [[ "$TARGET" == *"/"* ]]; then
-            PLATFORM=$(echo "$TARGET" | cut -d'/' -f1)
-            TYPE=$(echo "$TARGET" | cut -d'/' -f2)
-          else
-            echo "⚠️ Target format is unexpected: $TARGET"
-            # Default fallback values
-            PLATFORM="$TARGET"
-            TYPE="generic"
-          fi
+          PLATFORM=$(echo "$TARGET" | cut -d'/' -f1)
+          TYPE=$(echo "$TARGET" | cut -d'/' -f2)
+          PROFILE="${{ matrix.model }}"
           
-          echo "TARGET=$TARGET" >> $GITHUB_ENV
-          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
-          echo "TYPE=$TYPE" >> $GITHUB_ENV
-          echo "TARGET_DEVICE=${PLATFORM}-${TYPE}" >> $GITHUB_ENV
-          echo "PROFILE=${{ matrix.model }}" >> $GITHUB_ENV
-          
-          # Extract architecture packages
-          ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
-          echo "ARCH_PACKAGES=$ARCH_PACKAGES" >> $GITHUB_ENV
-          
-          # Parse device packages (comes as comma-separated list)
-          DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
-          echo "DEVICE_PACKAGES=$DEVICE_PACKAGES" >> $GITHUB_ENV
-          
-          # Parse default packages (comes as comma-separated list)
-          DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
-          echo "DEFAULT_PACKAGES=$DEFAULT_PACKAGES" >> $GITHUB_ENV
-          
-          # Set up proper architecture mapping for Blossom
-          ARCH_MAPPING_PATH="${GITHUB_WORKSPACE}/files/etc/tollgate/architecture_mapping.json"
-          
-          # Map OpenWRT arch to Blossom arch if the mapping file exists
-          if [ -f "${ARCH_MAPPING_PATH}" ]; then
-            echo "🔍 Using architecture mapping from: ${ARCH_MAPPING_PATH}"
-            
-            # First try direct mapping from architecture name
-            BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
-            
-            # If not found in direct mappings, use platform+type mapping
-            if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
-              PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-              echo "⚠️ Architecture ${ARCH_PACKAGES} not found in direct mappings, trying platform mapping with ${PLATFORM_TYPE}"
-              BLOSSOM_ARCH=$(jq -r --arg platform "${PLATFORM_TYPE}" '.platform_mappings[$platform] // .default' "${ARCH_MAPPING_PATH}")
-            fi
-            
-            echo "✅ Set BLOSSOM_ARCH=${BLOSSOM_ARCH} based on architecture mapping"
-          else
-            echo "⚠️ Architecture mapping file not found at ${ARCH_MAPPING_PATH}, using default mapping"
-            # Default mapping logic
-            case "${ARCH_PACKAGES}" in
-              "mipsel_24kc")
-                BLOSSOM_ARCH="mips_24kc"
-                ;;
-              *)
-                # Set default based on platform type
-                PLATFORM_TYPE="${PLATFORM}_${TYPE}"
-                case "${PLATFORM_TYPE}" in
-                  "ramips_mt7621")
-                    BLOSSOM_ARCH="mipsel_24kc"
-                    ;;
-                  "ath79_generic"|"ath79_nand")
-                    BLOSSOM_ARCH="mips_24kc"
-                    ;;
-                  "mediatek_filogic")
-                    BLOSSOM_ARCH="aarch64_cortex-a53"
-                    ;;
-                  "ipq40xx_generic")
-                    BLOSSOM_ARCH="arm_cortex-a7_neon-vfpv4"
-                    ;;
-                  "ipq806x_generic")
-                    BLOSSOM_ARCH="arm_cortex-a15_neon-vfpv4"
-                    ;;
-                  "x86_64")
-                    BLOSSOM_ARCH="x86_64"
-                    ;;
-                  "bcm27xx_bcm2711")
-                    BLOSSOM_ARCH="aarch64_cortex-a72"
-                    ;;
-                  *)
-                    echo "⚠️ Unknown architecture for ${PLATFORM}/${TYPE}, defaulting to aarch64_cortex-a53"
-                    BLOSSOM_ARCH="aarch64_cortex-a53"
-                    ;;
-                esac
-            esac
-          fi
-          
-          # Set the architecture for downloads
-          echo "BLOSSOM_ARCH=${BLOSSOM_ARCH}" >> $GITHUB_ENV
-          
-          # Special case for uboot-envtools - check if it's already included in device packages
-          if [[ "${{ matrix.model }}" == "glinet_gl-mt3000" || "${{ matrix.model }}" == "glinet_gl-mt6000" || "${{ matrix.model }}" == *"gl-ar300m"* ]]; then
-            if ! echo "${DEVICE_PACKAGES}" | grep -q "uboot-envtools"; then
-              echo "👉 Adding uboot-envtools for ${{ matrix.model }}"
-              echo "DEVICE_PACKAGES=uboot-envtools ${DEVICE_PACKAGES}" >> $GITHUB_ENV
-            fi
-          fi
-          
-          # Extract profile JSON to get image_prefix
-          echo '${{ steps.router-info.outputs.profile_json }}' > profile.json
-          IMAGE_PREFIX=$(jq -r '.image_prefix' profile.json)
-          echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
-          
-          # Set up build directory
-          sudo mkdir -p /tmp/openwrt-build
-          sudo chown $USER:$USER /tmp/openwrt-build
-          echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
-          
-          # Set cache key for caching - with version to avoid contention issues
-          # Create a stable part of the cache key with version prefix
-          CACHE_KEY="openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
-          # For restore keys, use a prefix that will match across runs
-          echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
-          echo "CACHE_KEY_RESTORE=${CACHE_KEY}" >> $GITHUB_ENV
-          
-          # Create a work directory for temporary files
-          WORK_DIR="/tmp/openwrt-build/work-dir"
-          sudo mkdir -p "${WORK_DIR}"
-          sudo chown $USER:$USER "${WORK_DIR}"
-          echo "WORK_DIR=${WORK_DIR}" >> $GITHUB_ENV
-
-      # Remove Docker-related step that was causing permission issues
-      - name: Setup Temporary Work Directory
-        run: |
-          # Verify permissions and access to the build directory
-          echo "🔍 Checking build directory permissions:"
-          ls -la /tmp/openwrt-build/
-          
-          # Ensure the work directory exists with proper permissions
-          mkdir -p $WORK_DIR
-          chmod 755 $WORK_DIR
-          
-          echo "✅ Work directory is ready: $WORK_DIR"
-          ls -la $WORK_DIR/
-
-      # Setup Build Directory with proper permissions
-      - name: Setup Build Directory
-        run: |
-          # Create build directory with proper permissions
+          # Create build directory
+          BUILDDIR="/tmp/openwrt-build"
           sudo mkdir -p $BUILDDIR
           sudo chown $USER:$USER $BUILDDIR
           
@@ -353,408 +119,216 @@ jobs:
           if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
             IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-ath79-nand.Linux-x86_64"
           else
-            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${TARGET_DEVICE}.Linux-x86_64"
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}.Linux-x86_64"
           fi
           
-          # For snapshots, always use tar.zst
+          # For snapshots, always use tar.zst, otherwise use tar.xz for stable versions
           if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
             IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
             DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
-            echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
+            ARCHIVE_EXT="tar.zst"
           else
-            # Try tar.zst first (used in newer OpenWRT versions like 24.x)
-            DOWNLOAD_URL_ZST="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
-            
-            # Check if the .tar.zst version exists
-            if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL_ZST"; then
-              echo "✅ Found .tar.zst image builder for version ${{ needs.check-versions.outputs.openwrt_version }}"
-              DOWNLOAD_URL="$DOWNLOAD_URL_ZST"
-              echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
-            else
-              # Fall back to .tar.xz (used in older OpenWRT versions like 23.x)
-              DOWNLOAD_URL_XZ="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
-              
-              # Check if the .tar.xz version exists
-              if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL_XZ"; then
-                echo "✅ Found .tar.xz image builder for version ${{ needs.check-versions.outputs.openwrt_version }}"
-                DOWNLOAD_URL="$DOWNLOAD_URL_XZ"
-                echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
-              else
-                echo "❌ Error: Neither .tar.zst nor .tar.xz image builder found for version ${{ needs.check-versions.outputs.openwrt_version }}"
-                echo "Attempted URLs:"
-                echo "- $DOWNLOAD_URL_ZST"
-                echo "- $DOWNLOAD_URL_XZ"
-                exit 1
-              fi
-            fi
+            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+            ARCHIVE_EXT="tar.xz"
           fi
           
-          echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
-          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
-
-      # Try to restore from cache - with fixed permissions and proper restore keys
-      - name: Restore ImageBuilder from Cache
+          # Get architecture from router-info
+          ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
+          
+          # Map to Blossom architecture using architecture_mapping.json
+          ARCH_MAPPING_PATH="./files/etc/tollgate/architecture_mapping.json"
+          if [ -f "${ARCH_MAPPING_PATH}" ]; then
+            # First try direct mapping from architecture name
+            BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
+            
+            # If not found, use platform mapping
+            if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
+              PLATFORM_TYPE="${PLATFORM}_${TYPE}"
+              BLOSSOM_ARCH=$(jq -r --arg platform "${PLATFORM_TYPE}" '.platform_mappings[$platform] // .default' "${ARCH_MAPPING_PATH}")
+            fi
+          else
+            # Fallback mapping if file not found
+            case "${ARCH_PACKAGES}" in
+              "mipsel_24kc") BLOSSOM_ARCH="mips_24kc" ;;
+              *) BLOSSOM_ARCH="${ARCH_PACKAGES}" ;;
+            esac
+          fi
+          
+          # Parse device packages
+          DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
+          
+          # Special case for U-Boot config
+          if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
+            DEVICE_PACKAGES="uboot-envtools ${DEVICE_PACKAGES}"
+          fi
+          
+          # Set cache key for imagebuilder
+          CACHE_KEY="openwrt-v2-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          
+          # Export all variables
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
+          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+          echo "TYPE=$TYPE" >> $GITHUB_ENV
+          echo "PROFILE=$PROFILE" >> $GITHUB_ENV
+          echo "BUILDDIR=$BUILDDIR" >> $GITHUB_ENV
+          echo "IMAGEBUILDER_NAME=$IMAGEBUILDER_NAME" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+          echo "ARCHIVE_EXT=$ARCHIVE_EXT" >> $GITHUB_ENV
+          echo "BLOSSOM_ARCH=$BLOSSOM_ARCH" >> $GITHUB_ENV
+          echo "DEVICE_PACKAGES=$DEVICE_PACKAGES" >> $GITHUB_ENV
+          echo "CACHE_KEY=$CACHE_KEY" >> $GITHUB_ENV
+      
+      # Try to restore from cache
+      - name: Restore ImageBuilder Setup from Cache
         id: cache-imagebuilder
         uses: actions/cache/restore@v3
         with:
-          path: |
-            ${{ env.BUILDDIR }}
-          key: ${{ env.CACHE_KEY }}-configured
-          restore-keys: |
-            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}-configured
-            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-configured
-            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-configured
-
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}-setup-complete
+      
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder
         if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         run: |
           cd $BUILDDIR
-          echo "🔍 Current working directory: $(pwd)"
-          echo "📂 BUILDDIR contents before download:"
-          ls -la ./ || true
           
-          if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
-            echo "🔄 Downloading OpenWRT ImageBuilder (${{ env.PLATFORM }}/${{ env.TYPE }}) from $DOWNLOAD_URL"
-            # Use the -O flag to save with original filename
-            curl -L -C - -O "$DOWNLOAD_URL"
-            
-            # Verify download was successful
-            if [ -f "$(basename $DOWNLOAD_URL)" ]; then
-              echo "✅ Successfully downloaded $(basename $DOWNLOAD_URL)"
-              echo "📊 Downloaded file size: $(du -h $(basename $DOWNLOAD_URL) | cut -f1)"
-              
-              echo "📦 Extracting OpenWRT ImageBuilder"
-              if [[ "${ARCHIVE_EXT}" == "tar.zst" ]]; then
-                echo "Using zstd extraction for $(basename $DOWNLOAD_URL)"
-                tar --zstd -xf "$(basename $DOWNLOAD_URL)"
-              else
-                echo "Using xz extraction for $(basename $DOWNLOAD_URL)"
-                tar xfJ "$(basename $DOWNLOAD_URL)"
-              fi
-              
-              # Check if extraction was successful
-              if [ $? -ne 0 ]; then
-                echo "❌ Failed to extract $(basename $DOWNLOAD_URL)"
-                exit 1
-              fi
-              
-              # Verify extracted contents
-              echo "📂 BUILDDIR contents after extraction:"
-              ls -la ./ || true
-              
-              # Final verification
-              if [ -d "${IMAGEBUILDER_NAME}" ]; then
-                echo "✅ Successfully extracted to ${IMAGEBUILDER_NAME}"
-              else
-                echo "❌ Failed to locate extracted directory at ${IMAGEBUILDER_NAME}"
-                
-                # Look for any extracted directory as a fallback
-                FOUND_DIR=$(find "." -maxdepth 1 -type d -name "openwrt-imagebuilder*" | head -1)
-                if [ -n "${FOUND_DIR}" ]; then
-                  echo "Found alternative directory: ${FOUND_DIR}"
-                  echo "Creating symlink from ${FOUND_DIR} to ${IMAGEBUILDER_NAME}"
-                  ln -sf "${FOUND_DIR}" "${IMAGEBUILDER_NAME}"
-                else
-                  echo "❌ Could not find any openwrt-imagebuilder directory"
-                  exit 1
-                fi
-              fi
-              
-              # Create a marker file to indicate this was a fresh setup
-              echo "Cache miss: Setting up fresh environment for ${{ env.PLATFORM }}/${{ env.TYPE }} on $(date)" > "cache-status.txt"
-            else
-              echo "❌ Failed to download from $DOWNLOAD_URL"
-              exit 1
-            fi
+          echo "🔄 Downloading OpenWRT ImageBuilder from $DOWNLOAD_URL"
+          curl -L -O "$DOWNLOAD_URL"
+          
+          echo "📦 Extracting OpenWRT ImageBuilder"
+          if [[ "$ARCHIVE_EXT" == "tar.zst" ]]; then
+            tar --zstd -xf "$(basename $DOWNLOAD_URL)"
           else
-            echo "❌ Error: URL $DOWNLOAD_URL does not exist"
+            tar xfJ "$(basename $DOWNLOAD_URL)"
+          fi
+          
+          if [ ! -d "$IMAGEBUILDER_NAME" ]; then
+            echo "❌ Failed to extract ImageBuilder"
             exit 1
           fi
-      
+
       # Setup Custom Files and Packages
       - name: Setup Custom Files and Packages
-        env:
-          NOSTR_SECRET_KEY: ${{ secrets.NOSTR_SECRET_KEY }}
-          NOSTR_PUBLIC_KEY: ${{ secrets.NOSTR_PUBLIC_KEY }}
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         run: |
-          # Find the ImageBuilder directory
-          if [ -d "${BUILDDIR}/${IMAGEBUILDER_NAME}" ]; then
-            TARGET_DIR="${BUILDDIR}/${IMAGEBUILDER_NAME}"
-          else
-            # Find any ImageBuilder directory as a fallback
-            TARGET_DIR=$(find "${BUILDDIR}" -type d -name "openwrt-imagebuilder*" | head -1)
-            if [ -z "${TARGET_DIR}" ]; then
-              echo "❌ Could not find ImageBuilder directory!"
-              exit 1
-            fi
-          fi
+          # Copy files directory
+          mkdir -p $BUILDDIR/$IMAGEBUILDER_NAME/files
+          cp -r ./files/* $BUILDDIR/$IMAGEBUILDER_NAME/files/
           
-          echo "✅ Using ImageBuilder at: ${TARGET_DIR}"
-          mkdir -p ${TARGET_DIR}/files
-          if [ -d "./files" ]; then
-            cp -r ./files/* ${TARGET_DIR}/files/
-          fi
-          PACKAGES_DIR="${TARGET_DIR}/packages/local"
-          mkdir -p "${PACKAGES_DIR}"
+          # Create packages directory
+          PACKAGES_DIR="$BUILDDIR/$IMAGEBUILDER_NAME/packages/local"
+          mkdir -p "$PACKAGES_DIR"
           
           # Add U-Boot config for supported devices
-          case "${{ matrix.model }}" in
-            "glinet_gl-mt3000"|"glinet_gl-mt6000")
-              echo "Creating U-Boot environment config"
-              mkdir -p ${TARGET_DIR}/files/etc
-              echo "/dev/mtd1 0x0 0x1000 0x10000" > ${TARGET_DIR}/files/etc/fw_env.config
-              ;;
-          esac
-          
-          # Save for later use
-          echo "TARGET_DIR=${TARGET_DIR}" >> $GITHUB_ENV
-          echo "PACKAGES_DIR=${PACKAGES_DIR}" >> $GITHUB_ENV
-
-      # Download TollGate Packages from release.json
-      - name: Download TollGate Packages
-        run: |
-          # Ensure TARGET_DIR is properly set
-          if [ -z "${TARGET_DIR}" ] || [ ! -d "${TARGET_DIR}" ]; then
-            echo "❌ TARGET_DIR not properly set or directory doesn't exist!"
-            exit 1
+          if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
+            mkdir -p $BUILDDIR/$IMAGEBUILDER_NAME/files/etc
+            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/$IMAGEBUILDER_NAME/files/etc/fw_env.config
           fi
           
-          # Create packages directory if it doesn't exist
-          mkdir -p "${PACKAGES_DIR}"
+          # Download TollGate packages
+          touch "$PACKAGES_DIR/Packages"
           
-          # Create an empty Packages file to prevent build failures if no packages are downloaded
-          touch "${PACKAGES_DIR}/Packages"
-          
-          # Parse release.json and download all packages for this architecture
           DOWNLOADED_PACKAGES=""
           for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
-            echo "📦 Processing module: ${MODULE_NAME}"
-            
-            # Extract URL for this module and architecture
             PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$BLOSSOM_ARCH" \
-              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
+              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' \
+              files/etc/tollgate/release.json)
+            
+            if [[ -n "$PACKAGE_URL" && "$PACKAGE_URL" != "null" && "$PACKAGE_URL" != *"[HASH]"* ]]; then
+              echo "⬇️ Downloading $MODULE_NAME from $PACKAGE_URL"
               
-            # Skip placeholder URLs
-            if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" || -z "$PACKAGE_URL" ]]; then
-              echo "⚠️ No package available for ${MODULE_NAME} (${BLOSSOM_ARCH})"
-              continue
-            fi
-            
-            # Download the package with retry logic
-            PACKAGE_FILENAME="${MODULE_NAME}-${BLOSSOM_ARCH}.ipk"
-            echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
-            
-            # Try up to 3 times with increasing timeouts
-            for ATTEMPT in {1..2}; do
-              echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
-              if curl -L -f --connect-timeout 30 --max-time 15 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-                # If download successful, add to packages list
-                if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-                  DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} ${MODULE_NAME}"
-                else
-                  DOWNLOADED_PACKAGES="${MODULE_NAME}"
-                fi
-                break
-              else
-                sleep 5
+              if curl -L -f --connect-timeout 30 --max-time 60 -o "$PACKAGES_DIR/${MODULE_NAME}-${BLOSSOM_ARCH}.ipk" "$PACKAGE_URL"; then
+                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} ${MODULE_NAME}"
               fi
-            done
+            fi
           done
           
-          # Add the downloaded packages to the build package list
-          if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-            echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
-            echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
-          else
-            echo "⚠️ No packages were downloaded successfully"
-            echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
-          fi
-          
-          # List the downloaded packages
-          echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
-          ls -la "${PACKAGES_DIR}" || true
-          
-          # Create package groups to try with fewer packages if full build fails
-          echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
-          echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
+          echo "TOLLGATE_PACKAGES=$DOWNLOADED_PACKAGES" >> $GITHUB_ENV
+          echo "PACKAGES_DIR=$PACKAGES_DIR" >> $GITHUB_ENV
 
       # Generate Package Index
       - name: Generate Package Index
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         run: |
-          cd ${TARGET_DIR}
+          cd $BUILDDIR/$IMAGEBUILDER_NAME
           sudo bash -c '
-            mkhash() {
+            mkhash() { 
               if [ "$1" = "sha256" ]; then 
                 sha256sum "$2" | cut -d" " -f1
               else 
                 sha256sum "$1" | cut -d" " -f1
-              fi
+              fi 
             }
             export -f mkhash
             export MKHASH=mkhash
             ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages
             gzip -9c packages/local/Packages > packages/local/Packages.gz
           '
-
-      # Ensure python3-distutils is installed before building
-      - name: Ensure Build Dependencies
-        run: |
-          echo "📦 Installing essential build dependencies for OpenWRT Builder..."
-          sudo apt-get update
-          sudo apt-get install -y python3-distutils python3-dev
-          
-          # Verify python3-distutils is installed correctly
-          echo "✅ Checking Python3 distutils installation..."
-          python3 -c "import distutils.core; print('Python3 distutils is available')"
-          
-          # Create a marker file to track which dependencies were installed
-          echo "Build dependencies installed on $(date)" > "${BUILDDIR}/build-deps-installed.txt"
-
-      # THIS IS THE SNAPSHOT POINT - Save fully configured image builder to cache
-      - name: Save Configured ImageBuilder to Cache
+      
+      # Save the setup to cache
+      - name: Save ImageBuilder Setup to Cache
         if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         uses: actions/cache/save@v3
         with:
           path: ${{ env.BUILDDIR }}
-          key: ${{ env.CACHE_KEY }}-configured
+          key: ${{ env.CACHE_KEY }}-setup-complete
 
-      # Build Firmware with All Packages
-      - name: Build Firmware with All Packages
-        continue-on-error: true
-        id: build-all
+      # Build firmware with all packages
+      - name: Build Firmware
+        id: build
         run: |
-          cd ${TARGET_DIR}
+          cd $BUILDDIR/$IMAGEBUILDER_NAME
           
           # Combine all packages
-          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
+          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
-          echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
+          echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
           
-          make image PROFILE="${PROFILE}" PACKAGES="${COMBINED_PACKAGE_LIST}" BIN_DIR="${BUILDDIR}/bin"
-          
-          # Check if build succeeded
-          BUILD_STATUS=$?
-          if [ $BUILD_STATUS -eq 0 ]; then
-            echo "✅ Build successful with ALL packages!"
-            echo "build_status=success" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Build failed with all packages. Will try with essential packages only."
-            echo "build_status=failed" >> $GITHUB_OUTPUT
-          fi
-
-      # Build Firmware with Essential Packages Only if the full build failed
-      - name: Build Firmware with Essential Packages Only
-        if: steps.build-all.outcome == 'failure'
-        continue-on-error: true
-        id: build-essential
-        run: |
-          cd ${TARGET_DIR}
-          
-          # Combine essential packages only
-          COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${ESSENTIAL_PACKAGES}"
-          
-          echo "📦 Attempting build with ESSENTIAL packages only: ${COMBINED_PACKAGE_LIST}"
-          
-          make image PROFILE="${PROFILE}" PACKAGES="${COMBINED_PACKAGE_LIST}" BIN_DIR="${BUILDDIR}/bin"
+          make image PROFILE="$PROFILE" \
+            PACKAGES="$COMBINED_PACKAGES" \
+            FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
+            FORCE=1
           
           # Check if build succeeded
-          BUILD_STATUS=$?
-          if [ $BUILD_STATUS -eq 0 ]; then
-            echo "✅ Build successful with ESSENTIAL packages!"
-            echo "build_status=success" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Build failed with essential packages as well."
-            echo "build_status=failed" >> $GITHUB_OUTPUT
-          fi
-
-      # Verify Firmware Build and Find Path
-      - name: Verify Firmware Build and Find Path
-        id: verify-build
-        run: |
-          BIN_DIR="${BUILDDIR}/bin"
-          
-          # Check if any files exist in the bin directory
-          if [ -d "$BIN_DIR" ] && [ "$(ls -A $BIN_DIR 2>/dev/null)" ]; then
-            echo "✅ Found files in build directory"
+          if find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | grep -q .; then
+            echo "✅ Build succeeded!"
+            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
             
-            # Find firmware files (squashfs or fit images)
-            FIRMWARE_FILES=$(find "$BIN_DIR" -name "*sysupgrade*.bin" -o -name "*.fit" -o -name "*.img.gz" | sort)
-            
-            if [ -n "$FIRMWARE_FILES" ]; then
-              echo "🎉 Found firmware files:"
-              echo "$FIRMWARE_FILES" | while read file; do
-                echo "📄 $(basename "$file") ($(du -h "$file" | cut -f1))"
-              done
-              echo "build_status=success" >> $GITHUB_OUTPUT
-              
-              # Get the first firmware file path for compatibility with steps that expect a single file
-              FIRST_FIRMWARE=$(echo "$FIRMWARE_FILES" | head -1)
-              echo "firmware_path=$FIRST_FIRMWARE" >> $GITHUB_OUTPUT
-              
-              # And also store the full list for steps that can handle multiple files
-              echo "firmware_files=$FIRMWARE_FILES" >> $GITHUB_OUTPUT
-            else
-              echo "❌ No firmware files found"
-              echo "build_status=failed" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "❌ No files found in build directory"
-            echo "build_status=failed" >> $GITHUB_OUTPUT
-          fi
-      
-      # Save firmware files as GitHub artifacts first (before Blossom upload)
-      - name: Save Firmware as GitHub Artifacts
-        if: steps.verify-build.outputs.firmware_path != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-${{ matrix.model }}
-          path: ${{ steps.verify-build.outputs.firmware_path }}
-          retention-days: 10
-          
-      # For x1860 firmware, save with a specific name for easy access
-      - name: Save x1860 Firmware with Specific Name
-        if: contains(steps.verify-build.outputs.firmware_path, 'covr-x1860')
-        uses: actions/upload-artifact@v4
-        with:
-          name: dlink-covr-x1860-firmware
-          path: ${{ steps.verify-build.outputs.firmware_path }}
-          retention-days: 10
-
-      # Calculate firmware hash and size
-      - name: Calculate Firmware Hash and Size
-        id: firmware-info
-        run: |
-          if [ -n "${{ steps.verify-build.outputs.firmware_path }}" ]; then
-            FIRMWARE_PATH="${{ steps.verify-build.outputs.firmware_path }}"
-            FIRMWARE_NAME=$(basename "$FIRMWARE_PATH")
+            # Calculate firmware hash and size
             FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
             FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")
             
+            echo "firmware_path=$FIRMWARE_PATH" >> $GITHUB_OUTPUT
             echo "firmware_name=$FIRMWARE_NAME" >> $GITHUB_OUTPUT
             echo "firmware_hash=$FIRMWARE_HASH" >> $GITHUB_OUTPUT
             echo "firmware_size=$FIRMWARE_SIZE" >> $GITHUB_OUTPUT
             
-            # Set environment variables for later steps
             echo "FIRMWARE_HASH=$FIRMWARE_HASH" >> $GITHUB_ENV
             echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
-            echo "FIRMWARE_NAME=$FIRMWARE_NAME" >> $GITHUB_ENV
-            
-            echo "✅ Firmware Hash: $FIRMWARE_HASH"
-            echo "📊 Firmware Size: $FIRMWARE_SIZE bytes"
           else
-            echo "⚠️ No firmware path found, cannot calculate hash and size"
+            echo "❌ Build failed"
             exit 1
           fi
 
+      # Save firmware as artifact
+      - name: Save Firmware as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.model }}
+          path: ${{ steps.build.outputs.firmware_path }}
+          retention-days: 10
+
+      # Upload firmware to Blossom
       - name: Upload Firmware to Blossom
         id: upload_firmware
         uses: c03rad0r/cli-blossom-uploader-go@main
         with:
           host: "https://blossom.swissdash.site"
-          filePath: ${{ steps.verify-build.outputs.firmware_path }}
+          filePath: ${{ steps.build.outputs.firmware_path }}
           nostrPrivateKey: ${{ secrets.NSECBECH }}
 
+      # Publish firmware metadata
       - name: Publish Firmware NIP-94 Metadata
         id: publish_firmware
         uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
@@ -764,45 +338,18 @@ jobs:
           mimeType: "application/octet-stream"
           fileHash: ${{ steps.upload_firmware.outputs.hash }}
           originalHash: ${{ env.FIRMWARE_HASH }}
-          filename: ${{ steps.firmware-info.outputs.firmware_name }}
+          filename: ${{ steps.build.outputs.firmware_name }}
           content: "TollGate OS Firmware for ${{ matrix.model }}"
           nsec: ${{ secrets.NSEC }}
           size: ${{ env.FIRMWARE_SIZE }}
           architecture: ${{ env.BLOSSOM_ARCH }}
           model: ${{ matrix.model }}
           version: ${{ needs.check-versions.outputs.openwrt_version }}
-
+      
+      # Verify publication
       - name: Verify Firmware Publication
         id: verify_firmware
         uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
         with:
           eventId: ${{ steps.publish_firmware.outputs.eventId }}
           relays: ${{ env.NOSTR_RELAYS }}
-      
-      # Upload the built firmware as an artifact
-      - name: Upload Firmware Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-${{ matrix.model }}.img
-          path: ${{ steps.verify-build.outputs.firmware_files }}
-          retention-days: 5
-          
-      # Upload x1860 firmware as a specifically named artifact for easy access
-      - name: Upload x1860 Firmware Artifact (if applicable)
-        if: contains(steps.verify-build.outputs.firmware_path, 'covr-x1860')
-        uses: actions/upload-artifact@v4
-        with:
-          name: dlink-covr-x1860-firmware
-          path: ${{ steps.verify-build.outputs.firmware_path }}
-          retention-days: 10
-
-      # System dependencies installed unconditionally to ensure they exist regardless of cache state
-      - name: Ensure Essential Build Dependencies
-        run: |
-          echo "📦 Installing essential build dependencies for OpenWRT Builder..."
-          sudo apt-get update
-          sudo apt-get install -y python3-distutils
-          
-          # Verify python3-distutils is installed correctly
-          echo "✅ Checking Python3 distutils installation..."
-          python3 -c "import distutils.core; print('Python3 distutils is available')"
