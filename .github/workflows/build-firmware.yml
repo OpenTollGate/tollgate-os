@@ -175,11 +175,12 @@ jobs:
           DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
           echo "📦 Default packages: $DEFAULT_PACKAGES"
           
-          # Always include UBI packages since they're small and might be needed
-          # The ImageBuilder will handle whether they're installed or not
+          # Define UBI packages separately (will be used for cache but not necessarily in the build)
           UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
-          DEFAULT_PACKAGES="$DEFAULT_PACKAGES $UBI_PACKAGES"
-          echo "📦 Added UBI packages just in case: $UBI_PACKAGES"
+          echo "📦 UBI packages defined for potential use: $UBI_PACKAGES"
+          
+          # Store UBI packages for caching step, but don't add to BASE_PACKAGES yet
+          echo "UBI_PACKAGES=$UBI_PACKAGES" >> $GITHUB_ENV
           
           # Combine with additional required packages to form base packages
           BASE_PACKAGES="${DEFAULT_PACKAGES} ${ADDITIONAL_PACKAGES}"
@@ -475,6 +476,66 @@ jobs:
             grep -A5 "define.*append-ubi\|UBIFS_\|MKUBIFS\|UBINIZE" "$IMAGE_MK" | head -20 || echo "No UBI commands found"
           fi
       
+      # Precache packages for faster builds
+      - name: Precache OpenWrt Packages
+        if: steps.cache-packages.outputs.cache-hit != 'true'
+        run: |
+          cd $BUILDDIR/$IMAGEBUILDER_NAME
+          echo "📦 Precaching packages for faster builds..."
+          
+          # Create a temporary download directory for package caching
+          mkdir -p dl
+          
+          # Create a combined package list including UBI packages for caching
+          # UBI packages are always included in the cache but will only be used in the build if needed
+          CACHE_PACKAGES="${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES} ${UBI_PACKAGES}"
+          
+          echo "📦 Packages to precache:"
+          echo "${CACHE_PACKAGES}" | tr ' ' '\n' | sort | uniq
+          
+          # Create dummy make file to download packages without installing them
+          cat > Makefile.download << 'EOF'
+          include rules.mk
+          
+          PKG_INSTALL_DIR:=$(TOPDIR)/dl
+          
+          define Package/install
+              $(INSTALL_DIR) $(PKG_INSTALL_DIR)
+              for dep in $$(DEPENDS); do \
+                  if [[ "$$$${dep}" == *:* ]]; then \
+                      dep=$$$${dep%:*}; \
+                  fi; \
+                  echo "Caching $$$${dep}"; \
+                  $(SCRIPT_DIR)/ipkg-extract $(dep) $(PKG_INSTALL_DIR); \
+              done
+              echo "Caching $(1)"; 
+              $(SCRIPT_DIR)/ipkg-extract $(1) $(PKG_INSTALL_DIR) || true; 
+          endef
+          
+          define GatherDeps
+              $(foreach dep,$(sort $(foreach pkg,$(1),$(PACKAGE_$(pkg)))),
+                  $(eval $(call Package/install,$(dep)))
+              )
+          endef
+          
+          download:
+              $(call GatherDeps,$(PACKAGES))
+          
+          EOF
+          
+          # Download the packages
+          echo "📦 Downloading package dependencies for caching..."
+          
+          # Define PACKAGES for the make command
+          export PACKAGES="${CACHE_PACKAGES}"
+          
+          # Run the custom make command to download packages
+          make -f Makefile.download download
+          
+          # Show what was downloaded
+          echo "📦 Downloaded package files:"
+          find dl/ -name "*.ipk" | wc -l
+      
       # Build firmware with all packages
       - name: Build Firmware
         id: build
@@ -499,8 +560,23 @@ jobs:
             fi
           done
           
+          # Only include UBI packages if USES_UBI is true
+          BUILD_PACKAGES="${BASE_PACKAGES}"
+          if [ "$USES_UBI" = "true" ]; then
+            echo "📦 Including UBI packages in build as device requires them"
+          else
+            echo "📦 Excluding UBI packages from build as device doesn't need them"
+            # Filter out UBI packages from BUILD_PACKAGES
+            for UBI_PKG in $UBI_PACKAGES; do
+              BUILD_PACKAGES=$(echo "$BUILD_PACKAGES" | sed "s/\b$UBI_PKG\b//g")
+            done
+            # Clean up extra spaces
+            BUILD_PACKAGES=$(echo "$BUILD_PACKAGES" | tr -s ' ' | sed 's/^ //' | sed 's/ $//')
+          fi
+          echo "📦 Final BASE_PACKAGES for build: ${BUILD_PACKAGES}"
+          
           # Combine all packages, ensuring proper spacing
-          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
+          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BUILD_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           # Generate a hash of the combined packages for cache key
           PACKAGES_HASH=$(echo "$COMBINED_PACKAGES" | sort | sha256sum | cut -d ' ' -f1)
