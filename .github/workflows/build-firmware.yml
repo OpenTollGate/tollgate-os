@@ -347,27 +347,29 @@ jobs:
           mkdir -p dl
           
           # Create a combined package list for caching
-          # We'll cache what we know, and let the ImageBuilder handle the rest
           CACHE_PACKAGES="${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           echo "📦 Packages to precache:"
           echo "${CACHE_PACKAGES}" | tr ' ' '\n' | sort | uniq
           
           # Use the ImageBuilder's native download mechanism to precache packages
-          # This creates a dummy config to download packages without building the image
-          # -j flag for parallel downloads
-          echo "📦 Downloading package dependencies for caching..."
+          # The PROFILE specification ensures that UBI-specific packages are included
+          echo "📦 Downloading package dependencies including UBI packages for profile $PROFILE..."
           
-          # Run a dry-run build with the packages to trigger downloads without building
+          # Run a package download with the target profile to ensure all required packages are cached
+          # This includes UBI packages for devices that need them
           make -j$(nproc) PROFILE="$PROFILE" \
             PACKAGES="${CACHE_PACKAGES}" \
-            BIN_DIR="/tmp/dummy-output" \
-            IGNORE_ERRORS=1 \
+            EXTRA_IMAGE_NAME="sysupgrade" \
             download
           
           # Show what was downloaded
           echo "📦 Downloaded package files:"
           find dl/ -name "*.ipk" | wc -l
+          
+          # Report UBI-specific packages if any
+          echo "📦 UBI-specific packages (if any):"
+          find dl/ -name "*ubi*" | sort
       
       # Build firmware with all packages
       - name: Build Firmware
