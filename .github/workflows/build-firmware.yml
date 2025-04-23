@@ -146,50 +146,29 @@ jobs:
             ~/.cache/pip
             /usr/local/lib/
             /var/lib/apt/lists
-          key: ${{ runner.os }}-system-deps-v2-${{ hashFiles('files/etc/tollgate/release.json') }}
+          key: ${{ runner.os }}-system-deps-v3-${{ hashFiles('files/etc/tollgate/release.json') }}
           restore-keys: |
-            ${{ runner.os }}-system-deps-v2-
+            ${{ runner.os }}-system-deps-v3-
             ${{ runner.os }}-system-deps-
 
-      # Install system dependencies
+      # Install system dependencies only if cache miss
       - name: Install System Dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
-          # Check if apt package lists are in cache
-          if [ "${{ steps.deps-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "/var/lib/apt/lists" ] || [ -z "$(ls -A /var/lib/apt/lists)" ]; then
-            echo "📦 Updating APT package lists..."
-            sudo apt-get update
-          else
-            echo "✅ Using cached APT package lists"
-          fi
-          
-          # Get a list of already installed packages
-          INSTALLED_PKGS=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | sort)
-          NEEDED_PKGS="gawk build-essential curl zstd libssl-dev jq"
-          PKGS_TO_INSTALL=""
-          
-          # Check which packages need to be installed
-          for pkg in $NEEDED_PKGS; do
-            if ! echo "$INSTALLED_PKGS" | grep -q "^$pkg$"; then
-              PKGS_TO_INSTALL="$PKGS_TO_INSTALL $pkg"
-            fi
-          done
-          
-          # Install only missing packages
-          if [ -n "$PKGS_TO_INSTALL" ]; then
-            echo "📦 Installing missing packages: $PKGS_TO_INSTALL"
-            sudo apt-get install -y $PKGS_TO_INSTALL
-          else
-            echo "✅ All required APT packages already installed"
-          fi
-          
-          # Use cached pip if available
-          if [ -d "~/.cache/pip" ] && [ -n "$(ls -A ~/.cache/pip 2>/dev/null)" ]; then
-            echo "✅ Using cached PIP packages"
-          fi
-          
-          # Install Python dependencies
+          echo "📦 Cache miss - Installing system dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
           python -m pip install --upgrade pip
           pip install nostr
+          echo "✅ System dependencies installed"
+      
+      # Only update pip if cache hit (dependencies should already be installed)
+      - name: Ensure Python Dependencies
+        if: steps.deps-cache.outputs.cache-hit == 'true'
+        run: |
+          echo "✅ Using cached system dependencies"
+          # Just ensure pip is up to date and packages are installed
+          python -m pip install --no-cache-dir --quiet nostr
       
       # Use our openwrt-info action to get router details
       - name: Get Router Info
