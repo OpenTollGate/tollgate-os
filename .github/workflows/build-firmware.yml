@@ -201,7 +201,7 @@ jobs:
           echo "📦 Device-specific packages: $DEVICE_PACKAGES"
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v3-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v4-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
@@ -353,44 +353,17 @@ jobs:
           echo "📦 Packages to precache:"
           echo "${CACHE_PACKAGES}" | tr ' ' '\n' | sort | uniq
           
-          # Create dummy make file to download packages without installing them
-          cat > Makefile.download << 'EOF'
-          include rules.mk
-          
-          PKG_INSTALL_DIR:=$(TOPDIR)/dl
-          
-          define Package/install
-              $(INSTALL_DIR) $(PKG_INSTALL_DIR)
-              for dep in $$(DEPENDS); do \
-                  if [[ "$$$${dep}" == *:* ]]; then \
-                      dep=$$$${dep%:*}; \
-                  fi; \
-                  echo "Caching $$$${dep}"; \
-                  $(SCRIPT_DIR)/ipkg-extract $(dep) $(PKG_INSTALL_DIR); \
-              done
-              echo "Caching $(1)"; 
-              $(SCRIPT_DIR)/ipkg-extract $(1) $(PKG_INSTALL_DIR) || true; 
-          endef
-          
-          define GatherDeps
-              $(foreach dep,$(sort $(foreach pkg,$(1),$(PACKAGE_$(pkg)))),
-                  $(eval $(call Package/install,$(dep)))
-              )
-          endef
-          
-          download:
-              $(call GatherDeps,$(PACKAGES))
-          
-          EOF
-          
-          # Download the packages
+          # Use the ImageBuilder's native download mechanism to precache packages
+          # This creates a dummy config to download packages without building the image
+          # -j flag for parallel downloads
           echo "📦 Downloading package dependencies for caching..."
           
-          # Define PACKAGES for the make command
-          export PACKAGES="${CACHE_PACKAGES}"
-          
-          # Run the custom make command to download packages
-          make -f Makefile.download download
+          # Run a dry-run build with the packages to trigger downloads without building
+          make -j$(nproc) PROFILE="$PROFILE" \
+            PACKAGES="${CACHE_PACKAGES}" \
+            BIN_DIR="/tmp/dummy-output" \
+            IGNORE_ERRORS=1 \
+            download
           
           # Show what was downloaded
           echo "📦 Downloaded package files:"
