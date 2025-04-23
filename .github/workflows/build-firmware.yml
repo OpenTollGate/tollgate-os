@@ -127,23 +127,15 @@ jobs:
           
           # Get supported image types and filesystems
           SUPPORTED_TYPES="${{ steps.router-info.outputs.supported_image_types }}"
+          SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
           
-          # Prioritize .mk file information over profiles.json
-          # Check if .mk file UBI analysis is available
-          if [ -f /tmp/openwrt_info/uses_ubi_mk.txt ]; then
-            USES_UBI=$(cat /tmp/openwrt_info/uses_ubi_mk.txt)
-            SUPPORTED_FILESYSTEMS=$(cat /tmp/openwrt_info/supported_filesystems_mk.txt)
-            echo "✅ Using UBI detection from .mk files: $USES_UBI"
-          else
-            # Fallback to profiles.json values
-            USES_UBI="${{ steps.router-info.outputs.uses_ubi }}"
-            SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
-            echo "⚠️ Falling back to profiles.json for UBI detection: $USES_UBI"
-          fi
-          
-          # Get UBI settings if available (JSON format)
-          UBI_SETTINGS='${{ steps.router-info.outputs.ubi_settings }}'
-          echo "📊 UBI Settings: $UBI_SETTINGS"
+          # We can't reliably detect UBI from profiles.json
+          # UBI detection will be done after analyzing .mk files in the ImageBuilder
+          # Default to false until we can check the actual .mk files
+          USES_UBI="false"
+          echo "📊 Device filesystem information from profiles.json:"
+          echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
+          echo "- Will check for UBI support after ImageBuilder is available"
           
           IMAGE_PREFIX="${{ steps.router-info.outputs.image_prefix }}"
           
@@ -153,11 +145,6 @@ jobs:
             echo "Available types are: $SUPPORTED_TYPES"
             exit 1
           fi
-          
-          # Display filesystem information
-          echo "📊 Device filesystem information:"
-          echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
-          echo "- Uses UBI: $USES_UBI"
           
           # Create build directory
           BUILDDIR="/tmp/openwrt-build"
@@ -187,12 +174,7 @@ jobs:
           # Get default packages from router-info and convert to space-separated list
           DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
           
-          # Add UBI/UBIFS packages if device uses UBI
-          if [ "$USES_UBI" = "true" ]; then
-            echo "📦 Adding UBI/UBIFS packages for UBI-enabled device"
-            UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
-            DEFAULT_PACKAGES="$DEFAULT_PACKAGES $UBI_PACKAGES"
-          fi
+          # Not adding UBI packages yet - we'll add them after analyzing .mk files
           
           # Combine with additional required packages to form base packages
           BASE_PACKAGES="${DEFAULT_PACKAGES} ${ADDITIONAL_PACKAGES}"
@@ -221,7 +203,7 @@ jobs:
           DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
           
           # Special case for U-Boot config for GL.iNet devices
-          # (Already handled by the UBI detection above for other UBI devices)
+          # Handle this explicitly rather than relying on UBI detection
           if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
             if ! echo "$DEVICE_PACKAGES" | grep -q "uboot-envtools"; then
               DEVICE_PACKAGES="uboot-envtools ${DEVICE_PACKAGES}"
@@ -229,7 +211,7 @@ jobs:
           fi
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v3-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v4-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
