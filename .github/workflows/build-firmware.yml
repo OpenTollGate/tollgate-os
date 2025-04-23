@@ -23,7 +23,8 @@ jobs:
   check-versions:
     runs-on: ubuntu-latest
     outputs:
-      openwrt_version: ${{ steps.get-version.outputs.version }}
+      # openwrt_version: ${{ steps.get-version.outputs.version }}
+      openwrt_version: 23.05.5
     
     steps:
       - uses: actions/checkout@v4
