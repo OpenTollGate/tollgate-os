@@ -147,9 +147,9 @@ jobs:
             ~/.cache/pip
             /usr/local/lib/
             /var/lib/apt/lists
-          key: ${{ runner.os }}-system-deps-v3-${{ hashFiles('files/etc/tollgate/release.json') }}
+          key: ${{ runner.os }}-system-deps-v4-${{ hashFiles('files/etc/tollgate/release.json') }}
           restore-keys: |
-            ${{ runner.os }}-system-deps-v3-
+            ${{ runner.os }}-system-deps-v4-
             ${{ runner.os }}-system-deps-
 
       # Install system dependencies only if cache miss
@@ -299,9 +299,9 @@ jobs:
           sudo chown $USER:$USER /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache key for caching - with version to avoid contention issues
-          # Create a stable part of the cache key with version prefix
-          CACHE_KEY="openwrt-builder-v1-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          # Set cache key for caching - without run_id to enable sharing across workflow runs
+          # Create a stable part of the cache key
+          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           # For restore keys, use a prefix that will match across runs
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
           echo "CACHE_KEY_RESTORE=${CACHE_KEY}" >> $GITHUB_ENV
@@ -765,3 +765,14 @@ jobs:
           name: dlink-covr-x1860-firmware
           path: ${{ steps.verify-build.outputs.firmware_path }}
           retention-days: 10
+
+      # System dependencies installed unconditionally to ensure they exist regardless of cache state
+      - name: Ensure Essential Build Dependencies
+        run: |
+          echo "📦 Installing essential build dependencies for OpenWRT Builder..."
+          sudo apt-get update
+          sudo apt-get install -y python3-distutils
+          
+          # Verify python3-distutils is installed correctly
+          echo "✅ Checking Python3 distutils installation..."
+          python3 -c "import distutils.core; print('Python3 distutils is available')"
