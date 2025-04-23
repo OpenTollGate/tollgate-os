@@ -129,17 +129,13 @@ jobs:
           SUPPORTED_TYPES="${{ steps.router-info.outputs.supported_image_types }}"
           SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
           
-          # We can't reliably detect UBI from profiles.json filesystems alone
-          # Initial guess based on filesystem info - this will be verified with .mk files later
+          # We don't need to detect UBI here - the ImageBuilder will handle it based on .mk files
+          # Just set a default value for environment variable purposes
           USES_UBI="false"
-          if echo "$SUPPORTED_FILESYSTEMS" | grep -q "ubifs"; then
-            USES_UBI="true"
-            echo "📊 Initial UBI detection: Device likely uses UBI based on supported filesystem 'ubifs'"
-          fi
           
           echo "📊 Device filesystem information from profiles.json:"
           echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
-          echo "- Initial UBI detection: $USES_UBI (will be verified with .mk files)"
+          echo "- UBI detection will be handled by ImageBuilder"
           
           IMAGE_PREFIX="${{ steps.router-info.outputs.image_prefix }}"
           
@@ -179,13 +175,11 @@ jobs:
           DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
           echo "📦 Default packages: $DEFAULT_PACKAGES"
           
-          # Add UBI packages if initial detection suggests UBI is used
-          if [ "$USES_UBI" = "true" ]; then
-            echo "📦 Adding UBI packages based on initial filesystem detection"
-            UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
-            DEFAULT_PACKAGES="$DEFAULT_PACKAGES $UBI_PACKAGES"
-            echo "📦 Updated default packages with UBI support: $DEFAULT_PACKAGES"
-          fi
+          # Always include UBI packages since they're small and might be needed
+          # The ImageBuilder will handle whether they're installed or not
+          UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
+          DEFAULT_PACKAGES="$DEFAULT_PACKAGES $UBI_PACKAGES"
+          echo "📦 Added UBI packages just in case: $UBI_PACKAGES"
           
           # Combine with additional required packages to form base packages
           BASE_PACKAGES="${DEFAULT_PACKAGES} ${ADDITIONAL_PACKAGES}"
@@ -214,16 +208,8 @@ jobs:
           DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
           echo "📦 Device-specific packages: $DEVICE_PACKAGES"
           
-          # Special case for U-Boot config for GL.iNet devices
-          # Handle this explicitly rather than relying on UBI detection
-          if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
-            if ! echo "$DEVICE_PACKAGES" | grep -q "uboot-envtools"; then
-              DEVICE_PACKAGES="uboot-envtools ${DEVICE_PACKAGES}"
-            fi
-          fi
-          
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v4-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v3-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
