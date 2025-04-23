@@ -127,8 +127,24 @@ jobs:
           
           # Get supported image types and filesystems
           SUPPORTED_TYPES="${{ steps.router-info.outputs.supported_image_types }}"
-          SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
-          USES_UBI="${{ steps.router-info.outputs.uses_ubi }}"
+          
+          # Prioritize .mk file information over profiles.json
+          # Check if .mk file UBI analysis is available
+          if [ -f /tmp/openwrt_info/uses_ubi_mk.txt ]; then
+            USES_UBI=$(cat /tmp/openwrt_info/uses_ubi_mk.txt)
+            SUPPORTED_FILESYSTEMS=$(cat /tmp/openwrt_info/supported_filesystems_mk.txt)
+            echo "✅ Using UBI detection from .mk files: $USES_UBI"
+          else
+            # Fallback to profiles.json values
+            USES_UBI="${{ steps.router-info.outputs.uses_ubi }}"
+            SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
+            echo "⚠️ Falling back to profiles.json for UBI detection: $USES_UBI"
+          fi
+          
+          # Get UBI settings if available (JSON format)
+          UBI_SETTINGS='${{ steps.router-info.outputs.ubi_settings }}'
+          echo "📊 UBI Settings: $UBI_SETTINGS"
+          
           IMAGE_PREFIX="${{ steps.router-info.outputs.image_prefix }}"
           
           # Verify that sysupgrade is supported
@@ -347,61 +363,138 @@ jobs:
         with:
           path: ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}-setup-complete
-
-      # Debug step to analyze ImageBuilder .mk files vs environment values
-      - name: Debug - Analyze ImageBuilder Files
+      
+      # Analyze MK files in the ImageBuilder to extract UBI settings and compare with profiles.json
+      - name: Analyze MK Files for UBI Settings
+        id: mk_analysis
         run: |
-          echo "🔍 DEBUG: Analyzing ImageBuilder files for comparison with our environment settings"
+          echo "🔍 Analyzing .mk files for device '$PROFILE' in ImageBuilder"
           
-          # Check if the image builder has target directories with .mk files
-          echo "📋 Looking for device definition .mk files in the ImageBuilder..."
-          IMAGE_MK_FILES=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.mk" -type f | sort)
+          # Store original values from profiles.json for comparison
+          JSON_USES_UBI="$USES_UBI"
+          JSON_SUPPORTED_FS="$SUPPORTED_FILESYSTEMS"
           
-          echo "Found the following .mk files:"
-          echo "$IMAGE_MK_FILES"
-          
-          # Try to find the specific device definitions
-          echo "📋 Checking for our profile ($PROFILE) in .mk files..."
-          PROFILE_SEARCH=$(grep -r "Device/$PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME --include="*.mk" || echo "Not found directly")
-          echo "Profile search results:"
-          echo "$PROFILE_SEARCH"
-          
-          # Check if we can find any UBI-related settings
-          echo "📋 Checking for UBI/UBIFS related settings in .mk files..."
-          UBI_SEARCH=$(grep -r "UBI\|UBIFS\|append-ubi" $BUILDDIR/$IMAGEBUILDER_NAME --include="*.mk" | head -20)
-          echo "UBI search results:"
-          echo "$UBI_SEARCH"
-          
-          # Look for Makefiles that define the profiles
-          echo "📋 Checking for profile definitions in Makefiles..."
-          PROFILE_SEARCH_2=$(grep -r "PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME --include="Makefile*" | grep -i "$PROFILE" | head -10 || echo "Not found")
-          echo "Profile in Makefiles:"
-          echo "$PROFILE_SEARCH_2"
-          
-          # Let's check what profiles.json looks like inside the ImageBuilder
-          echo "📋 Checking if profiles.json exists in the ImageBuilder..."
-          PROFILES_JSON=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "profiles.json" -type f)
-          if [ -n "$PROFILES_JSON" ]; then
-            echo "Found profiles.json at: $PROFILES_JSON"
-            echo "Comparing first few entries with our profile data:"
-            cat $PROFILES_JSON | jq -c '.profiles | keys | .[:5]'
+          # Find device definition in .mk files
+          MK_PATH="$BUILDDIR/$IMAGEBUILDER_NAME/target/linux/$PLATFORM/image"
+          if [ -d "$MK_PATH" ]; then
+            echo "✅ Found image directory: $MK_PATH"
             
-            # Check if our profile exists in the ImageBuilder's profiles.json
-            echo "Checking if $PROFILE is in ImageBuilder profiles.json:"
-            cat $PROFILES_JSON | jq -c --arg profile "$PROFILE" '.profiles[$profile] | {supported_filesystem: .supported_filesystems, uses_ubi: .uses_ubi}' || echo "Not found or different format"
+            # Find which .mk file contains our device definition
+            DEVICE_MK_FILE=$(grep -l "Device/${PROFILE}" $MK_PATH/*.mk 2>/dev/null || true)
+            
+            if [ -n "$DEVICE_MK_FILE" ]; then
+              echo "✅ Found device definition in: $DEVICE_MK_FILE"
+              
+              # Extract the device definition block
+              DEV_LINE=$(grep -n "Device/${PROFILE}" "$DEVICE_MK_FILE" | cut -d':' -f1)
+              if [ -n "$DEV_LINE" ]; then
+                echo "📄 Device definition starts at line $DEV_LINE"
+                
+                # Extract 50 lines after the definition to capture the entire block
+                DEV_BLOCK=$(tail -n +$DEV_LINE "$DEVICE_MK_FILE" | head -n 50)
+                
+                # Find where the definition ends
+                BLOCK_END=$(echo "$DEV_BLOCK" | grep -n "^endef" | head -1 | cut -d':' -f1)
+                if [ -n "$BLOCK_END" ]; then
+                  DEV_BLOCK=$(echo "$DEV_BLOCK" | head -n $BLOCK_END)
+                fi
+                
+                echo "📋 Device definition block from .mk file:"
+                echo "$DEV_BLOCK"
+                
+                # Check for UBI-related indicators in the device block
+                MK_USES_UBI="false"
+                MK_SUPPORTED_FS="squashfs"
+                
+                # Check for UBI-related macros or parent device types
+                if echo "$DEV_BLOCK" | grep -q "Device/nand\|UBI\|NAND_\|UBINIZE"; then
+                  MK_USES_UBI="true"
+                  MK_SUPPORTED_FS="squashfs,ubifs"
+                  echo "🔍 Found UBI-related macros in device definition"
+                fi
+                
+                # Look for append-ubi in image commands
+                if echo "$DEV_BLOCK" | grep -q "append-ubi"; then
+                  MK_USES_UBI="true"
+                  MK_SUPPORTED_FS="squashfs,ubifs"
+                  echo "🔍 Found append-ubi command in device definition"
+                fi
+                
+                # Extract UBI settings if device uses UBI
+                if [ "$MK_USES_UBI" = "true" ]; then
+                  # Get UBINIZE_OPTS
+                  UBINIZE_OPTS=$(echo "$DEV_BLOCK" | grep -o "UBINIZE_OPTS.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
+                  if [ -n "$UBINIZE_OPTS" ]; then
+                    echo "🔧 UBINIZE_OPTS: $UBINIZE_OPTS"
+                  fi
+                  
+                  # Get PAGESIZE
+                  PAGESIZE=$(echo "$DEV_BLOCK" | grep -o "PAGESIZE.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
+                  if [ -n "$PAGESIZE" ]; then
+                    echo "🔧 PAGESIZE: $PAGESIZE"
+                  fi
+                  
+                  # Get BLOCKSIZE
+                  BLOCKSIZE=$(echo "$DEV_BLOCK" | grep -o "BLOCKSIZE.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
+                  if [ -n "$BLOCKSIZE" ]; then
+                    echo "🔧 BLOCKSIZE: $BLOCKSIZE"
+                  fi
+                fi
+                
+                # Compare with values from profiles.json
+                echo "📊 Comparison of settings:"
+                echo "- profiles.json: Uses UBI = $JSON_USES_UBI, Filesystems = $JSON_SUPPORTED_FS"
+                echo "- .mk file: Uses UBI = $MK_USES_UBI, Filesystems = $MK_SUPPORTED_FS"
+                
+                # If there are differences, use the .mk file values
+                if [ "$JSON_USES_UBI" != "$MK_USES_UBI" ] || [ "$JSON_SUPPORTED_FS" != "$MK_SUPPORTED_FS" ]; then
+                  echo "⚠️ Found discrepancies between profiles.json and .mk file!"
+                  echo "⚠️ Will use .mk file values for building as they are more definitive"
+                  
+                  # Update our environment variables with .mk file values
+                  echo "USES_UBI=$MK_USES_UBI" >> $GITHUB_ENV
+                  echo "SUPPORTED_FILESYSTEMS=$MK_SUPPORTED_FS" >> $GITHUB_ENV
+                  
+                  # Add UBI packages if needed and not already added
+                  if [ "$MK_USES_UBI" = "true" ] && [ "$JSON_USES_UBI" = "false" ]; then
+                    echo "📦 Adding UBI packages based on .mk file detection"
+                    UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
+                    
+                    # Update BASE_PACKAGES variable
+                    BASE_PACKAGES="$BASE_PACKAGES $UBI_PACKAGES"
+                    echo "BASE_PACKAGES=$BASE_PACKAGES" >> $GITHUB_ENV
+                  fi
+                else
+                  echo "✅ profiles.json and .mk file settings match, no changes needed"
+                fi
+                
+                # Write the device block to a file for reference
+                mkdir -p /tmp/openwrt_info/
+                echo "$DEV_BLOCK" > /tmp/openwrt_info/device_mk_block.txt
+              else
+                echo "⚠️ Could not determine line number for device definition"
+              fi
+            else
+              echo "⚠️ Device definition not found in any .mk file"
+            fi
           else
-            echo "No profiles.json found in ImageBuilder"
+            echo "⚠️ Could not find target image directory at $MK_PATH"
           fi
           
-          echo "📊 Summary of our current settings:"
-          echo "- Profile: $PROFILE"
-          echo "- Uses UBI: $USES_UBI"
-          echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
+          # Also check the OpenWrt target defaults in the target Makefile
+          TARGET_MK="$BUILDDIR/$IMAGEBUILDER_NAME/target/linux/$PLATFORM/$TYPE/target.mk"
+          if [ -f "$TARGET_MK" ]; then
+            echo "📄 Target-specific settings from $TARGET_MK:"
+            grep "FEATURES\|KERNEL\|DEFAULT_\|TARGET_" "$TARGET_MK" | grep -v "#" || echo "No relevant settings found"
+          fi
           
-          # Check if there are any specific rules directly in the Makefile
-          echo "📋 Checking main Makefile for profile-specific rules..."
-          grep -A10 "$PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME/Makefile || echo "No direct profile rules found in main Makefile"
-
+          # Look for include/image.mk which has UBI image generation commands
+          IMAGE_MK="$BUILDDIR/$IMAGEBUILDER_NAME/include/image.mk"
+          if [ -f "$IMAGE_MK" ]; then
+            echo "📄 UBI image commands from include/image.mk:"
+            grep -A5 "define.*append-ubi\|UBIFS_\|MKUBIFS\|UBINIZE" "$IMAGE_MK" | head -20 || echo "No UBI commands found"
+          fi
+      
       # Build firmware with all packages
       - name: Build Firmware
         id: build
