@@ -136,6 +136,17 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
+          
+      # Install critical system dependencies first - before any cache operations
+      - name: Install Critical Build Dependencies
+        run: |
+          echo "📦 Installing critical build dependencies for OpenWRT Builder..."
+          sudo apt-get update
+          sudo apt-get install -y python3-distutils python3-dev
+          
+          # Verify python3-distutils is installed correctly
+          echo "✅ Checking Python3 distutils installation..."
+          python3 -c "import distutils.core; print('Python3 distutils is available')"
 
       # Cache for apt packages and pip dependencies - much more stable keys
       - name: Cache Dependencies
