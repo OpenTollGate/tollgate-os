@@ -31,12 +31,6 @@ outputs:
   source_date_epoch:
     description: 'source_date_epoch from profiles.json'
     value: ${{ steps.profiles.outputs.source_date_epoch }}
-  version_code:
-    description: 'version_code from profiles.json'
-    value: ${{ steps.profiles.outputs.version_code }}
-  version_number:
-    description: 'version_number from profiles.json'
-    value: ${{ steps.profiles.outputs.version_number }}
   linux_kernel_release:
     description: 'linux_kernel.release'
     value: ${{ steps.profiles.outputs.linux_kernel_release }}
@@ -180,8 +174,6 @@ runs:
         defaults=$(echo "$raw" | jq -r '.default_packages | join(",")')
         meta=$(echo "$raw" | jq -r '.metadata_version')
         source_date_epoch=$(echo "$raw" | jq -r '.source_date_epoch // "unknown"')
-        version_code=$(echo "$raw" | jq -r '.version_code // "unknown"')
-        version_number=$(echo "$raw" | jq -r '.version_number // "unknown"')
         lin_rel=$(echo "$raw" | jq -r '.linux_kernel.release // "unknown"')
         lin_ver=$(echo "$raw" | jq -r '.linux_kernel.version // "unknown"')
         lin_vmg=$(echo "$raw" | jq -r '.linux_kernel.vermagic // "unknown"')
@@ -214,8 +206,6 @@ runs:
         echo "default_packages=$defaults" >> "$GITHUB_OUTPUT"
         echo "metadata_version=$meta" >> "$GITHUB_OUTPUT"
         echo "source_date_epoch=$source_date_epoch" >> "$GITHUB_OUTPUT"
-        echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
-        echo "version_number=$version_number" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_release=$lin_rel" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_version=$lin_ver" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
