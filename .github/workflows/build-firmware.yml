@@ -682,9 +682,7 @@ jobs:
               echo "firmware_path=$FIRST_FIRMWARE" >> $GITHUB_OUTPUT
               
               # And also store the full list for steps that can handle multiple files
-              echo "firmware_files<<EOF" >> $GITHUB_OUTPUT
-              echo "$FIRMWARE_FILES"
-              echo "EOF" >> $GITHUB_OUTPUT
+              echo "firmware_files=$FIRMWARE_FILES" >> $GITHUB_OUTPUT
             else
               echo "❌ No firmware files found"
               echo "build_status=failed" >> $GITHUB_OUTPUT
@@ -693,6 +691,24 @@ jobs:
             echo "❌ No files found in build directory"
             echo "build_status=failed" >> $GITHUB_OUTPUT
           fi
+      
+      # Save firmware files as GitHub artifacts first (before Blossom upload)
+      - name: Save Firmware as GitHub Artifacts
+        if: steps.verify-build.outputs.firmware_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.model }}
+          path: ${{ steps.verify-build.outputs.firmware_path }}
+          retention-days: 10
+          
+      # For x1860 firmware, save with a specific name for easy access
+      - name: Save x1860 Firmware with Specific Name
+        if: contains(steps.verify-build.outputs.firmware_path, 'covr-x1860')
+        uses: actions/upload-artifact@v4
+        with:
+          name: dlink-covr-x1860-firmware
+          path: ${{ steps.verify-build.outputs.firmware_path }}
+          retention-days: 10
 
       # Calculate firmware hash and size
       - name: Calculate Firmware Hash and Size
