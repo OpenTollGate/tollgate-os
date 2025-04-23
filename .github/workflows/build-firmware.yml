@@ -91,12 +91,12 @@ jobs:
         with:
           python-version: '3.x'
       
-      # Install critical build dependencies first
-      - name: Install Critical Build Dependencies
+      # Install essential dependencies needed for all paths (cache hit or miss)
+      - name: Install Essential Dependencies
         run: |
-          echo "📦 Installing critical build dependencies..."
+          echo "📦 Installing essential dependencies..."
           sudo apt-get update
-          sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
+          sudo apt-get install -y curl jq
           python -m pip install setuptools nostr
       
       # Use the openwrt-info action to get router details
@@ -198,6 +198,13 @@ jobs:
         with:
           path: ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}-setup-complete
+      
+      # Install build-specific dependencies only when cache misses
+      - name: Install Build Dependencies
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        run: |
+          echo "📦 Installing build-specific dependencies..."
+          sudo apt-get install -y gawk build-essential zstd libssl-dev
       
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder
