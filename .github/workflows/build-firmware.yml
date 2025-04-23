@@ -85,20 +85,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Set up Python with pip caching built-in (GitHub's recommended way)
+      # Set up Python with optimized pip caching
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
           cache: 'pip'
+          # The cache key is based on specific dependencies and runner OS
+          cache-dependency-path: 'requirements.txt'
       
       # Install essential dependencies needed for workflow
       - name: Install Dependencies
         run: |
           echo "📦 Installing dependencies..."
           sudo apt-get update
+          # Only install packages that aren't already installed 
           sudo apt-get install -y curl jq gawk build-essential zstd libssl-dev
+          
+          # We're explicitly timing the pip installation to track optimization progress
+          start_time=$SECONDS
           python -m pip install -r requirements.txt
+          end_time=$SECONDS
+          echo "📊 Python dependencies installation took $((end_time-start_time)) seconds"
       
       # Use the openwrt-info action to get router details
       - name: Get Router Info
