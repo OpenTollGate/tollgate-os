@@ -348,6 +348,60 @@ jobs:
           path: ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}-setup-complete
 
+      # Debug step to analyze ImageBuilder .mk files vs environment values
+      - name: Debug - Analyze ImageBuilder Files
+        run: |
+          echo "🔍 DEBUG: Analyzing ImageBuilder files for comparison with our environment settings"
+          
+          # Check if the image builder has target directories with .mk files
+          echo "📋 Looking for device definition .mk files in the ImageBuilder..."
+          IMAGE_MK_FILES=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.mk" -type f | sort)
+          
+          echo "Found the following .mk files:"
+          echo "$IMAGE_MK_FILES"
+          
+          # Try to find the specific device definitions
+          echo "📋 Checking for our profile ($PROFILE) in .mk files..."
+          PROFILE_SEARCH=$(grep -r "Device/$PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME --include="*.mk" || echo "Not found directly")
+          echo "Profile search results:"
+          echo "$PROFILE_SEARCH"
+          
+          # Check if we can find any UBI-related settings
+          echo "📋 Checking for UBI/UBIFS related settings in .mk files..."
+          UBI_SEARCH=$(grep -r "UBI\|UBIFS\|append-ubi" $BUILDDIR/$IMAGEBUILDER_NAME --include="*.mk" | head -20)
+          echo "UBI search results:"
+          echo "$UBI_SEARCH"
+          
+          # Look for Makefiles that define the profiles
+          echo "📋 Checking for profile definitions in Makefiles..."
+          PROFILE_SEARCH_2=$(grep -r "PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME --include="Makefile*" | grep -i "$PROFILE" | head -10 || echo "Not found")
+          echo "Profile in Makefiles:"
+          echo "$PROFILE_SEARCH_2"
+          
+          # Let's check what profiles.json looks like inside the ImageBuilder
+          echo "📋 Checking if profiles.json exists in the ImageBuilder..."
+          PROFILES_JSON=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "profiles.json" -type f)
+          if [ -n "$PROFILES_JSON" ]; then
+            echo "Found profiles.json at: $PROFILES_JSON"
+            echo "Comparing first few entries with our profile data:"
+            cat $PROFILES_JSON | jq -c '.profiles | keys | .[:5]'
+            
+            # Check if our profile exists in the ImageBuilder's profiles.json
+            echo "Checking if $PROFILE is in ImageBuilder profiles.json:"
+            cat $PROFILES_JSON | jq -c --arg profile "$PROFILE" '.profiles[$profile] | {supported_filesystem: .supported_filesystems, uses_ubi: .uses_ubi}' || echo "Not found or different format"
+          else
+            echo "No profiles.json found in ImageBuilder"
+          fi
+          
+          echo "📊 Summary of our current settings:"
+          echo "- Profile: $PROFILE"
+          echo "- Uses UBI: $USES_UBI"
+          echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
+          
+          # Check if there are any specific rules directly in the Makefile
+          echo "📋 Checking main Makefile for profile-specific rules..."
+          grep -A10 "$PROFILE" $BUILDDIR/$IMAGEBUILDER_NAME/Makefile || echo "No direct profile rules found in main Makefile"
+
       # Build firmware with all packages
       - name: Build Firmware
         id: build
