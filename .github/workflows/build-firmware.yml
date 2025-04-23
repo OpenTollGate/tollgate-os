@@ -142,13 +142,13 @@ jobs:
         run: |
           echo "📦 Installing critical build dependencies for OpenWRT Builder..."
           sudo apt-get update
+          sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
           
-          # Python 3.12 on Ubuntu 24.04 doesn't have python3-distutils
-          # Install python3-setuptools instead and create a compatibility layer
-          sudo apt-get install -y python3-setuptools python3-dev
+          # Install setuptools directly with pip for the Python environment
+          python -m pip install setuptools
           
           echo "✅ Checking Python setuptools installation..."
-          python3 -c "import setuptools; print('Python setuptools is available')"
+          python -m pip list | grep setuptools
           
           # Set FORCE=1 for the OpenWrt build to bypass distutils check
           echo "FORCE=1" >> $GITHUB_ENV
