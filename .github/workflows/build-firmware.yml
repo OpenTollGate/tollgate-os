@@ -330,22 +330,32 @@ jobs:
           
           echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
           
-          # Use BIN_DIR to specify the output directory explicitly 
+          # Create output directory structure with absolute path
+          OUTPUT_DIR="$BUILDDIR/$IMAGEBUILDER_NAME/bin"
+          mkdir -p "$OUTPUT_DIR/targets/$PLATFORM/$TYPE"
+          
+          echo "🗂️ Using output directory: $OUTPUT_DIR"
+          
+          # Use BIN_DIR to specify the output directory explicitly with absolute path
           # Use a target that specifically builds sysupgrade image
           make -j$NUM_PROCS image \
             PROFILE="$PROFILE" \
             PACKAGES="$COMBINED_PACKAGES" \
             FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
-            BIN_DIR="bin" \
+            BIN_DIR="$OUTPUT_DIR" \
             EXTRA_IMAGE_NAME="sysupgrade" \
             FORCE=1
           
-          # Debug - list all files in target directory to see what's available
-          echo "📋 Listing files in target directory:"
-          find bin/targets/$PLATFORM/$TYPE/ -type f | sort
+          # Debug - list build directory structure after build
+          echo "📋 Checking build directory content:"
+          find $BUILDDIR/$IMAGEBUILDER_NAME -type d | grep bin || echo "No bin directory found"
+          
+          # List all files recursively under bin directory
+          echo "📋 Listing all files under bin directory (recursive):"
+          find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.bin" || echo "No .bin files found"
           
           # Determine expected sysupgrade file path based on image prefix
-          EXPECTED_SYSUPGRADE_PATH="bin/targets/$PLATFORM/$TYPE/${IMAGE_PREFIX}-squashfs-sysupgrade.bin"
+          EXPECTED_SYSUPGRADE_PATH="$OUTPUT_DIR/targets/$PLATFORM/$TYPE/${IMAGE_PREFIX}-squashfs-sysupgrade.bin"
           echo "🔍 Looking for sysupgrade image at: $EXPECTED_SYSUPGRADE_PATH"
           
           if [ -f "$EXPECTED_SYSUPGRADE_PATH" ]; then
@@ -355,19 +365,34 @@ jobs:
             # Fallback to other detection methods if the expected path is not found
             echo "⚠️ Expected sysupgrade image not found, trying alternative detection..."
             
-            # First try the standard pattern
-            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+            # Check if OpenWrt might have output to a different location
+            echo "🔍 Searching for firmware files in other paths:"
             
-            # If not found, look for any bin files
+            # First, search in the current directory and its subdirectories
+            FIRMWARE_PATH=$(find . -name "*sysupgrade*.bin" | head -1)
+            
+            # If not found, look in the build directory
             if [ -z "$FIRMWARE_PATH" ]; then
-              echo "⚠️ Standard sysupgrade*.bin not found, looking for other bin files..."
-              FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.bin" | grep -v "initramfs" | head -1)
+              echo "⚠️ Looking in build directory..."
+              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*sysupgrade*.bin" | head -1)
+            fi
+            
+            # If still not found, look for any bin files
+            if [ -z "$FIRMWARE_PATH" ]; then
+              echo "⚠️ Looking for any .bin files..."
+              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.bin" | grep -v "initramfs" | head -1)
             fi
             
             # If still not found, look for img files
             if [ -z "$FIRMWARE_PATH" ]; then
               echo "⚠️ No .bin files found, looking for .img files..."
-              FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.img" | head -1)
+              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.img" | head -1)
+            fi
+            
+            # If still not found, look in the entire build directory for any relevant file
+            if [ -z "$FIRMWARE_PATH" ]; then
+              echo "⚠️ Listing all files in build directory that might be firmware:"
+              find $BUILDDIR/$IMAGEBUILDER_NAME -type f -size +1M | grep -v "\.tar\." || echo "No large files found"
             fi
           fi
           
@@ -389,8 +414,10 @@ jobs:
             echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
           else
             echo "❌ Build succeeded but no firmware file found"
-            echo "Directory contents:"
-            find bin/targets/ -type f | sort
+            echo "Build logs:"
+            cat $BUILDDIR/$IMAGEBUILDER_NAME/build.log || echo "No build.log found"
+            echo "Looking in logs directory:"
+            find $BUILDDIR/$IMAGEBUILDER_NAME/logs -type f | xargs cat || echo "No log files found"
             exit 1
           fi
 
