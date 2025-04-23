@@ -129,13 +129,11 @@ jobs:
           SUPPORTED_TYPES="${{ steps.router-info.outputs.supported_image_types }}"
           SUPPORTED_FILESYSTEMS="${{ steps.router-info.outputs.supported_filesystems }}"
           
-          # We don't need to detect UBI here - the ImageBuilder will handle it based on .mk files
-          # Just set a default value for environment variable purposes
+          # Default UBI setting - ImageBuilder will handle this automatically
           USES_UBI="false"
           
           echo "📊 Device filesystem information from profiles.json:"
           echo "- Supported filesystems: $SUPPORTED_FILESYSTEMS"
-          echo "- UBI detection will be handled by ImageBuilder"
           
           IMAGE_PREFIX="${{ steps.router-info.outputs.image_prefix }}"
           
@@ -174,13 +172,6 @@ jobs:
           # Get default packages from router-info and convert to space-separated list
           DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
           echo "📦 Default packages: $DEFAULT_PACKAGES"
-          
-          # Define UBI packages separately (will be used for cache but not necessarily in the build)
-          UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
-          echo "📦 UBI packages defined for potential use: $UBI_PACKAGES"
-          
-          # Store UBI packages for caching step, but don't add to BASE_PACKAGES yet
-          echo "UBI_PACKAGES=$UBI_PACKAGES" >> $GITHUB_ENV
           
           # Combine with additional required packages to form base packages
           BASE_PACKAGES="${DEFAULT_PACKAGES} ${ADDITIONAL_PACKAGES}"
@@ -345,137 +336,6 @@ jobs:
           path: ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}-setup-complete
       
-      # Analyze MK files in the ImageBuilder to extract UBI settings and compare with profiles.json
-      - name: Analyze MK Files for UBI Settings
-        id: mk_analysis
-        run: |
-          echo "🔍 Analyzing .mk files for device '$PROFILE' in ImageBuilder"
-          
-          # Store original values from profiles.json for comparison
-          JSON_USES_UBI="$USES_UBI"
-          JSON_SUPPORTED_FS="$SUPPORTED_FILESYSTEMS"
-          
-          # Find device definition in .mk files
-          MK_PATH="$BUILDDIR/$IMAGEBUILDER_NAME/target/linux/$PLATFORM/image"
-          if [ -d "$MK_PATH" ]; then
-            echo "✅ Found image directory: $MK_PATH"
-            
-            # Find which .mk file contains our device definition
-            DEVICE_MK_FILE=$(grep -l "Device/${PROFILE}" $MK_PATH/*.mk 2>/dev/null || true)
-            
-            if [ -n "$DEVICE_MK_FILE" ]; then
-              echo "✅ Found device definition in: $DEVICE_MK_FILE"
-              
-              # Extract the device definition block
-              DEV_LINE=$(grep -n "Device/${PROFILE}" "$DEVICE_MK_FILE" | cut -d':' -f1)
-              if [ -n "$DEV_LINE" ]; then
-                echo "📄 Device definition starts at line $DEV_LINE"
-                
-                # Extract 50 lines after the definition to capture the entire block
-                DEV_BLOCK=$(tail -n +$DEV_LINE "$DEVICE_MK_FILE" | head -n 50)
-                
-                # Find where the definition ends
-                BLOCK_END=$(echo "$DEV_BLOCK" | grep -n "^endef" | head -1 | cut -d':' -f1)
-                if [ -n "$BLOCK_END" ]; then
-                  DEV_BLOCK=$(echo "$DEV_BLOCK" | head -n $BLOCK_END)
-                fi
-                
-                echo "📋 Device definition block from .mk file:"
-                echo "$DEV_BLOCK"
-                
-                # Check for UBI-related indicators in the device block
-                MK_USES_UBI="false"
-                MK_SUPPORTED_FS="squashfs"
-                
-                # Check for UBI-related macros or parent device types
-                if echo "$DEV_BLOCK" | grep -q "Device/nand\|UBI\|NAND_\|UBINIZE"; then
-                  MK_USES_UBI="true"
-                  MK_SUPPORTED_FS="squashfs,ubifs"
-                  echo "🔍 Found UBI-related macros in device definition"
-                fi
-                
-                # Look for append-ubi in image commands
-                if echo "$DEV_BLOCK" | grep -q "append-ubi"; then
-                  MK_USES_UBI="true"
-                  MK_SUPPORTED_FS="squashfs,ubifs"
-                  echo "🔍 Found append-ubi command in device definition"
-                fi
-                
-                # Extract UBI settings if device uses UBI
-                if [ "$MK_USES_UBI" = "true" ]; then
-                  # Get UBINIZE_OPTS
-                  UBINIZE_OPTS=$(echo "$DEV_BLOCK" | grep -o "UBINIZE_OPTS.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
-                  if [ -n "$UBINIZE_OPTS" ]; then
-                    echo "🔧 UBINIZE_OPTS: $UBINIZE_OPTS"
-                  fi
-                  
-                  # Get PAGESIZE
-                  PAGESIZE=$(echo "$DEV_BLOCK" | grep -o "PAGESIZE.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
-                  if [ -n "$PAGESIZE" ]; then
-                    echo "🔧 PAGESIZE: $PAGESIZE"
-                  fi
-                  
-                  # Get BLOCKSIZE
-                  BLOCKSIZE=$(echo "$DEV_BLOCK" | grep -o "BLOCKSIZE.*" | sed 's/.*:=\s*\(.*\)/\1/' || echo "")
-                  if [ -n "$BLOCKSIZE" ]; then
-                    echo "🔧 BLOCKSIZE: $BLOCKSIZE"
-                  fi
-                fi
-                
-                # Compare with values from profiles.json
-                echo "📊 Comparison of settings:"
-                echo "- profiles.json: Uses UBI = $JSON_USES_UBI, Filesystems = $JSON_SUPPORTED_FS"
-                echo "- .mk file: Uses UBI = $MK_USES_UBI, Filesystems = $MK_SUPPORTED_FS"
-                
-                # If there are differences, use the .mk file values
-                if [ "$JSON_USES_UBI" != "$MK_USES_UBI" ] || [ "$JSON_SUPPORTED_FS" != "$MK_SUPPORTED_FS" ]; then
-                  echo "⚠️ Found discrepancies between profiles.json and .mk file!"
-                  echo "⚠️ Will use .mk file values for building as they are more definitive"
-                  
-                  # Update our environment variables with .mk file values
-                  echo "USES_UBI=$MK_USES_UBI" >> $GITHUB_ENV
-                  echo "SUPPORTED_FILESYSTEMS=$MK_SUPPORTED_FS" >> $GITHUB_ENV
-                  
-                  # Add UBI packages if needed and not already added
-                  if [ "$MK_USES_UBI" = "true" ] && [ "$JSON_USES_UBI" = "false" ]; then
-                    echo "📦 Adding UBI packages based on .mk file detection"
-                    UBI_PACKAGES="kmod-mtd-ubi kmod-ubi-block uboot-envtools"
-                    
-                    # Update BASE_PACKAGES variable
-                    BASE_PACKAGES="$BASE_PACKAGES $UBI_PACKAGES"
-                    echo "BASE_PACKAGES=$BASE_PACKAGES" >> $GITHUB_ENV
-                  fi
-                else
-                  echo "✅ profiles.json and .mk file settings match, no changes needed"
-                fi
-                
-                # Write the device block to a file for reference
-                mkdir -p /tmp/openwrt_info/
-                echo "$DEV_BLOCK" > /tmp/openwrt_info/device_mk_block.txt
-              else
-                echo "⚠️ Could not determine line number for device definition"
-              fi
-            else
-              echo "⚠️ Device definition not found in any .mk file"
-            fi
-          else
-            echo "⚠️ Could not find target image directory at $MK_PATH"
-          fi
-          
-          # Also check the OpenWrt target defaults in the target Makefile
-          TARGET_MK="$BUILDDIR/$IMAGEBUILDER_NAME/target/linux/$PLATFORM/$TYPE/target.mk"
-          if [ -f "$TARGET_MK" ]; then
-            echo "📄 Target-specific settings from $TARGET_MK:"
-            grep "FEATURES\|KERNEL\|DEFAULT_\|TARGET_" "$TARGET_MK" | grep -v "#" || echo "No relevant settings found"
-          fi
-          
-          # Look for include/image.mk which has UBI image generation commands
-          IMAGE_MK="$BUILDDIR/$IMAGEBUILDER_NAME/include/image.mk"
-          if [ -f "$IMAGE_MK" ]; then
-            echo "📄 UBI image commands from include/image.mk:"
-            grep -A5 "define.*append-ubi\|UBIFS_\|MKUBIFS\|UBINIZE" "$IMAGE_MK" | head -20 || echo "No UBI commands found"
-          fi
-      
       # Precache packages for faster builds
       - name: Precache OpenWrt Packages
         if: steps.cache-packages.outputs.cache-hit != 'true'
@@ -486,9 +346,9 @@ jobs:
           # Create a temporary download directory for package caching
           mkdir -p dl
           
-          # Create a combined package list including UBI packages for caching
-          # UBI packages are always included in the cache but will only be used in the build if needed
-          CACHE_PACKAGES="${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES} ${UBI_PACKAGES}"
+          # Create a combined package list for caching
+          # We'll cache what we know, and let the ImageBuilder handle the rest
+          CACHE_PACKAGES="${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           echo "📦 Packages to precache:"
           echo "${CACHE_PACKAGES}" | tr ' ' '\n' | sort | uniq
@@ -560,23 +420,8 @@ jobs:
             fi
           done
           
-          # Only include UBI packages if USES_UBI is true
-          BUILD_PACKAGES="${BASE_PACKAGES}"
-          if [ "$USES_UBI" = "true" ]; then
-            echo "📦 Including UBI packages in build as device requires them"
-          else
-            echo "📦 Excluding UBI packages from build as device doesn't need them"
-            # Filter out UBI packages from BUILD_PACKAGES
-            for UBI_PKG in $UBI_PACKAGES; do
-              BUILD_PACKAGES=$(echo "$BUILD_PACKAGES" | sed "s/\b$UBI_PKG\b//g")
-            done
-            # Clean up extra spaces
-            BUILD_PACKAGES=$(echo "$BUILD_PACKAGES" | tr -s ' ' | sed 's/^ //' | sed 's/ $//')
-          fi
-          echo "📦 Final BASE_PACKAGES for build: ${BUILD_PACKAGES}"
-          
           # Combine all packages, ensuring proper spacing
-          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BUILD_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
+          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           # Generate a hash of the combined packages for cache key
           PACKAGES_HASH=$(echo "$COMBINED_PACKAGES" | sort | sha256sum | cut -d ' ' -f1)
@@ -591,27 +436,13 @@ jobs:
           
           echo "🗂️ Using output directory: $OUTPUT_DIR"
           
-          # Set build arguments based on filesystem requirements
+          # Set build arguments - let the ImageBuilder determine filesystem needs
           BUILD_ARGS=()
           BUILD_ARGS+=(PROFILE="$PROFILE")
           BUILD_ARGS+=(PACKAGES="$COMBINED_PACKAGES")
           BUILD_ARGS+=(FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files")
           BUILD_ARGS+=(BIN_DIR="$OUTPUT_DIR")
-          
-          # Add filesystem-specific build options
-          if [ "$USES_UBI" = "true" ]; then
-            echo "🔧 Configuring build for UBI/UBIFS filesystem"
-            
-            # Enable UBIFS for this build
-            BUILD_ARGS+=(CONFIG_TARGET_ROOTFS_UBIFS=y)
-            
-            # Set image suffix to indicate UBI support
-            BUILD_ARGS+=(EXTRA_IMAGE_NAME="ubi-sysupgrade")
-          else
-            echo "🔧 Using standard squashfs image configuration"
-            BUILD_ARGS+=(EXTRA_IMAGE_NAME="sysupgrade")
-          fi
-          
+          BUILD_ARGS+=(EXTRA_IMAGE_NAME="sysupgrade")
           BUILD_ARGS+=(FORCE=1)
           
           # Show final build command
