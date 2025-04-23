@@ -62,17 +62,23 @@ jobs:
     runs-on: ubuntu-latest
     name: Build ${{ matrix.model }}
     env:
-      # Default packages to include in all firmware builds
-      BASE_PACKAGES: >-
-        base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
-        kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
-        libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
-        ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
-        uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+      # Use default_packages from profiles.json (will be set in Set Build Variables step)
+      # The below list is kept for documentation of what's typically included
+      # BASE_PACKAGES: base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
+      #   kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
+      #   libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
+      #   ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
+      #   uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+      
+      # Additional required packages to add regardless of default
+      ADDITIONAL_PACKAGES: openssh-sftp-server nodogsplash
+      
       # Nostr relay configuration
       NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
+      
       # Default removed packages
       REMOVED_PACKAGES: -odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini
+      
       # Force flag to bypass distutils check on newer Ubuntu runners
       FORCE: 1
 
@@ -134,6 +140,13 @@ jobs:
           
           # Get architecture from router-info
           ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
+          
+          # Get default packages from router-info and convert to space-separated list
+          DEFAULT_PACKAGES=$(echo "${{ steps.router-info.outputs.default_packages }}" | tr ',' ' ')
+          
+          # Combine with additional required packages to form base packages
+          BASE_PACKAGES="${DEFAULT_PACKAGES} ${ADDITIONAL_PACKAGES}"
+          echo "BASE_PACKAGES=$BASE_PACKAGES" >> $GITHUB_ENV
           
           # Map to Blossom architecture using architecture_mapping.json
           ARCH_MAPPING_PATH="./files/etc/tollgate/architecture_mapping.json"

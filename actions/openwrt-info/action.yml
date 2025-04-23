@@ -23,11 +23,20 @@ outputs:
     description: 'arch_packages from profiles.json'
     value: ${{ steps.profiles.outputs.arch_packages }}
   default_packages:
-    description: 'default_packages from profiles.json'
+    description: 'default_packages from profiles.json as comma-separated list'
     value: ${{ steps.profiles.outputs.default_packages }}
   metadata_version:
     description: 'metadata_version from profiles.json'
     value: ${{ steps.profiles.outputs.metadata_version }}
+  source_date_epoch:
+    description: 'source_date_epoch from profiles.json'
+    value: ${{ steps.profiles.outputs.source_date_epoch }}
+  version_code:
+    description: 'version_code from profiles.json'
+    value: ${{ steps.profiles.outputs.version_code }}
+  version_number:
+    description: 'version_number from profiles.json'
+    value: ${{ steps.profiles.outputs.version_number }}
   linux_kernel_release:
     description: 'linux_kernel.release'
     value: ${{ steps.profiles.outputs.linux_kernel_release }}
@@ -41,7 +50,7 @@ outputs:
     description: 'Full profile object for router_id (JSON‑encoded)'
     value: ${{ steps.profiles.outputs.profile_json }}
   device_packages:
-    description: 'device_packages array for router_id'
+    description: 'device_packages array for router_id as comma-separated list'
     value: ${{ steps.profiles.outputs.device_packages }}
 
 runs:
@@ -166,10 +175,13 @@ runs:
           echo "$raw" | jq -r '.profiles | keys[]' | grep -i "${{ inputs.router_id }}" || echo "No matching profile found"
         fi
 
-        # Pull out the overall top-level fields
+        # Pull out all the top-level fields from profiles.json
         arch=$(echo "$raw" | jq -r '.arch_packages')
         defaults=$(echo "$raw" | jq -r '.default_packages | join(",")')
         meta=$(echo "$raw" | jq -r '.metadata_version')
+        source_date_epoch=$(echo "$raw" | jq -r '.source_date_epoch // "unknown"')
+        version_code=$(echo "$raw" | jq -r '.version_code // "unknown"')
+        version_number=$(echo "$raw" | jq -r '.version_number // "unknown"')
         lin_rel=$(echo "$raw" | jq -r '.linux_kernel.release // "unknown"')
         lin_ver=$(echo "$raw" | jq -r '.linux_kernel.version // "unknown"')
         lin_vmg=$(echo "$raw" | jq -r '.linux_kernel.vermagic // "unknown"')
@@ -201,6 +213,9 @@ runs:
         echo "arch_packages=$arch" >> "$GITHUB_OUTPUT"
         echo "default_packages=$defaults" >> "$GITHUB_OUTPUT"
         echo "metadata_version=$meta" >> "$GITHUB_OUTPUT"
+        echo "source_date_epoch=$source_date_epoch" >> "$GITHUB_OUTPUT"
+        echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+        echo "version_number=$version_number" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_release=$lin_rel" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_version=$lin_ver" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
@@ -213,6 +228,7 @@ runs:
         
         # Debug - print to verify what's being set
         echo "DEBUG: Set arch_packages output to: $arch"
+        echo "DEBUG: Set default_packages output to: $defaults"
         echo "DEBUG: Set device_packages output to: $dev_pkgs"
         
         # Make sure this information is available for later steps
@@ -223,4 +239,4 @@ runs:
         echo "$prof" > /tmp/openwrt_info/profile.json
         
         # Also write out combined outputs file for debugging
-        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"device_packages\":\"$dev_pkgs\"}" > /tmp/openwrt_info/outputs.json
+        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"default_packages\":\"$defaults\",\"device_packages\":\"$dev_pkgs\"}" > /tmp/openwrt_info/outputs.json
