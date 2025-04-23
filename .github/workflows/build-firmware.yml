@@ -325,7 +325,7 @@ jobs:
         uses: c03rad0r/cli-blossom-uploader-go@main
         with:
           host: "https://blossom.swissdash.site"
-          filePath: ${{ steps.build.outputs.firmware_path }}
+          filePath: "${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/${{ steps.build.outputs.firmware_path }}"
           nostrPrivateKey: ${{ secrets.NSECBECH }}
 
       # Publish firmware metadata
