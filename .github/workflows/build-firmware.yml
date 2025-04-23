@@ -221,6 +221,20 @@ jobs:
           path: ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}-setup-complete
       
+      # Try to restore OpenWrt package downloads cache
+      - name: Restore OpenWrt Package Downloads Cache
+        id: cache-packages
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/dl
+            ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/staging_dir
+          # We can only use restore-keys here since PACKAGES_HASH isn't defined yet
+          # The most specific match will be used if available
+          key: ${{ env.CACHE_KEY }}-packages
+          restore-keys: |
+            ${{ env.CACHE_KEY }}-packages
+      
       # Install build-specific dependencies only when cache misses
       - name: Install Build Dependencies
         if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
@@ -328,6 +342,10 @@ jobs:
           # Combine all packages
           COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
+          # Generate a hash of the combined packages for cache key
+          PACKAGES_HASH=$(echo "$COMBINED_PACKAGES" | sort | sha256sum | cut -d ' ' -f1)
+          echo "PACKAGES_HASH=$PACKAGES_HASH" >> $GITHUB_ENV
+          
           echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
           
           # Create output directory structure with absolute path
@@ -428,6 +446,16 @@ jobs:
           name: firmware-${{ matrix.model }}
           path: ${{ steps.build.outputs.firmware_path }}
           retention-days: 10
+      
+      # Save OpenWrt Package Downloads Cache
+      - name: Save OpenWrt Package Downloads Cache
+        if: always()  # Try to save cache even if the build fails
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/dl
+            ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/staging_dir
+          key: ${{ env.CACHE_KEY }}-packages-${{ env.PACKAGES_HASH }}
 
       # Upload firmware to Blossom
       - name: Upload Firmware to Blossom
