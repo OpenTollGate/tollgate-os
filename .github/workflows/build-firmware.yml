@@ -223,7 +223,7 @@ jobs:
           fi
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v3-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v4-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
@@ -499,14 +499,29 @@ jobs:
           NUM_PROCS=$(nproc)
           echo "🖥️ Detected $NUM_PROCS processors for parallel building"
           
-          # Combine all packages
+          # Display each package list separately for easier debugging
+          echo "📦 REMOVED_PACKAGES: ${REMOVED_PACKAGES}"
+          echo "📦 BASE_PACKAGES: ${BASE_PACKAGES}"
+          echo "📦 DEVICE_PACKAGES: ${DEVICE_PACKAGES}"
+          echo "📦 TOLLGATE_PACKAGES: ${TOLLGATE_PACKAGES}"
+          
+          # Check for any suspicious package names that might cause errors
+          echo "🔍 Checking for problematic package names..."
+          for PKG in ${BASE_PACKAGES}; do
+            if [[ "$PKG" == *" "* || "$PKG" == "" || "$PKG" == "basic" ]]; then
+              echo "⚠️ WARNING: Potential issue with package: '$PKG'"
+            fi
+          done
+          
+          # Combine all packages, ensuring proper spacing
           COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           # Generate a hash of the combined packages for cache key
           PACKAGES_HASH=$(echo "$COMBINED_PACKAGES" | sort | sha256sum | cut -d ' ' -f1)
           echo "PACKAGES_HASH=$PACKAGES_HASH" >> $GITHUB_ENV
           
-          echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
+          echo "📦 Full package list for build:"
+          echo "$COMBINED_PACKAGES" | tr ' ' '\n' | sort | uniq
           
           # Create output directory structure with absolute path
           OUTPUT_DIR="$BUILDDIR/$IMAGEBUILDER_NAME/bin"
