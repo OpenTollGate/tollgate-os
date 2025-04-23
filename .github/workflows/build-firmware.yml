@@ -133,6 +133,17 @@ jobs:
           TYPE=$(echo "$TARGET" | cut -d'/' -f2)
           PROFILE="${{ matrix.model }}"
           
+          # Get supported image types
+          SUPPORTED_TYPES="${{ steps.router-info.outputs.supported_image_types }}"
+          IMAGE_PREFIX="${{ steps.router-info.outputs.image_prefix }}"
+          
+          # Verify that sysupgrade is supported
+          if ! echo "$SUPPORTED_TYPES" | grep -q "sysupgrade"; then
+            echo "❌ ERROR: 'sysupgrade' firmware type is not supported for this device ($PROFILE)"
+            echo "Available types are: $SUPPORTED_TYPES"
+            exit 1
+          fi
+          
           # Create build directory
           BUILDDIR="/tmp/openwrt-build"
           sudo mkdir -p $BUILDDIR
@@ -207,6 +218,8 @@ jobs:
           echo "BLOSSOM_ARCH=$BLOSSOM_ARCH" >> $GITHUB_ENV
           echo "DEVICE_PACKAGES=$DEVICE_PACKAGES" >> $GITHUB_ENV
           echo "CACHE_KEY=$CACHE_KEY" >> $GITHUB_ENV
+          echo "SUPPORTED_TYPES=$SUPPORTED_TYPES" >> $GITHUB_ENV
+          echo "IMAGE_PREFIX=$IMAGE_PREFIX" >> $GITHUB_ENV
       
       # Try to restore from cache
       - name: Restore ImageBuilder Setup from Cache
@@ -325,29 +338,45 @@ jobs:
           
           echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
           
-          make -j$NUM_PROCS image PROFILE="$PROFILE" \
+          # Use BIN_DIR to specify the output directory explicitly 
+          # Use a target that specifically builds sysupgrade image
+          make -j$NUM_PROCS image \
+            PROFILE="$PROFILE" \
             PACKAGES="$COMBINED_PACKAGES" \
             FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
+            BIN_DIR="bin" \
+            EXTRA_IMAGE_NAME="sysupgrade" \
             FORCE=1
           
           # Debug - list all files in target directory to see what's available
           echo "📋 Listing files in target directory:"
           find bin/targets/$PLATFORM/$TYPE/ -type f | sort
           
-          # Check if build succeeded with more robust file detection
-          # First try the standard pattern
-          FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+          # Determine expected sysupgrade file path based on image prefix
+          EXPECTED_SYSUPGRADE_PATH="bin/targets/$PLATFORM/$TYPE/${IMAGE_PREFIX}-squashfs-sysupgrade.bin"
+          echo "🔍 Looking for sysupgrade image at: $EXPECTED_SYSUPGRADE_PATH"
           
-          # If not found, look for any bin files
-          if [ -z "$FIRMWARE_PATH" ]; then
-            echo "⚠️ Standard sysupgrade*.bin not found, looking for other bin files..."
-            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.bin" | grep -v "initramfs" | head -1)
-          fi
-          
-          # If still not found, look for img files
-          if [ -z "$FIRMWARE_PATH" ]; then
-            echo "⚠️ No .bin files found, looking for .img files..."
-            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.img" | head -1)
+          if [ -f "$EXPECTED_SYSUPGRADE_PATH" ]; then
+            FIRMWARE_PATH="$EXPECTED_SYSUPGRADE_PATH"
+            echo "✅ Found expected sysupgrade image at: $FIRMWARE_PATH"
+          else
+            # Fallback to other detection methods if the expected path is not found
+            echo "⚠️ Expected sysupgrade image not found, trying alternative detection..."
+            
+            # First try the standard pattern
+            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+            
+            # If not found, look for any bin files
+            if [ -z "$FIRMWARE_PATH" ]; then
+              echo "⚠️ Standard sysupgrade*.bin not found, looking for other bin files..."
+              FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.bin" | grep -v "initramfs" | head -1)
+            fi
+            
+            # If still not found, look for img files
+            if [ -z "$FIRMWARE_PATH" ]; then
+              echo "⚠️ No .bin files found, looking for .img files..."
+              FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*.img" | head -1)
+            fi
           fi
           
           # If we found a firmware file

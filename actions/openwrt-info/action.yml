@@ -40,6 +40,12 @@ outputs:
   linux_kernel_vermagic:
     description: 'linux_kernel.vermagic'
     value: ${{ steps.profiles.outputs.linux_kernel_vermagic }}
+  supported_image_types:
+    description: 'Comma-separated list of supported firmware image types (sysupgrade, factory, etc.)'
+    value: ${{ steps.profiles.outputs.supported_image_types }}
+  image_prefix:
+    description: 'Image file prefix for this router model'
+    value: ${{ steps.profiles.outputs.image_prefix }}
   profile_json:
     description: 'Full profile object for router_id (JSON‑encoded)'
     value: ${{ steps.profiles.outputs.profile_json }}
@@ -196,9 +202,26 @@ runs:
           # Extract device packages as comma-separated list
           dev_pkgs=$(echo "$prof" | jq -r '.device_packages | join(",") // ""')
           
+          # Extract image prefix
+          image_prefix=$(echo "$prof" | jq -r '.image_prefix // ""')
+          
+          # Extract supported image types
+          supported_types=$(echo "$prof" | jq -r '.images[] | .type' | sort | uniq | tr '\n' ',' | sed 's/,$//')
+          
           # Display the profile for our router
           echo "📱 Router profile details from profiles.json:"
           echo "$prof" | jq '.'
+          
+          # Display supported image types
+          echo "📷 Supported firmware image types: $supported_types"
+          
+          # Verify sysupgrade is supported
+          if echo "$supported_types" | grep -q "sysupgrade"; then
+            echo "✅ 'sysupgrade' firmware type is supported for this device"
+          else
+            echo "⚠️ WARNING: 'sysupgrade' firmware type does NOT appear to be supported for this device!"
+            echo "⚠️ Available types are: $supported_types"
+          fi
         fi
 
         # Export to GitHub Actions outputs
@@ -210,6 +233,8 @@ runs:
         echo "linux_kernel_version=$lin_ver" >> "$GITHUB_OUTPUT"
         echo "linux_kernel_vermagic=$lin_vmg" >> "$GITHUB_OUTPUT"
         echo "device_packages=$dev_pkgs" >> "$GITHUB_OUTPUT"
+        echo "image_prefix=$image_prefix" >> "$GITHUB_OUTPUT"
+        echo "supported_image_types=$supported_types" >> "$GITHUB_OUTPUT"
         
         # Store profile JSON in a way that's compatible with multiline outputs
         echo "profile_json<<EOF" >> "$GITHUB_OUTPUT"
@@ -227,6 +252,8 @@ runs:
         echo "$defaults" > /tmp/openwrt_info/default_packages.txt
         echo "$dev_pkgs" > /tmp/openwrt_info/device_packages.txt
         echo "$prof" > /tmp/openwrt_info/profile.json
+        echo "$supported_types" > /tmp/openwrt_info/supported_image_types.txt
+        echo "$image_prefix" > /tmp/openwrt_info/image_prefix.txt
         
         # Also write out combined outputs file for debugging
-        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"default_packages\":\"$defaults\",\"device_packages\":\"$dev_pkgs\"}" > /tmp/openwrt_info/outputs.json
+        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"default_packages\":\"$defaults\",\"device_packages\":\"$dev_pkgs\",\"supported_image_types\":\"$supported_types\"}" > /tmp/openwrt_info/outputs.json
