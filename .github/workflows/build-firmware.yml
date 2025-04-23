@@ -375,17 +375,18 @@ jobs:
           echo "IMAGEBUILDER_NAME=${IMAGEBUILDER_NAME}" >> $GITHUB_ENV
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
 
-      # Try to restore from cache - with fixed permissions
+      # Try to restore from cache - with fixed permissions and proper restore keys
       - name: Restore ImageBuilder from Cache
         id: cache-imagebuilder
         uses: actions/cache/restore@v3
         with:
           path: |
-            ${{ env.BUILDDIR }}/*
-            !${{ env.BUILDDIR }}/docker-context
+            ${{ env.BUILDDIR }}
           key: ${{ env.CACHE_KEY }}
           restore-keys: |
-            ${{ env.CACHE_KEY_PREFIX }}-${{ needs.check-versions.outputs.openwrt_version }}-
+            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
+            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}
+            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}
 
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder
@@ -454,7 +455,7 @@ jobs:
             exit 1
           fi
       
-      # Save to cache if downloaded fresh
+      # Save to cache if downloaded fresh - with fixed paths
       - name: Save ImageBuilder to Cache
         if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
         uses: actions/cache/save@v3
