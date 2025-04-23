@@ -316,12 +316,16 @@ jobs:
         run: |
           cd $BUILDDIR/$IMAGEBUILDER_NAME
           
+          # Detect number of processors for parallelization
+          NUM_PROCS=$(nproc)
+          echo "🖥️ Detected $NUM_PROCS processors for parallel building"
+          
           # Combine all packages
           COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
           
           echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
           
-          make image PROFILE="$PROFILE" \
+          make -j$NUM_PROCS image PROFILE="$PROFILE" \
             PACKAGES="$COMBINED_PACKAGES" \
             FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
             FORCE=1
