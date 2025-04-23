@@ -338,7 +338,7 @@ jobs:
       
       # Precache packages for faster builds
       - name: Precache OpenWrt Packages
-        if: steps.cache-packages.outputs.cache-hit != 'true'
+        if: false # Disabled: 'make download' target not available in ImageBuilder
         run: |
           cd $BUILDDIR/$IMAGEBUILDER_NAME
           echo "📦 Precaching packages for faster builds..."
