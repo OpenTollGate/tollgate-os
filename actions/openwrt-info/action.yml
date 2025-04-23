@@ -46,9 +46,6 @@ outputs:
   supported_filesystems:
     description: 'Comma-separated list of supported filesystems (squashfs, ubifs, etc.)'
     value: ${{ steps.profiles.outputs.supported_filesystems }}
-  uses_ubi:
-    description: 'Whether this device uses UBI (true/false)'
-    value: ${{ steps.profiles.outputs.uses_ubi }}
   image_prefix:
     description: 'Image file prefix for this router model'
     value: ${{ steps.profiles.outputs.image_prefix }}
@@ -217,17 +214,8 @@ runs:
           # Extract supported filesystems from image names
           supported_fs=$(echo "$prof" | jq -r '.images[] | .filesystem' | sort | uniq | tr '\n' ',' | sed 's/,$//')
           
-          # Detect if device uses UBI - First try profiles.json approach
-          uses_ubi="false"
-          if echo "$prof" | jq -r '.images[] | .name' | grep -q "ubi"; then
-            uses_ubi="true"
-            echo "✅ UBI filesystem detected from image names in profiles.json"
-          elif echo "$prof" | jq -r '.images[] | .filesystem' | grep -q "ubifs"; then
-            uses_ubi="true"
-            echo "✅ UBIFS filesystem detected in profiles.json"
-          else
-            echo "ℹ️ No UBI/UBIFS indicators found in profiles.json"
-          fi
+          # Note: We no longer attempt to detect UBI from profiles.json as it's not reliable
+          # UBI information will be determined later from .mk files in the build workflow
           
           # Display the profile for our router
           echo "📱 Router profile details from profiles.json:"
@@ -236,7 +224,6 @@ runs:
           # Display supported image types
           echo "📷 Supported firmware image types: $supported_types"
           echo "📂 Supported filesystems: $supported_fs"
-          echo "🗄️ Uses UBI: $uses_ubi"
           
           # Verify sysupgrade is supported
           if echo "$supported_types" | grep -q "sysupgrade"; then
@@ -259,7 +246,6 @@ runs:
         echo "image_prefix=$image_prefix" >> "$GITHUB_OUTPUT"
         echo "supported_image_types=$supported_types" >> "$GITHUB_OUTPUT"
         echo "supported_filesystems=$supported_fs" >> "$GITHUB_OUTPUT"
-        echo "uses_ubi=$uses_ubi" >> "$GITHUB_OUTPUT"
         
         # Store profile JSON in a way that's compatible with multiline outputs
         echo "profile_json<<EOF" >> "$GITHUB_OUTPUT"
@@ -279,7 +265,6 @@ runs:
         echo "$prof" > /tmp/openwrt_info/profile.json
         echo "$supported_types" > /tmp/openwrt_info/supported_image_types.txt
         echo "$supported_fs" > /tmp/openwrt_info/supported_filesystems.txt
-        echo "$uses_ubi" > /tmp/openwrt_info/uses_ubi.txt
         
         # Also write out combined outputs file for debugging
-        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"default_packages\":\"$defaults\",\"device_packages\":\"$dev_pkgs\",\"supported_image_types\":\"$supported_types\",\"supported_filesystems\":\"$supported_fs\",\"uses_ubi\":\"$uses_ubi\"}" > /tmp/openwrt_info/outputs.json
+        echo "{\"target\":\"$(cat /tmp/openwrt_target.txt)\",\"arch_packages\":\"$arch\",\"default_packages\":\"$defaults\",\"device_packages\":\"$dev_pkgs\",\"supported_image_types\":\"$supported_types\",\"supported_filesystems\":\"$supported_fs\"}" > /tmp/openwrt_info/outputs.json
