@@ -148,7 +148,7 @@ jobs:
           echo "✅ Checking Python3 distutils installation..."
           python3 -c "import distutils.core; print('Python3 distutils is available')"
 
-      # Cache for apt packages and pip dependencies - much more stable keys
+      # Cache for apt packages and pip dependencies with bumped version
       - name: Cache Dependencies
         uses: actions/cache@v3
         id: deps-cache
@@ -158,9 +158,9 @@ jobs:
             ~/.cache/pip
             /usr/local/lib/
             /var/lib/apt/lists
-          key: ${{ runner.os }}-system-deps-v4-${{ hashFiles('files/etc/tollgate/release.json') }}
+          key: ${{ runner.os }}-system-deps-v5-${{ hashFiles('files/etc/tollgate/release.json') }}
           restore-keys: |
-            ${{ runner.os }}-system-deps-v4-
+            ${{ runner.os }}-system-deps-v5-
             ${{ runner.os }}-system-deps-
 
       # Install system dependencies only if cache miss
