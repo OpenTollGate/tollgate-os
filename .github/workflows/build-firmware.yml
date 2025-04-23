@@ -201,7 +201,7 @@ jobs:
           echo "📦 Device-specific packages: $DEVICE_PACKAGES"
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v4-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v5-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
