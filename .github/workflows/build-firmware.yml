@@ -91,9 +91,6 @@ jobs:
         with:
           python-version: '3.x'
           cache: 'pip'
-          cache-dependency-path: |
-            **/requirements.txt
-            **/setup.py
       
       # Install essential dependencies needed for workflow
       - name: Install Dependencies
@@ -101,7 +98,7 @@ jobs:
           echo "📦 Installing dependencies..."
           sudo apt-get update
           sudo apt-get install -y curl jq gawk build-essential zstd libssl-dev
-          python -m pip install setuptools nostr
+          python -m pip install -r requirements.txt
       
       # Use the openwrt-info action to get router details
       - name: Get Router Info
