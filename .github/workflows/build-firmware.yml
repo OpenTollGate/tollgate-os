@@ -201,7 +201,7 @@ jobs:
           echo "📦 Device-specific packages: $DEVICE_PACKAGES"
           
           # Set cache key for imagebuilder
-          CACHE_KEY="openwrt-v5-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          CACHE_KEY="openwrt-v6-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           
           # Export all variables
           echo "TARGET=$TARGET" >> $GITHUB_ENV
@@ -230,6 +230,7 @@ jobs:
       
       # Try to restore OpenWrt package downloads cache
       - name: Restore OpenWrt Package Downloads Cache
+        if: false
         id: cache-packages
         uses: actions/cache/restore@v3
         with:
