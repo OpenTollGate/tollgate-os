@@ -310,9 +310,9 @@ jobs:
           sudo chown $USER:$USER /tmp/openwrt-build
           echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
           
-          # Set cache key for caching - without run_id to enable sharing across workflow runs
-          # Create a stable part of the cache key
-          CACHE_KEY="openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          # Set cache key for caching - with version to avoid contention issues
+          # Create a stable part of the cache key with version prefix
+          CACHE_KEY="openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
           # For restore keys, use a prefix that will match across runs
           echo "CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
           echo "CACHE_KEY_RESTORE=${CACHE_KEY}" >> $GITHUB_ENV
