@@ -394,11 +394,11 @@ jobs:
         with:
           path: |
             ${{ env.BUILDDIR }}
-          key: ${{ env.CACHE_KEY }}
+          key: ${{ env.CACHE_KEY }}-configured
           restore-keys: |
-            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}
-            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}
-            openwrt-builder-${{ needs.check-versions.outputs.openwrt_version }}
+            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-${{ env.TYPE }}-configured
+            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-${{ env.PLATFORM }}-configured
+            openwrt-builder-v2-${{ needs.check-versions.outputs.openwrt_version }}-configured
 
       # Download and Extract ImageBuilder if cache miss
       - name: Download and Extract ImageBuilder
@@ -467,14 +467,6 @@ jobs:
             exit 1
           fi
       
-      # Save to cache if downloaded fresh - with fixed paths
-      - name: Save ImageBuilder to Cache
-        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v3
-        with:
-          path: ${{ env.BUILDDIR }}
-          key: ${{ env.CACHE_KEY }}
-
       # Setup Custom Files and Packages
       - name: Setup Custom Files and Packages
         env:
@@ -599,6 +591,28 @@ jobs:
             ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages
             gzip -9c packages/local/Packages > packages/local/Packages.gz
           '
+
+      # Ensure python3-distutils is installed before building
+      - name: Ensure Build Dependencies
+        run: |
+          echo "📦 Installing essential build dependencies for OpenWRT Builder..."
+          sudo apt-get update
+          sudo apt-get install -y python3-distutils python3-dev
+          
+          # Verify python3-distutils is installed correctly
+          echo "✅ Checking Python3 distutils installation..."
+          python3 -c "import distutils.core; print('Python3 distutils is available')"
+          
+          # Create a marker file to track which dependencies were installed
+          echo "Build dependencies installed on $(date)" > "${BUILDDIR}/build-deps-installed.txt"
+
+      # THIS IS THE SNAPSHOT POINT - Save fully configured image builder to cache
+      - name: Save Configured ImageBuilder to Cache
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}-configured
 
       # Build Firmware with All Packages
       - name: Build Firmware with All Packages
