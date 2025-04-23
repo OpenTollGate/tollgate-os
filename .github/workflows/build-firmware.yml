@@ -373,15 +373,34 @@ jobs:
           
           echo "🗂️ Using output directory: $OUTPUT_DIR"
           
-          # Use BIN_DIR to specify the output directory explicitly with absolute path
-          # Use a target that specifically builds sysupgrade image
-          make -j$NUM_PROCS image \
-            PROFILE="$PROFILE" \
-            PACKAGES="$COMBINED_PACKAGES" \
-            FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
-            BIN_DIR="$OUTPUT_DIR" \
-            EXTRA_IMAGE_NAME="sysupgrade" \
-            FORCE=1
+          # Set build arguments based on filesystem requirements
+          BUILD_ARGS=()
+          BUILD_ARGS+=(PROFILE="$PROFILE")
+          BUILD_ARGS+=(PACKAGES="$COMBINED_PACKAGES")
+          BUILD_ARGS+=(FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files")
+          BUILD_ARGS+=(BIN_DIR="$OUTPUT_DIR")
+          
+          # Add filesystem-specific build options
+          if [ "$USES_UBI" = "true" ]; then
+            echo "🔧 Configuring build for UBI/UBIFS filesystem"
+            
+            # Enable UBIFS for this build
+            BUILD_ARGS+=(CONFIG_TARGET_ROOTFS_UBIFS=y)
+            
+            # Set image suffix to indicate UBI support
+            BUILD_ARGS+=(EXTRA_IMAGE_NAME="ubi-sysupgrade")
+          else
+            echo "🔧 Using standard squashfs image configuration"
+            BUILD_ARGS+=(EXTRA_IMAGE_NAME="sysupgrade")
+          fi
+          
+          BUILD_ARGS+=(FORCE=1)
+          
+          # Show final build command
+          echo "📋 Running build with arguments: ${BUILD_ARGS[@]}"
+          
+          # Execute the build with all arguments
+          make -j$NUM_PROCS image "${BUILD_ARGS[@]}"
           
           # Debug - list build directory structure after build
           echo "📋 Checking build directory content:"
@@ -392,7 +411,18 @@ jobs:
           find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.bin" || echo "No .bin files found"
           
           # Determine expected sysupgrade file path based on image prefix
-          EXPECTED_SYSUPGRADE_PATH="$OUTPUT_DIR/targets/$PLATFORM/$TYPE/${IMAGE_PREFIX}-squashfs-sysupgrade.bin"
+          if [ "$USES_UBI" = "true" ]; then
+            # For UBI devices, the image name pattern might include "ubi" or "ubifs"
+            EXPECTED_SYSUPGRADE_PATH=$(find $OUTPUT_DIR/targets/$PLATFORM/$TYPE/ -name "${IMAGE_PREFIX}*ubi*sysupgrade.bin" | head -1)
+            if [ -z "$EXPECTED_SYSUPGRADE_PATH" ]; then
+              # Try alternative UBI naming pattern
+              EXPECTED_SYSUPGRADE_PATH=$(find $OUTPUT_DIR/targets/$PLATFORM/$TYPE/ -name "*${PROFILE}*ubi*sysupgrade.bin" | head -1)
+            fi
+          else
+            # For standard squashfs devices
+            EXPECTED_SYSUPGRADE_PATH="$OUTPUT_DIR/targets/$PLATFORM/$TYPE/${IMAGE_PREFIX}-squashfs-sysupgrade.bin"
+          fi
+          
           echo "🔍 Looking for sysupgrade image at: $EXPECTED_SYSUPGRADE_PATH"
           
           if [ -f "$EXPECTED_SYSUPGRADE_PATH" ]; then
@@ -402,34 +432,49 @@ jobs:
             # Fallback to other detection methods if the expected path is not found
             echo "⚠️ Expected sysupgrade image not found, trying alternative detection..."
             
-            # Check if OpenWrt might have output to a different location
-            echo "🔍 Searching for firmware files in other paths:"
-            
-            # First, search in the current directory and its subdirectories
-            FIRMWARE_PATH=$(find . -name "*sysupgrade*.bin" | head -1)
-            
-            # If not found, look in the build directory
-            if [ -z "$FIRMWARE_PATH" ]; then
-              echo "⚠️ Looking in build directory..."
-              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*sysupgrade*.bin" | head -1)
+            # For UBI devices, look for UBI-specific images first
+            if [ "$USES_UBI" = "true" ]; then
+              echo "🔍 Looking specifically for UBI images..."
+              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*ubi*sysupgrade*.bin" | head -1)
+              
+              if [ -z "$FIRMWARE_PATH" ]; then
+                echo "🔍 Looking for any UBI or UBIFS images..."
+                FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*ubi*.bin" | head -1)
+              fi
             fi
             
-            # If still not found, look for any bin files
+            # If still not found, try standard detection methods
             if [ -z "$FIRMWARE_PATH" ]; then
-              echo "⚠️ Looking for any .bin files..."
-              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.bin" | grep -v "initramfs" | head -1)
-            fi
-            
-            # If still not found, look for img files
-            if [ -z "$FIRMWARE_PATH" ]; then
-              echo "⚠️ No .bin files found, looking for .img files..."
-              FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.img" | head -1)
+              echo "🔍 Falling back to standard image detection..."
+              
+              # First, search in the current directory and its subdirectories
+              FIRMWARE_PATH=$(find . -name "*sysupgrade*.bin" | head -1)
+              
+              # If not found, look in the build directory
+              if [ -z "$FIRMWARE_PATH" ]; then
+                echo "⚠️ Looking in build directory..."
+                FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*sysupgrade*.bin" | head -1)
+              fi
+              
+              # If still not found, look for any bin files
+              if [ -z "$FIRMWARE_PATH" ]; then
+                echo "⚠️ Looking for any .bin files..."
+                FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.bin" | grep -v "initramfs" | head -1)
+              fi
+              
+              # If still not found, look for img files
+              if [ -z "$FIRMWARE_PATH" ]; then
+                echo "⚠️ No .bin files found, looking for .img files..."
+                FIRMWARE_PATH=$(find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.img" | head -1)
+              fi
             fi
             
             # If still not found, look in the entire build directory for any relevant file
             if [ -z "$FIRMWARE_PATH" ]; then
               echo "⚠️ Listing all files in build directory that might be firmware:"
-              find $BUILDDIR/$IMAGEBUILDER_NAME -type f -size +1M | grep -v "\.tar\." || echo "No large files found"
+              find $BUILDDIR/$IMAGEBUILDER_NAME -type f -size +1M | grep -v "\.tar\."
+              echo "⚠️ Checking build logs for clues..."
+              find $BUILDDIR/$IMAGEBUILDER_NAME -name "*.log" -exec cat {} \; | grep -i "output"
             fi
           fi
           
