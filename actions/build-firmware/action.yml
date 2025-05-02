@@ -471,12 +471,10 @@ runs:
         content: "TollGate OS Firmware for ${{ inputs.model }}"
         nsec: ${{ inputs.nsec }}
         size: ${{ env.FIRMWARE_SIZE }}
-        customTagsJson: >-
-          {
-            "architecture": "${{ env.BLOSSOM_ARCH }}",
-            "model": "${{ inputs.model }}",
-            "version": "${{ inputs.version }}"
-          }
+        customTags: |
+            architecture=${{ env.BLOSSOM_ARCH }}
+            model=${{ inputs.model }}
+            version=${{ inputs.version }}
 
     - name: Verify Firmware Publication
       id: verify_firmware
