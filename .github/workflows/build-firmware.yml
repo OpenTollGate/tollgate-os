@@ -4,7 +4,6 @@ on:
   push:
   pull_request:
     branches: [ main ]
-
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
@@ -44,6 +43,15 @@ jobs:
             # If this is a branch push, use branch-shortCommitHash format
             echo "version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
           fi
+        
+      - name: Set version variable
+        id: determine-release-channel
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "channel=stable" >> $GITHUB_OUTPUT
+          else
+            echo "channel=dev" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build OpenWRT Image
         id: build-openwrt-image
@@ -57,6 +65,7 @@ jobs:
           nsec: ${{ secrets.NSEC }}
           # openwrt_version: '24.10.1'
           tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
+          release_channel: ${{ steps.determine-release-channel.outputs.channel }}
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4

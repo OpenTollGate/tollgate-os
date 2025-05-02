@@ -16,6 +16,9 @@ inputs:
   tollgate_os_version:
     description: 'TollGate OS version'
     default: 'v0.0.0'
+  release_channel:
+    description: 'TollGate OS release channel (stable, dev, beta, etc)'
+    default: 'dev'
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -479,6 +482,7 @@ runs:
             model=${{ inputs.model }}
             openwrt_version=${{ inputs.openwrt_version }}
             tollgate_os_version=${{ inputs.tollgate_os_version }}
+            release_channel=${{ inputs.release_channel }}
 
     - name: Verify Firmware Publication
       id: verify_firmware
