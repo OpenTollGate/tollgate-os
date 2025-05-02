@@ -1,9 +1,13 @@
-name: Build OpenWRT Firmware
+name: Build TollGate OS (OpenWRT Firmware)
 
 on:
   push:
   pull_request:
     branches: [ main ]
+  # Pattern matched against refs/tags
+  tags:        
+    - '**'           # Push events to every tag including hierarchical tags like v1.0/beta
+
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
@@ -29,8 +33,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - id: commit-hash
         uses: prompt/actions-commit-hash@v3
+
       - name: Set version variable
         id: determine-os-version
         run: |
