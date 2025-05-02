@@ -460,7 +460,7 @@ runs:
 
     - name: Publish Firmware NIP-94 Metadata
       id: publish_firmware
-      uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
+      uses: OpenTollGate/nostr-publish-file-metadata-action/python@feature/custom-tags
       with:
         relays: ${{ inputs.nostr_relays }}
         url: ${{ steps.upload_firmware.outputs.url }}
