@@ -10,9 +10,15 @@ inputs:
   model:
     description: 'The device model to build for'
     required: true
-  version:
+  openwrt_version:
     description: 'OpenWRT version'
     default: '23.05.3'
+  tollgate_os_version:
+    description: 'TollGate OS version'
+    default: 'v0.0.0'
+  release_channel:
+    description: 'TollGate OS release channel (stable, dev, beta, etc)'
+    default: 'dev'
   nostr_secret_key:
     description: 'Nostr secret key'
     required: true
@@ -127,17 +133,17 @@ runs:
       run: |
         mkdir -p $BUILDDIR
         
-        if [ "${{ inputs.version }}" = "snapshot" ]; then
+        if [ "${{ inputs.openwrt_version }}" = "snapshot" ]; then
           IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
           DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
           echo "ARCHIVE_EXT=tar.zst" >> $GITHUB_ENV
         elif [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-ath79-nand.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.openwrt_version }}-ath79-nand.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
           echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
         else
-          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.version }}-${TARGET_DEVICE}.Linux-x86_64"
-          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+          IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${TARGET_DEVICE}.Linux-x86_64"
+          DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
           echo "ARCHIVE_EXT=tar.xz" >> $GITHUB_ENV
         fi
         
@@ -150,7 +156,7 @@ runs:
         cd $BUILDDIR
         if curl --output /dev/null --silent --head --fail "$DOWNLOAD_URL"; then
           curl -L -C - -O "$DOWNLOAD_URL"
-          if [ "${{ inputs.version }}" = "snapshot" ]; then
+          if [ "${{ inputs.openwrt_version }}" = "snapshot" ]; then
             tar --zstd -xf "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
           else
             tar xfJ "${IMAGEBUILDER_NAME}.${ARCHIVE_EXT}"
@@ -460,7 +466,7 @@ runs:
 
     - name: Publish Firmware NIP-94 Metadata
       id: publish_firmware
-      uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
+      uses: OpenTollGate/nostr-publish-file-metadata-action@feature/custom-tags
       with:
         relays: ${{ inputs.nostr_relays }}
         url: ${{ steps.upload_firmware.outputs.url }}
@@ -471,9 +477,12 @@ runs:
         content: "TollGate OS Firmware for ${{ inputs.model }}"
         nsec: ${{ inputs.nsec }}
         size: ${{ env.FIRMWARE_SIZE }}
-        architecture: ${{ env.BLOSSOM_ARCH }}
-        model: ${{ inputs.model }}
-        version: ${{ inputs.version }}
+        customTags: |
+            architecture=${{ env.BLOSSOM_ARCH }}
+            model=${{ inputs.model }}
+            openwrt_version=${{ inputs.openwrt_version }}
+            tollgate_os_version=${{ inputs.tollgate_os_version }}
+            release_channel=${{ inputs.release_channel }}
 
     - name: Verify Firmware Publication
       id: verify_firmware
