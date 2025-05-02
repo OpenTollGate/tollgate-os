@@ -1,4 +1,4 @@
-name: Build OpenWRT Firmware
+name: Build TollGate OS (OpenWRT Firmware)
 
 on:
   push:
@@ -29,7 +29,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
+      - id: commit-hash
+        uses: prompt/actions-commit-hash@v3
+
+      - name: Set version variable
+        id: determine-os-version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # If this is a tag push, use the tag name
+            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            # If this is a branch push, use branch-shortCommitHash format
+            echo "version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Set version variable
+        id: determine-release-channel
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "channel=stable" >> $GITHUB_OUTPUT
+          else
+            echo "channel=dev" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build OpenWRT Image
         id: build-openwrt-image
         uses: ./actions/build-firmware
@@ -40,6 +63,9 @@ jobs:
           files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
+          # openwrt_version: '24.10.1'
+          tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
+          release_channel: ${{ steps.determine-release-channel.outputs.channel }}
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
