@@ -59,7 +59,7 @@ def sample_event(temp_dir):
             ["m", "application/octet-stream"],
             ["x", "newhash123"],
             ["filename", "basic-gl-mt3000-aarch64_cortex-a53.ipk"],
-            ["arch", "aarch64_cortex-a53"]
+            ["architecture", "aarch64_cortex-a53"]
         ]
     }
     
@@ -105,7 +105,7 @@ def test_extract_event_data():
         "tags": [
             ["url", "https://example.com/test.ipk"],
             ["x", "testhash"],
-            ["arch", "test_arch"],
+            ["architecture", "test_arch"],
             ["filename", "test-filename.ipk"]
         ]
     }
@@ -115,7 +115,7 @@ def test_extract_event_data():
     assert created_at == 12345
     assert url == "https://example.com/test.ipk"
     assert hash_value == "testhash"
-    assert arch == "test_arch"
+    assert architecture == "test_arch"
     assert filename == "test-filename.ipk"
 
 
@@ -143,15 +143,15 @@ def test_process_events_with_event(temp_dir, sample_release_json, sample_event):
 
 
 def test_process_events_multiple_events(temp_dir, sample_release_json):
-    """Test processing with multiple events for the same module/arch."""
-    # Create events with different timestamps for same module/arch
+    """Test processing with multiple events for the same module/architecture."""
+    # Create events with different timestamps for same module/architecture
     event1 = {
         "id": "oldevent",
         "created_at": 1000,
         "tags": [
             ["url", "https://example.com/old.ipk"],
             ["x", "oldhash"],
-            ["arch", "aarch64_cortex-a53"],
+            ["architecture", "aarch64_cortex-a53"],
             ["filename", "basic-old.ipk"]
         ]
     }
@@ -162,7 +162,7 @@ def test_process_events_multiple_events(temp_dir, sample_release_json):
         "tags": [
             ["url", "https://example.com/new.ipk"],
             ["x", "newhash"],
-            ["arch", "aarch64_cortex-a53"],
+            ["architecture", "aarch64_cortex-a53"],
             ["filename", "basic-new.ipk"]
         ]
     }
@@ -198,7 +198,7 @@ def test_process_events_invalid_module(temp_dir, sample_release_json):
         "tags": [
             ["url", "https://example.com/test.ipk"],
             ["x", "testhash"],
-            ["arch", "aarch64_cortex-a53"],
+            ["architecture", "aarch64_cortex-a53"],
             ["filename", "nonexistent-module-test.ipk"]
         ]
     }

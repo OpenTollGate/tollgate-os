@@ -69,7 +69,7 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
         event_data: The parsed event data
         
     Returns:
-        Tuple of (event_id, created_at, url, hash_value, arch, filename)
+        Tuple of (event_id, created_at, url, hash_value, architecture, filename)
     """
     event_id = event_data.get('id', '')
     created_at = event_data.get('created_at', 0)
@@ -77,7 +77,7 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
     # Extract tags
     url = None
     hash_value = None
-    arch = None
+    architecture = None
     filename = None
     
     for tag in event_data.get('tags', []):
@@ -88,12 +88,12 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
             url = tag[1]
         elif tag[0] == 'x':
             hash_value = tag[1]
-        elif tag[0] == 'arch':
-            arch = tag[1]
+        elif tag[0] == 'architecture':
+            architecture = tag[1]
         elif tag[0] == 'filename':
             filename = tag[1]
     
-    return event_id, created_at, url, hash_value, arch, filename
+    return event_id, created_at, url, hash_value, architecture, filename
 
 
 def process_events(events_dir: str, release_json_path: str, verbose: bool = False) -> bool:
@@ -136,10 +136,10 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Extract event details
-        event_id, created_at, url, hash_value, arch, filename = extract_event_data(event_data)
+        event_id, created_at, url, hash_value, architecture, filename = extract_event_data(event_data)
         
         # Skip events with missing required fields
-        if not all([url, hash_value, arch, filename]):
+        if not all([url, hash_value, architecture, filename]):
             print(f"Warning: Event {event_id} missing required fields, skipping")
             continue
         
@@ -155,13 +155,13 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Create a key for this module/architecture
-        key = f"{module}-{arch}"
+        key = f"{module}-{architecture}"
         
         # Add to events_by_key, keeping track of timestamp for sorting
         if key not in events_by_key or events_by_key[key]['created_at'] < created_at:
             events_by_key[key] = {
                 'module': module,
-                'arch': arch,
+                'architecture': architecture,
                 'url': url,
                 'hash': hash_value,
                 'event_id': event_id,
@@ -177,7 +177,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
     update_count = 0
     for key, event in events_by_key.items():
         module = event['module']
-        arch = event['arch']
+        architecture = event['architecture']
         url = event['url']
         hash_value = event['hash']
         event_id = event['event_id']
@@ -185,13 +185,13 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
         # Find the module in release.json
         for release_module in release_data['modules']:
             if release_module['name'] == module:
-                # Update all versions for this module/arch
+                # Update all versions for this module/architecture
                 for version in release_module['versions']:
                     if 'architectures' not in version:
                         version['architectures'] = {}
                     
                     # Update the architecture entry
-                    version['architectures'][arch] = {
+                    version['architectures'][architecture] = {
                         'url': url,
                         'hash': f"sha256:{hash_value}",
                         'eventId': event_id
@@ -199,7 +199,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
                     update_count += 1
                     
                     if verbose:
-                        print(f"Updated {module}/{arch} with event {event_id}")
+                        print(f"Updated {module}/{architecture} with event {event_id}")
     
     # Save the updated release.json
     if update_count > 0:

@@ -84,7 +84,7 @@ jobs:
             # Extract key information
             EVENT_ID=$(echo "$event" | jq -r '.id')
             CREATED_AT=$(echo "$event" | jq -r '.created_at')
-            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "arch") | .[1] // "unknown"')
+            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
             FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
             URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
             HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
