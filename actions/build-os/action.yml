@@ -188,7 +188,7 @@ runs:
         echo "AAAAA"
         
         for tollgate_package in $tollgate_packages; do
-          echo "BBBB"
+          echo "BBBB: $tollgate_package"
           tollgate_package_name=$(echo $tollgate_package | jq -r '.name')
           echo $tollgate_package_name
           tollgate_package_url=$(echo $tollgate_package | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.versions[0].architectures[$arch].url')
