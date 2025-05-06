@@ -187,7 +187,7 @@ runs:
         tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
         
         for tollgate_package in $tollgate_packages; do
-          tollgate_package_name=$(echo $tollgate_package | q -r '.name')
+          tollgate_package_name=$(echo $tollgate_package | jq -r '.name')
           tollgate_package_url=$(echo $tollgate_package | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.versions[0].architectures[$arch].url')
 
           echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
