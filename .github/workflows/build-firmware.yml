@@ -31,8 +31,6 @@ jobs:
           echo "os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
         fi
 
-        echo "ℹ️ OS os_version set to ${os_version}"
-      
     - name: Set OS release channel
       id: determine-release-channel
       run: |
@@ -63,24 +61,29 @@ jobs:
     name: Build ${{ matrix.device_id }}
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Build TollGateOS for ${{ matrix.device_id }}
-        id: build-os-image
-        uses: ./actions/build-os
-        with:
-          device_id: ${{ matrix.device_id }}
-          nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
-          nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
-          os_files_path: "./files"
-          nsecbech: ${{ secrets.NSECBECH }}
-          nsec: ${{ secrets.NSEC }}
-          openwrt_version: '24.10.1'
-          tollgate_os_version: ${{ needs.initialize.outputs.os_version }}
-          release_channel: ${{ needs.initialize.outputs.os_release_channel }}
+      - name: Set OS release channel
+        id: determine-release-channel
+        run: |
+          echo "ℹ️ OS Version: ${{ needs.initialize.outputs.os_version }}"
+          echo "ℹ️ OS Release channel: ${{ needs.initialize.outputs.os_release_channel }}"
+      # - uses: actions/checkout@v4
+      # - name: Build TollGateOS for ${{ matrix.device_id }}
+      #   id: build-os-image
+      #   uses: ./actions/build-os
+      #   with:
+      #     device_id: ${{ matrix.device_id }}
+      #     nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
+      #     nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
+      #     os_files_path: "./files"
+      #     nsecbech: ${{ secrets.NSECBECH }}
+      #     nsec: ${{ secrets.NSEC }}
+      #     openwrt_version: '24.10.1'
+      #     tollgate_os_version: ${{ needs.initialize.outputs.os_version }}
+      #     release_channel: ${{ needs.initialize.outputs.os_release_channel }}
       
-      - name: Upload Firmware Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tollgate-os-${{ matrix.device_id }}-${{ needs.initialize.outputs.version }}.img
-          path: ${{ steps.build-os-image.outputs.firmware_path }}
-          retention-days: 5
+      # - name: Upload Firmware Artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: tollgate-os-${{ matrix.device_id }}-${{ needs.initialize.outputs.version }}.img
+      #     path: ${{ steps.build-os-image.outputs.firmware_path }}
+      #     retention-days: 5
