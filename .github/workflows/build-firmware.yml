@@ -14,9 +14,9 @@ jobs:
       matrix:
         device_id: [
           'glinet_gl-mt3000',
+          'glinet_gl-mt6000',
           'glinet_gl-ar300m16', # don't know which is which (nand/nor)
           'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
-          'gl-mt6000',
 
           #'gl-mt300n-v2',
           #'gl-ar300m16',
@@ -39,13 +39,15 @@ jobs:
         run: |
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             # If this is a tag push, use the tag name
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "os_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           else
             # If this is a branch push, use branch-shortCommitHash format
-            echo "version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
+            echo "os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
           fi
+
+          echo "ℹ️ OS os_version set to ${os_version}"
         
-      - name: Set version variable
+      - name: Set OS release channel
         id: determine-release-channel
         run: |
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -65,7 +67,7 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: '24.10.1'
-          tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
+          tollgate_os_version: ${{ steps.determine-os-version.outputs.os_version }}
           release_channel: ${{ steps.determine-release-channel.outputs.channel }}
       
       - name: Upload Firmware Artifact
