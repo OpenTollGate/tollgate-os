@@ -68,6 +68,7 @@ runs:
         echo "BUILDDIR=$builddir" >> $GITHUB_ENV
         
    
+   # Example extraction source: https://downloads.openwrt.org/releases/24.10.1/.overview.json
     - name: Get Target details by device_id
       shell: bash
       run: |
@@ -87,7 +88,7 @@ runs:
         echo "CURRENT_TARGET=$current_target" >> $GITHUB_ENV
 
 
-    # example source of what we're extracting from: https://downloads.openwrt.org/releases/24.10.1/targets/mediatek/filogic/profiles.json
+    # Example extraction source: https://downloads.openwrt.org/releases/24.10.1/targets/mediatek/filogic/profiles.json
     - name: Get architecture details by target
       shell: bash
       run: |
@@ -96,8 +97,8 @@ runs:
       
         current_target_architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
 
-        default_packages=$( jq -r '.default_packages | map(tostring) | join(" ")')
-        device_packages=$( echo "$target_profiles" | jq -r --arg device "${{ inputs.device_id }}" '.profiles[] | select(.id == $device) | map(tostring) | join(" ")' )
+        default_packages=$( echo "$target_profiles" | jq -r '.default_packages | map(tostring) | join(" ")')
+        device_packages=$( echo "$target_profiles" | jq -r '.profiles.${{ inputs.device_id }}.device_packages | map(tostring) | join(" ")' )
 
 
         echo "ℹ️ Current architecture: $current_target_architecture"
