@@ -185,7 +185,9 @@ runs:
         
         # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
         tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
+        tollgate_packages_length=$(echo "${tollgate_packages}" | jq 'length')
         echo "AAAAA: $tollgate_packages"
+        echo "length: $tollgate_packages_length"
         
         for tollgate_package in $tollgate_packages; do
           echo "BBBB: $tollgate_package"
