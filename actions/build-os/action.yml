@@ -95,7 +95,7 @@ runs:
         
         # If not present, fall back to .tar.zst extension
         if ! curl --output /dev/null --silent --head --fail "$download_url"; then
-          download_url=$(echo "${download_url}" | tr '.tar.xz' '.tar.zst')
+          download_url=$(echo "${download_url}" | sed 's/\.tar\.xz$/.tar.zst/')
           echo "⚠️ Using Image Builder fallback url"
         fi
 
