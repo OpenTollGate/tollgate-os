@@ -230,35 +230,23 @@ runs:
 
         cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
         
-        echo "TODODODODODODOOD"
-
-        # if [ -n "${DEVICE_EXTRA}" ]; then
-        #   echo "Adding device compatibility: ${DEVICE_EXTRA}"
-        #   # Use eval to properly handle the parameters
-        #   eval sudo make -j$(nproc) image V=s \
-        #     PROFILE="${PROFILE}" \
-        #     ${DEVICE_EXTRA} \
-        #     PACKAGES="${combined_packages}" \
-        #     FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-        # else
-        #   # Original command
-        #   sudo make -j$(nproc) image V=s \
-        #     PROFILE="${PROFILE}" \
-        #     PACKAGES="${combined_packages}" \
-        #     FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-        # fi
+        # Original command
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${{ inputs.device_id }}" \
+          PACKAGES="${combined_packages}" \
+          FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
         
-        # # Check if build succeeded
-        # if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-        #   echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
-        #   echo "✅ Build with ALL packages succeeded!"
-        #   exit 0
-        # else
-        #   echo "❌ Build with ALL packages failed, will try with fewer packages"
-        #   # Show logs or errors
-        #   cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
-        #   exit 1
-        # fi
+        # Check if build succeeded
+        if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
+          echo "✅ Build with ALL packages succeeded!"
+          exit 0
+        else
+          echo "❌ Build with ALL packages failed, will try with fewer packages"
+          # Show logs or errors
+          cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          exit 1
+        fi
 
     # - name: Set up Python
     #   uses: actions/setup-python@v4
@@ -398,42 +386,6 @@ runs:
     #       exit 0
     #     else
     #       echo "❌ Build with ESSENTIAL packages failed, will try without TollGate packages"
-    #       exit 1
-    #     fi
-
-    # - name: Build Basic Firmware (Fallback)
-    #   shell: bash
-    #   if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
-    #   id: build-basic
-    #   run: |
-    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
-    #     sudo make clean
-        
-    #     BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
-        
-    #     echo "📦 Attempting BASIC build without TollGate packages: ${BASIC_PACKAGE_LIST}"
-        
-    #     # Check if DEVICE_EXTRA is set and add it to the build command if it is
-    #     if [ -n "${DEVICE_EXTRA}" ]; then
-    #       echo "Adding device compatibility: ${DEVICE_EXTRA}"
-    #       sudo make -j$(nproc) image V=s \
-    #         PROFILE="${PROFILE}" \
-    #         ${DEVICE_EXTRA} \
-    #         PACKAGES="${BASIC_PACKAGE_LIST}" \
-    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-    #     else
-    #       sudo make -j$(nproc) image V=s \
-    #         PROFILE="${PROFILE}" \
-    #         PACKAGES="${BASIC_PACKAGE_LIST}" \
-    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-    #     fi
-        
-    #     # Check if build succeeded
-    #     if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-    #       echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
-    #       echo "✅ Basic build succeeded!"
-    #     else
-    #       echo "❌ Even basic build failed, there might be a fundamental issue"
     #       exit 1
     #     fi
 
