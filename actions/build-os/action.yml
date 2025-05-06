@@ -84,7 +84,9 @@ runs:
           exit 1
         fi
         
-        echo "Current target for device '${{ inputs.device_id }}' is: $current_target"
+        echo "ℹ️ Current device: ${{ inputs.device_id }}"
+        echo "ℹ️ Current target: $current_target (for device)"
+
         echo "CURRENT_TARGET=$current_target" >> $GITHUB_ENV
 
 
@@ -95,24 +97,23 @@ runs:
         echo "ℹ️ Fetching architecture based on discovered target"
         target_profiles=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.CURRENT_TARGET }}/profiles.json )
       
-        current_target_architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
-
+        # Exctract all relevant info for our OS build
+        architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
         default_packages=$( echo "$target_profiles" | jq -r '.default_packages | map(tostring) | join(" ")')
         device_packages=$( echo "$target_profiles" | jq -r --arg device "${{ inputs.device_id }}" '.profiles.[$device].device_packages | map(tostring) | join(" ")' )
+        supported_devices=$( echo "$target_profiles" | jq -r --arg device "${{ inputs.device_id }}" '.profiles.[$device].supported_devices | map(tostring) | join(" ")' )
 
 
-        echo "ℹ️ Current architecture: $current_target_architecture"
+        echo "ℹ️ Current architecture: $architecture"
         echo "ℹ️ Current default_packages: $default_packages"
         echo "ℹ️ Current device_packages: $device_packages"
 
-        
-        
 
-        echo "CURRENT_TARGET_ARCHITECTURE=$current_target_architecture" >> $GITHUB_ENV
+        echo "OS_ARCHITECTURE=$architecture" >> $GITHUB_ENV
+        echo "OS_DEFAULT_PACKAGES=$default_packages" >> $GITHUB_ENV
+        echo "OS_DEVICE_PACKAGES=$device_packages" >> $GITHUB_ENV
+        echo "OS_SUPPORTED_DEVICES=$supported_devices" >> $GITHUB_ENV
 
-
-
-    
     - name: Select correct ImageBuilder for this target
       shell: bash
       run: |
@@ -158,7 +159,7 @@ runs:
             tar xfJ "$downloaded_filename"
         fi
 
-    - name: Copy Custom Files and Packages to OS
+    - name: Prepare for copy Custom Files and Packages to OS
       shell: bash
       env:
         NOSTR_SECRET_KEY: ${{ inputs.nostr_secret_key }}
@@ -170,76 +171,39 @@ runs:
           cp -r ${{ inputs.os_files_path }}/* ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files/
         fi
 
-        packages_dir="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
         mkdir -p "${packages_dir}"
+        echo "PACKAGES_DIR=$packages_dir" >> $GITHUB_ENV
 
-    # - name: Download TollGate Packages from release.json
-    #   shell: bash
-    #   run: |
-    #     # Create packages directory if it doesn't exist
-    #     PACKAGES_DIR="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
-    #     mkdir -p "${PACKAGES_DIR}"
+    - name: Download TollGate Packages from release.json
+      shell: bash
+      run: |
+        # Create + populate packages directory if it doesn't exist
+        touch "${{ env.PACKAGES_DIR }}/Packages" # prevents failures if no packages are downloaded
         
-    #     # Convert BLOSSOM_ARCH (if needed)
-    #     if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
-    #       TARGET_ARCH="mips_24kc"
-    #     else
-    #       TARGET_ARCH="${BLOSSOM_ARCH}"
-    #     fi
+        echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
-    #     echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+        # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
+        tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
         
-    #     # Create an empty Packages file to prevent build failures if no packages are downloaded
-    #     touch "${PACKAGES_DIR}/Packages"
+        for tollgate_package in $tollgate_packages; do
+          tollgate_package_name=$(echo $tollgate_package | q -r '.name')"
+          tollgate_package_url=$(echo $tollgate_package | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.versions[0].architectures[$arch].url')
+
+          echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
+
+          if curl -L -f --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 5 -o "${{ env.PACKAGES_DIR }}/${tollgate_package_name}.ipk" "${tollgate_package_url}"; then
+              echo "✅ Successfully downloaded ${tollgate_package_name}"
+              donwloaded_packages="${donwloaded_packages} ${tollgate_package_name}"
+            else
+              echo "❌ Error: Failed to download ${tollgate_package_name} after 3 attempts"
+              exit 1;
+            fi
+        done
         
-    #     # Parse release.json and download all packages for this architecture
-    #     DOWNLOADED_PACKAGES=""
-    #     for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
-    #       echo "📦 Processing module: ${MODULE_NAME}"
-          
-    #       # Extract URL for this module and architecture
-    #       PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
-    #         '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
-            
-    #       # Skip placeholder URLs
-    #       if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
-    #         echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
-    #         continue
-    #       fi
-          
-    #       # Download the package with retry logic
-    #       PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
-    #       echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
-          
-    #       # Try up to 3 times with increasing timeouts
-    #       for ATTEMPT in {1..3}; do
-    #         echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
-    #         if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
-    #           echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
-    #           DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
-    #           break
-    #         else
-    #           echo "⚠️ Attempt $ATTEMPT failed for ${PACKAGE_FILENAME}"
-    #           if [ $ATTEMPT -eq 3 ]; then
-    #             echo "❌ Failed to download ${PACKAGE_FILENAME} after 3 attempts"
-    #           fi
-    #           sleep 5
-    #         fi
-    #       done
-    #     done
-        
-    #     # Add the downloaded packages to the build package list
-    #     if [ -n "${DOWNLOADED_PACKAGES}" ]; then
-    #       echo "🔧 Adding packages to build: ${DOWNLOADED_PACKAGES}"
-    #       echo "TOLLGATE_PACKAGES=${DOWNLOADED_PACKAGES}" >> $GITHUB_ENV
-    #     else
-    #       echo "⚠️ No packages were downloaded successfully"
-    #       echo "TOLLGATE_PACKAGES=" >> $GITHUB_ENV
-    #     fi
-        
-    #     # List the downloaded packages
-    #     echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
-    #     ls -la "${PACKAGES_DIR}" || true
+        # List the downloaded packages
+        echo "📋 Downloaded packages in ${{ env.PACKAGES_DIR }}:"
+        ls -la "${{ env.PACKAGES_DIR }}" || true
 
 
     # - name: Set up Python
@@ -353,7 +317,7 @@ runs:
     # - name: Check Available Profiles
     #   shell: bash
     #   run: |
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
     #     echo "📋 Checking for available profiles..."
         
     #     # More reliable method to check profiles
@@ -381,8 +345,8 @@ runs:
     #     if [ -d "${{ inputs.os_files_path }}" ]; then
     #       cp -r ${{ inputs.os_files_path }}/* $BUILDDIR/${{ env.IMAGEBUILDER_NAME }}/files/
     #     fi
-    #     PACKAGES_DIR="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
-    #     mkdir -p "${PACKAGES_DIR}"
+    #     PACKAGES_DIR="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+    #     mkdir -p "${{ env.PACKAGES_DIR }}"
         
     #     # Add U-Boot config for supported devices
     #     case "${{ inputs.model }}" in
@@ -397,8 +361,8 @@ runs:
     #   shell: bash
     #   run: |
     #     # Create packages directory if it doesn't exist
-    #     PACKAGES_DIR="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
-    #     mkdir -p "${PACKAGES_DIR}"
+    #     PACKAGES_DIR="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+    #     mkdir -p "${{ env.PACKAGES_DIR }}"
         
     #     # Convert BLOSSOM_ARCH (if needed)
     #     if [ "${BLOSSOM_ARCH}" == "mips_24kc" ]; then
@@ -407,10 +371,10 @@ runs:
     #       TARGET_ARCH="${BLOSSOM_ARCH}"
     #     fi
         
-    #     echo "🔍 Looking for packages for architecture: ${TARGET_ARCH}"
+    #     echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
     #     # Create an empty Packages file to prevent build failures if no packages are downloaded
-    #     touch "${PACKAGES_DIR}/Packages"
+    #     touch "${{ env.PACKAGES_DIR }}/Packages"
         
     #     # Parse release.json and download all packages for this architecture
     #     DOWNLOADED_PACKAGES=""
@@ -418,23 +382,23 @@ runs:
     #       echo "📦 Processing module: ${MODULE_NAME}"
           
     #       # Extract URL for this module and architecture
-    #       PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$TARGET_ARCH" \
+    #       PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "${{ env.OS_ARCHITECTURE }}" \
     #         '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' files/etc/tollgate/release.json)
             
     #       # Skip placeholder URLs
     #       if [[ "$PACKAGE_URL" == *"[HASH]"* || "$PACKAGE_URL" == "null" ]]; then
-    #         echo "⚠️ No package available for ${MODULE_NAME} (${TARGET_ARCH})"
+    #         echo "⚠️ No package available for ${MODULE_NAME} (${{ env.OS_ARCHITECTURE }})"
     #         continue
     #       fi
           
     #       # Download the package with retry logic
-    #       PACKAGE_FILENAME="${MODULE_NAME}-${TARGET_ARCH}.ipk"
+    #       PACKAGE_FILENAME="${MODULE_NAME}-${{ env.OS_ARCHITECTURE }}.ipk"
     #       echo "⬇️ Downloading ${MODULE_NAME} from ${PACKAGE_URL}"
           
     #       # Try up to 3 times with increasing timeouts
     #       for ATTEMPT in {1..3}; do
     #         echo "Download attempt $ATTEMPT for ${MODULE_NAME}"
-    #         if curl -L -f --connect-timeout 30 --max-time 120 -o "${PACKAGES_DIR}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
+    #         if curl -L -f --connect-timeout 30 --max-time 120 -o "${{ env.PACKAGES_DIR }}/${PACKAGE_FILENAME}" "${PACKAGE_URL}"; then
     #           echo "✅ Successfully downloaded ${PACKAGE_FILENAME}"
     #           DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} tollgate-module-${MODULE_NAME}-go"
     #           break
@@ -458,13 +422,13 @@ runs:
     #     fi
         
     #     # List the downloaded packages
-    #     echo "📋 Downloaded packages in ${PACKAGES_DIR}:"
-    #     ls -la "${PACKAGES_DIR}" || true
+    #     echo "📋 Downloaded packages in ${{ env.PACKAGES_DIR }}:"
+    #     ls -la "${{ env.PACKAGES_DIR }}" || true
 
     # - name: Generate Package Index
     #   shell: bash
     #   run: |
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
     #     sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
     #     export -f mkhash; \
     #     export MKHASH=mkhash; \
@@ -475,7 +439,7 @@ runs:
     #   shell: bash
     #   run: |
     #     echo "📊 Analyzing TollGate package sizes:"
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
         
     #     # Check if packages directory has .ipk files 
     #     if ls packages/local/*.ipk 1> /dev/null 2>&1; then
@@ -491,8 +455,8 @@ runs:
     #     fi
         
     #     # Check device specs
-    #     if grep -q "Flash" "${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
-    #       FLASH_INFO=$(grep "Flash" ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/target/linux/${PLATFORM}/image/Makefile)
+    #     if grep -q "Flash" "${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/target/linux/${PLATFORM}/image/Makefile" 2>/dev/null; then
+    #       FLASH_INFO=$(grep "Flash" ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/target/linux/${PLATFORM}/image/Makefile)
     #       echo "Device flash information: ${FLASH_INFO}"
     #     else
     #       echo "⚠️ Flash information not found in Makefile"
@@ -508,7 +472,7 @@ runs:
     #   id: build-all
     #   run: |
     #     COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
         
     #     echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
         
@@ -519,24 +483,24 @@ runs:
     #         PROFILE="${PROFILE}" \
     #         ${DEVICE_EXTRA} \
     #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     else
     #       # Original command
     #       sudo make -j$(nproc) image V=s \
     #         PROFILE="${PROFILE}" \
     #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     fi
         
     #     # Check if build succeeded
-    #     if find ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+    #     if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
     #       echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
     #       echo "✅ Build with ALL packages succeeded!"
     #       exit 0
     #     else
     #       echo "❌ Build with ALL packages failed, will try with fewer packages"
     #       # Show logs or errors
-    #       cat ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+    #       cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
     #       exit 1
     #     fi
 
@@ -546,7 +510,7 @@ runs:
     #   continue-on-error: true
     #   id: build-essential
     #   run: |
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
     #     sudo make clean
         
     #     COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
@@ -560,16 +524,16 @@ runs:
     #         PROFILE="${PROFILE}" \
     #         ${DEVICE_EXTRA} \
     #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     else
     #       sudo make -j$(nproc) image V=s \
     #         PROFILE="${PROFILE}" \
     #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     fi
         
     #     # Check if build succeeded
-    #     if find ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+    #     if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
     #       echo "BUILD_RESULT=ESSENTIAL_PACKAGES" >> $GITHUB_ENV
     #       echo "✅ Build with ESSENTIAL packages succeeded!"
     #       exit 0
@@ -583,7 +547,7 @@ runs:
     #   if: steps.build-all.outcome == 'failure' && steps.build-essential.outcome == 'failure'
     #   id: build-basic
     #   run: |
-    #     cd ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}
+    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
     #     sudo make clean
         
     #     BASIC_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES}"
@@ -597,16 +561,16 @@ runs:
     #         PROFILE="${PROFILE}" \
     #         ${DEVICE_EXTRA} \
     #         PACKAGES="${BASIC_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     else
     #       sudo make -j$(nproc) image V=s \
     #         PROFILE="${PROFILE}" \
     #         PACKAGES="${BASIC_PACKAGE_LIST}" \
-    #         FILES="${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/files"
+    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     fi
         
     #     # Check if build succeeded
-    #     if find ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+    #     if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
     #       echo "BUILD_RESULT=NO_PACKAGES" >> $GITHUB_ENV
     #       echo "✅ Basic build succeeded!"
     #     else
@@ -619,11 +583,11 @@ runs:
     #   shell: bash
     #   run: |
     #     # Look for any sysupgrade.bin file
-    #     FIRMWARE_PATH=$(find ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+    #     FIRMWARE_PATH=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
         
     #     if [ -z "$FIRMWARE_PATH" ]; then
     #       # Try to find any .bin file as fallback
-    #       FIRMWARE_PATH=$(find ${BUILDDIR}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
+    #       FIRMWARE_PATH=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
     #     fi
         
     #     if [ -f "$FIRMWARE_PATH" ]; then
