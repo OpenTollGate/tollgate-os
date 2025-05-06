@@ -16,8 +16,6 @@ jobs:
       os_version: ${{ steps.determine-os-version.os_version }}
       os_release_channel: ${{ steps.determine-release-channel.os_release_channel }}
     steps:
-    - uses: actions/checkout@v4
-
     - id: commit-hash
       uses: prompt/actions-commit-hash@v3
 
@@ -64,6 +62,7 @@ jobs:
     name: Build ${{ matrix.model }}
 
     steps:
+      - uses: actions/checkout@v4
       - name: Build TollGateOS for ${{ matrix.device_id }}
         id: build-os-image
         uses: ./actions/build-os
