@@ -23,13 +23,17 @@ jobs:
     - name: Set version variable
       id: determine-os-version
       run: |
+
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           # If this is a tag push, use the tag name
-          echo "os_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          os_version=${GITHUB_REF_NAME}
         else
           # If this is a branch push, use branch-shortCommitHash format
-          echo "os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
+          os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}
         fi
+
+        echo "ℹ️ OS Version: ${os_version}"
+        echo "os_version=${os_version}" >> $GITHUB_OUTPUT
 
     - name: Set OS release channel
       id: determine-release-channel
