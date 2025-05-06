@@ -191,9 +191,9 @@ runs:
         
         for ((i=0; i<$tollgate_packages_length; i++)); do
           echo "zzzzz: $tollgate_packages"
-          tollgate_package_name=$(echo $tollgate_packages | jq -r '.[$i].name')
+          tollgate_package_name=$(echo $tollgate_packages | jq -r --arg i "${i}" '.[$i].name')
           echo "gggg $tollgate_package_name"
-          tollgate_package_url=$(echo $tollgate_packages | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.[$i].versions[0].architectures[$arch].url')
+          tollgate_package_url=$(echo $tollgate_packages | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i].versions[0].architectures[$arch].url')
 
           echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
 
