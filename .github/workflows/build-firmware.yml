@@ -9,7 +9,43 @@ on:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
 jobs:
+  initialize:
+    id: initialize
+    runs-on: ubuntu-latest
+    name: "Set TollGate OS version + Release channel"
+    outputs:
+      os_version: ${{ steps.determine-os-version.os_version }}
+      os_release_channel: ${{ steps.determine-release-channel.os_release_channel }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - id: commit-hash
+      uses: prompt/actions-commit-hash@v3
+
+    - name: Set version variable
+      id: determine-os-version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          # If this is a tag push, use the tag name
+          echo "os_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        else
+          # If this is a branch push, use branch-shortCommitHash format
+          echo "os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
+        fi
+
+        echo "ℹ️ OS os_version set to ${os_version}"
+      
+    - name: Set OS release channel
+      id: determine-release-channel
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "os_release_channel=stable" >> $GITHUB_OUTPUT
+        else
+          echo "os_release_channel=dev" >> $GITHUB_OUTPUT
+        fi
+
   build:
+    needs: initialize
     strategy:
       matrix:
         device_id: [
@@ -29,34 +65,7 @@ jobs:
     name: Build ${{ matrix.model }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - id: commit-hash
-        uses: prompt/actions-commit-hash@v3
-
-      - name: Set version variable
-        id: determine-os-version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            # If this is a tag push, use the tag name
-            echo "os_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-          else
-            # If this is a branch push, use branch-shortCommitHash format
-            echo "os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
-          fi
-
-          echo "ℹ️ OS os_version set to ${os_version}"
-        
-      - name: Set OS release channel
-        id: determine-release-channel
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            echo "channel=stable" >> $GITHUB_OUTPUT
-          else
-            echo "channel=dev" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build TollGateOS for each target
+      - name: Build TollGateOS for ${{ matrix.device_id }}
         id: build-os-image
         uses: ./actions/build-os
         with:
@@ -67,12 +76,12 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: '24.10.1'
-          tollgate_os_version: ${{ steps.determine-os-version.outputs.os_version }}
-          release_channel: ${{ steps.determine-release-channel.outputs.channel }}
+          tollgate_os_version: ${{ needs.initialize.outputs.os_version }}
+          release_channel: ${{ needs.initialize.outputs.os_release_channel }}
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tollgate-os-${{ matrix.device_id }}-${{ steps.determine-os-version.outputs.version }}.img
+          name: tollgate-os-${{ matrix.device_id }}-${{ needs.initialize.outputs.version }}.img
           path: ${{ steps.build-os-image.outputs.firmware_path }}
           retention-days: 5
