@@ -107,6 +107,7 @@ runs:
         echo "ℹ️ Current architecture: $architecture"
         echo "ℹ️ Current default_packages: $default_packages"
         echo "ℹ️ Current device_packages: $device_packages"
+        echo "ℹ️ Current supported_devices: $supported_devices"
 
 
         echo "OS_ARCHITECTURE=$architecture" >> $GITHUB_ENV
@@ -251,50 +252,6 @@ runs:
         echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
         echo "TOLLGATE_OS_FIRMWARE_PATH=$tollgate_os_firmware_path" >> $GITHUB_ENV
 
-    # - name: Set up Python
-    #   uses: actions/setup-python@v4
-    #   with:
-    #     python-version: '3.x'
-
-    # - name: Install System Dependencies
-    #   shell: bash
-    #   run: |
-    #     sudo apt-get update
-    #     sudo apt-get install -y \
-    #       gawk \
-    #       build-essential \
-    #       curl \
-    #       zstd \
-    #       libssl-dev
-    #     python -m pip install --upgrade pip
-    #     pip install nostr
-
-    # - name: Find Firmware File
-    #   id: find-firmware
-    #   shell: bash
-    #   run: |
-    #     # Look for any sysupgrade.bin file
-    #     FIRMWARE_PATH=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
-        
-    #     if [ -z "$FIRMWARE_PATH" ]; then
-    #       # Try to find any .bin file as fallback
-    #       FIRMWARE_PATH=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*.bin" -type f | head -1)
-    #     fi
-        
-    #     if [ -f "$FIRMWARE_PATH" ]; then
-    #       echo "✅ Found firmware file: $(basename $FIRMWARE_PATH)"
-    #       echo "firmware_path=${FIRMWARE_PATH}" >> $GITHUB_OUTPUT
-    #       echo "firmware_name=$(basename ${FIRMWARE_PATH})" >> $GITHUB_OUTPUT
-          
-    #       # Store firmware metadata
-    #       FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
-    #       echo "FIRMWARE_HASH=${FIRMWARE_HASH}" >> $GITHUB_ENV
-    #       echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
-    #     else
-    #       echo "❌ Error: No firmware file found!"
-    #       exit 1
-    #     fi
-
     - name: Upload Firmware to Blossom
       id: upload_firmware
       uses: c03rad0r/cli-blossom-uploader-go@main
@@ -319,13 +276,14 @@ runs:
         customTags: |
             architecture=${{ env.OS_ARCHITECTURE }}
             device_id=${{ inputs.device_id }}
+            supported_devices=${{ env.OS_SUPPORTED_DEVICES }}
             openwrt_version=${{ inputs.openwrt_version }}
             tollgate_os_version=${{ inputs.tollgate_os_version }}
             release_channel=${{ inputs.release_channel }}
 
     - name: Verify Firmware Publication
       id: verify_firmware
-      uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
+      uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@v0.1.0
       with:
         eventId: ${{ steps.publish_firmware.outputs.eventId }}
         relays: ${{ inputs.nostr_relays }}
