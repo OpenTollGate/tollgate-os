@@ -39,10 +39,13 @@ jobs:
       id: determine-release-channel
       run: |
         if [[ $GITHUB_REF == refs/tags/* ]]; then
-          echo "os_release_channel=stable" >> $GITHUB_OUTPUT
+          os_release_channel=stable
         else
-          echo "os_release_channel=dev" >> $GITHUB_OUTPUT
+          os_release_channel=dev
         fi
+
+        echo "ℹ️ OS Release channel: ${os_release_channel}"
+        echo "os_release_channel=${os_release_channel}" >> $GITHUB_OUTPUT
 
   build:
     needs: initialize
