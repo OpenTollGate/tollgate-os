@@ -62,10 +62,14 @@ runs:
       id: vars
       shell: bash
       run: |
-        all_targets=$( curl https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/.overview.json )
-
-
-        current_target=$( echo "$all_targets" | jq -r '.[] | select(.id == "'"${{ inputs.device_id }}"'") | .target' )
+        all_targets=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/.overview.json )
+        
+        # Debug: Print the JSON structure format
+        echo "JSON structure format:"
+        echo "$all_targets" | jq 'keys' || echo "Invalid JSON structure"
+        
+        # Extract target from the correct path in the JSON structure
+        current_target=$( echo "$all_targets" | jq -r --arg device "${{ inputs.device_id }}" '.profiles[] | select(.id == $device) | .target' )
         
         # Check if target was found
         if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
