@@ -58,16 +58,16 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Initialize
+      shell: bash
+      run: |
+        echo "BUILDDIR=/tmp/tollgate-os-build" >> $GITHUB_ENV
+   
     - name: Get Target details by device_id
-      id: vars
       shell: bash
       run: |
         all_targets=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/.overview.json )
-        
-        # Debug: Print the JSON structure format
-        echo "JSON structure format:"
-        echo "$all_targets" | jq 'keys' || echo "Invalid JSON structure"
-        
+      
         # Extract target from the correct path in the JSON structure
         current_target=$( echo "$all_targets" | jq -r --arg device "${{ inputs.device_id }}" '.profiles[] | select(.id == $device) | .target' )
         
@@ -78,8 +78,18 @@ runs:
         fi
         
         echo "Current target for device '${{ inputs.device_id }}' is: $current_target"
-        echo "target=$current_target" >> $GITHUB_OUTPUT
+        echo "target=$current_target" >> $GITHUB_ENV
+    
+    - name: Setup ImageBuilder
+      shell: bash
+      run: |
+        current_target_with_dash=$(echo "${{ env.current_target }}" | tr '/' '-')
 
+        IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${current_target_with_dash}.Linux-x86_64"
+        DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${IMAGEBUILDER_NAME}.tar.xz"
+
+        echo $IMAGEBUILDER_NAME
+        echo $DOWNLOAD_URL
 
     # - name: Set up Python
     #   uses: actions/setup-python@v4
