@@ -90,7 +90,7 @@ runs:
       shell: bash
       run: |
         echo "ℹ️ Fetching architecture based on discovered target"
-        target_profiles=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.CURRENT_TARGET }}/profiles.json
+        target_profiles=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.CURRENT_TARGET }}/profiles.json )
       
         current_target_architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
 
