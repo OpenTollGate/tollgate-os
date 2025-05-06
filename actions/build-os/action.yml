@@ -184,10 +184,8 @@ runs:
         echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
         # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
-        tollgate_packages=$(jq -r '.modules[]' files/etc/tollgate/release.json)
+        tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
         echo "AAAAA: $tollgate_packages"
-
-        echo "XXX: $(jq -r '.modules' files/etc/tollgate/release.json)"
         
         for tollgate_package in $tollgate_packages; do
           echo "BBBB: $tollgate_package"
