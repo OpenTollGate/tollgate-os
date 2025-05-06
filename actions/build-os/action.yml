@@ -94,8 +94,8 @@ runs:
         download_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${imagebuilder_name}.tar.xz"
         
         # If not present, fall back to .tar.zst extension
-        if curl --output /dev/null --silent --head --fail "$download_url"; then
-          download_url=$(echo "${ download_url }" | tr '.tar.xz' '.tar.zst')
+        if ! curl --output /dev/null --silent --head --fail "$download_url"; then
+          download_url=$(echo "${download_url}" | tr '.tar.xz' '.tar.zst')
           echo "⚠️ Using Image Builder fallback url"
         fi
 
