@@ -106,18 +106,26 @@ runs:
         echo "IMAGEBUILDER_DOWNLOAD_URL=$download_url" >> $GITHUB_ENV
 
     
+    - name: Cache ImageBuilder
+      id: cache-imagebuilder
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.BUILDDIR }}
+        key: ${{ runner.os }}-imagebuilder-${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
+      
     - name: Download and Extract ImageBuilder
+      if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
       shell: bash
       run: |
         cd $BUILDDIR
-          
+            
         curl -L -C - -O "${{ env.IMAGEBUILDER_DOWNLOAD_URL }}"
-
+ 
         downloaded_url=${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
         downloaded_filename="${downloaded_url##*/}"
-
+ 
         if [[ "$downloaded_filename" == *.tar.zst ]]; then
-        tar --zstd -xf "$downloaded_filename"
+          tar --zstd -xf "$downloaded_filename"
         else
             tar xfJ "$downloaded_filename"
         fi
