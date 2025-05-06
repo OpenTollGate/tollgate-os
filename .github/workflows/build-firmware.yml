@@ -64,7 +64,7 @@ jobs:
           files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
-          # openwrt_version: '24.10.1'
+          openwrt_version: '24.10.1'
           tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
           release_channel: ${{ steps.determine-release-channel.outputs.channel }}
       
