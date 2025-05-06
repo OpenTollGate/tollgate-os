@@ -88,7 +88,7 @@ runs:
         current_target_with_dash=$(echo "${{ env.current_target }}" | tr '/' '-')
 
         imagebuilder_name="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${current_target_with_dash}.Linux-x86_64"
-        download_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${IMAGEBUILDER_NAME}.tar.xz"
+        download_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${imagebuilder_name}.tar.xz"
         
         # If not present, fall back to .tar.zst extension
         if curl --output /dev/null --silent --head --fail "$download_url"; then
