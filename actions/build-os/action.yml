@@ -62,7 +62,8 @@ runs:
       id: vars
       shell: bash
       run: |
-        all_targets=$( curl https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/overview.json )
+        all_targets=$( curl https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/.overview.json )
+
 
         current_target=$( echo "$all_targets" | jq -r '.[] | select(.id == "'"${{ inputs.device_id }}"'") | .target' )
         
