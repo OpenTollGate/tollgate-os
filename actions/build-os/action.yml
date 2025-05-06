@@ -116,11 +116,16 @@ runs:
         downloaded_url=${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
         downloaded_filename="${downloaded_url##*/}"
 
-        if [[ "$filename" == *.tar.zst ]]; then
-            tar --zstd -xf "$downloaded_filename"
+        if [[ "$downloaded_filename" == *.tar.zst ]]; then
+        tar --zstd -xf "$downloaded_filename"
         else
             tar xfJ "$downloaded_filename"
         fi
+
+
+
+
+
 
     # - name: Set up Python
     #   uses: actions/setup-python@v4
