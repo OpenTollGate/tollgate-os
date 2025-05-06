@@ -10,7 +10,6 @@ on:
 
 jobs:
   initialize:
-    id: initialize
     runs-on: ubuntu-latest
     name: "Set TollGate OS version + Release channel"
     outputs:
