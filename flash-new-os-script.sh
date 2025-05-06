@@ -21,7 +21,7 @@ fi
 
 # Copy file to router
 echo "Copying OS image to router..."
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$TMP_DIR/$FILENAME" "root@192.168.1.1:/root/$FILENAME"
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$TMP_DIR/$FILENAME" "root@192.168.8.1:/root/$FILENAME"
 if [ $? -ne 0 ]; then
     echo "Failed to copy file to router"
     rm -rf "$TMP_DIR"
@@ -33,6 +33,6 @@ rm -rf "$TMP_DIR"
 
 # Execute sysupgrade
 echo "Initiating system upgrade..."
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@192.168.1.1 "sysupgrade -n /root/$FILENAME"
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@192.168.8.1 "sysupgrade -n /root/$FILENAME"
 
 
