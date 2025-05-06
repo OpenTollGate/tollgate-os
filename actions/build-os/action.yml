@@ -78,7 +78,7 @@ runs:
         fi
         
         echo "Current target for device '${{ inputs.device_id }}' is: $current_target"
-        echo "target=$current_target" >> $GITHUB_ENV
+        echo "current_target=$current_target" >> $GITHUB_ENV
     
     - name: Setup ImageBuilder
       shell: bash
