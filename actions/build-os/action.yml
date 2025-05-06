@@ -62,6 +62,8 @@ runs:
       shell: bash
       run: |
         echo "BUILDDIR=/tmp/tollgate-os-build" >> $GITHUB_ENV
+
+        mkdir $BUILDDIR
    
     - name: Get Target details by device_id
       shell: bash
