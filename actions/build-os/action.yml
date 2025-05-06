@@ -50,10 +50,10 @@ inputs:
 outputs:
   firmware_path:
     description: 'Path to the built firmware file'
-    value: ${{ steps.find-firmware.outputs.firmware_path }}
+    value: ${{ steps.build-os.outputs.firmware_path }}
   firmware_name:
     description: 'Name of the built firmware file'
-    value: ${{ steps.find-firmware.outputs.firmware_name }}
+    value: ${{ steps.build-os.outputs.firmware_name }}
 
 runs:
   using: "composite"
@@ -248,6 +248,9 @@ runs:
           echo "❌ Build failed"
           exit 1
         fi
+
+        echo "firmware_path=${tollgate_os_firmware_path}" >> $GITHUB_OUTPUT
+        echo "firmware_name=$(basename ${tollgate_os_firmware_path})" >> $GITHUB_OUTPUT
 
         echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
         echo "TOLLGATE_OS_FIRMWARE_PATH=$tollgate_os_firmware_path" >> $GITHUB_ENV

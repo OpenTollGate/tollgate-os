@@ -14,9 +14,9 @@ jobs:
       matrix:
         device_id: [
           'glinet_gl-mt3000',
-          # 'glinet_gl-ar300m16', # don't know which is which (nand/nor)
-          # 'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
-          # 'gl-mt6000',
+          'glinet_gl-ar300m16', # don't know which is which (nand/nor)
+          'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
+          'gl-mt6000',
 
           #'gl-mt300n-v2',
           #'gl-ar300m16',
@@ -68,9 +68,9 @@ jobs:
           tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
           release_channel: ${{ steps.determine-release-channel.outputs.channel }}
       
-      # - name: Upload Firmware Artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: tollgate-os-${{ matrix.device_id }}-${{ steps.determine-os-version.outputs.version }}.img
-      #     path: ${{ steps.build-os-image.outputs.firmware_path }}
-      #     retention-days: 5
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tollgate-os-${{ matrix.device_id }}-${{ steps.determine-os-version.outputs.version }}.img
+          path: ${{ steps.build-os-image.outputs.firmware_path }}
+          retention-days: 5
