@@ -98,7 +98,7 @@ runs:
         current_target_architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
 
         default_packages=$( echo "$target_profiles" | jq -r '.default_packages | map(tostring) | join(" ")')
-        device_packages=$( echo "$target_profiles" | jq -r '.profiles.${{ inputs.device_id }}.device_packages | map(tostring) | join(" ")' )
+        device_packages=$( echo "$target_profiles" | jq -r --key device "${{ inputs.device_id }}" '.profiles.[$key].device_packages | map(tostring) | join(" ")' )
 
 
         echo "ℹ️ Current architecture: $current_target_architecture"
