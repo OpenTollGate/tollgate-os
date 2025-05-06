@@ -80,16 +80,41 @@ runs:
         echo "Current target for device '${{ inputs.device_id }}' is: $current_target"
         echo "current_target=$current_target" >> $GITHUB_ENV
     
-    - name: Setup ImageBuilder
+    - name: Select correct ImageBuilder for this target
       shell: bash
       run: |
         current_target_with_dash=$(echo "${{ env.current_target }}" | tr '/' '-')
 
-        IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${current_target_with_dash}.Linux-x86_64"
-        DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${IMAGEBUILDER_NAME}.tar.xz"
+        imagebuilder_name="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${current_target_with_dash}.Linux-x86_64"
+        download_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.current_target }}/${IMAGEBUILDER_NAME}.tar.xz"
+        
+        # If not present, fall back to .tar.zst extension
+        if curl --output /dev/null --silent --head --fail "$download_url"; then
+          download_url=$(echo "${ download_url }" | tr '.tar.xz' '.tar.zst')
+        fi
 
-        echo $IMAGEBUILDER_NAME
-        echo $DOWNLOAD_URL
+        echo $imagebuilder_name
+        echo $download_url
+
+        echo "IMAGEBUILDER_NAME=$imagebuilder_name" >> $GITHUB_ENV
+        echo "IMAGEBUILDER_DOWNLOAD_URL=$download_url" >> $GITHUB_ENV
+
+    
+    - name: Download and Extract ImageBuilder
+      shell: bash
+      run: |
+        cd $BUILDDIR
+          
+        curl -L -C - -O "${{ env.IMAGEBUILDER_DOWNLOAD_URL }}"
+
+        downloaded_url = ${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
+        downloaded_filename="${downloaded_url##*/}"
+
+        if [[ "$filename" == *.tar.zst ]]; then
+            tar --zstd -xf "$downloaded_filename"
+        else
+            tar xfJ "$downloaded_filename"
+        fi
 
     # - name: Set up Python
     #   uses: actions/setup-python@v4
