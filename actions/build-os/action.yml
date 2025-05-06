@@ -186,14 +186,13 @@ runs:
         # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
         tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
         tollgate_packages_length=$(echo "${tollgate_packages}" | jq 'length')
-        echo "AAAAA: $tollgate_packages"
-        echo "length: $tollgate_packages_length"
         
-        for tollgate_package in $tollgate_packages; do
-          echo "BBBB: $tollgate_package"
-          tollgate_package_name=$(echo $tollgate_package | jq -r '.name')
-          echo $tollgate_package_name
-          tollgate_package_url=$(echo $tollgate_package | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.versions[0].architectures[$arch].url')
+        echo "🔍 Found $tollgate_packages_length TollGate package(s)."
+        
+        for ((i=0; i<$tollgate_packages_length; i++)); do
+          tollgate_package_name=$(echo $tollgate_packages[i] | jq -r '.name')
+          echo "gggg $tollgate_package_name"
+          tollgate_package_url=$(echo $tollgate_packages[i] | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" '.versions[0].architectures[$arch].url')
 
           echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
 
