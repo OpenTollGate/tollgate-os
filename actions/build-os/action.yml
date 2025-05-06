@@ -197,7 +197,7 @@ runs:
 
           if curl -L -f --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 5 -o "${{ env.PACKAGES_DIR }}/${tollgate_package_name}.ipk" "${tollgate_package_url}"; then
               echo "✅ Successfully downloaded ${tollgate_package_name}"
-              donwloaded_packages="${donwloaded_packages} ${tollgate_package_name}"
+              tollgate_custom_packages="${tollgate_custom_packages} ${tollgate_package_name} "
             else
               echo "❌ Error: Failed to download ${tollgate_package_name} after 3 attempts"
               exit 1;
@@ -208,6 +208,9 @@ runs:
         echo "📋 Downloaded packages in ${{ env.PACKAGES_DIR }}:"
         ls -la "${{ env.PACKAGES_DIR }}"
 
+        echo "ℹ️ TollGate custom packages added: $tollgate_custom_packages"
+        echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
+
     - name: Generate Package Index
       shell: bash
       run: |
@@ -217,6 +220,45 @@ runs:
         export MKHASH=mkhash; \
         ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
         gzip -9c packages/local/Packages > packages/local/Packages.gz'
+
+    - name: Build Firmware with All Packages
+      shell: bash
+      id: build-os
+      run: |
+        combined_packages="${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }} ${{ env.TOLLGATE_CUSTOM_PACKAGES }}"
+        echo "ℹ️ Building TollGate OS with the following packages: ${combined_packages}"
+
+        cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
+        
+        echo "TODODODODODODOOD"
+
+        # if [ -n "${DEVICE_EXTRA}" ]; then
+        #   echo "Adding device compatibility: ${DEVICE_EXTRA}"
+        #   # Use eval to properly handle the parameters
+        #   eval sudo make -j$(nproc) image V=s \
+        #     PROFILE="${PROFILE}" \
+        #     ${DEVICE_EXTRA} \
+        #     PACKAGES="${combined_packages}" \
+        #     FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
+        # else
+        #   # Original command
+        #   sudo make -j$(nproc) image V=s \
+        #     PROFILE="${PROFILE}" \
+        #     PACKAGES="${combined_packages}" \
+        #     FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
+        # fi
+        
+        # # Check if build succeeded
+        # if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+        #   echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
+        #   echo "✅ Build with ALL packages succeeded!"
+        #   exit 0
+        # else
+        #   echo "❌ Build with ALL packages failed, will try with fewer packages"
+        #   # Show logs or errors
+        #   cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+        #   exit 1
+        # fi
 
     # - name: Set up Python
     #   uses: actions/setup-python@v4
@@ -288,15 +330,6 @@ runs:
     #     echo "BUILDDIR=/tmp/openwrt-build" >> $GITHUB_ENV
 
 
-    # - name: Generate Package Index
-    #   shell: bash
-    #   run: |
-    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
-    #     sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
-    #     export -f mkhash; \
-    #     export MKHASH=mkhash; \
-    #     ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
-    #     gzip -9c packages/local/Packages > packages/local/Packages.gz'
 
     # - name: Analyze Package Sizes
     #   shell: bash
@@ -329,43 +362,6 @@ runs:
     #     echo "ESSENTIAL_PACKAGES=tollgate-module-janitor-go tollgate-module-relay-go" >> $GITHUB_ENV
     #     echo "OPTIONAL_PACKAGES=tollgate-module-crowsnest-go tollgate-module-merchant-go tollgate-module-valve-go tollgate-module-whoami-go" >> $GITHUB_ENV
 
-    # - name: Build Firmware with All Packages
-    #   shell: bash
-    #   continue-on-error: true
-    #   id: build-all
-    #   run: |
-    #     COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${TOLLGATE_PACKAGES}"
-    #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
-        
-    #     echo "📦 Attempting build with ALL packages: ${COMBINED_PACKAGE_LIST}"
-        
-    #     if [ -n "${DEVICE_EXTRA}" ]; then
-    #       echo "Adding device compatibility: ${DEVICE_EXTRA}"
-    #       # Use eval to properly handle the parameters
-    #       eval sudo make -j$(nproc) image V=s \
-    #         PROFILE="${PROFILE}" \
-    #         ${DEVICE_EXTRA} \
-    #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-    #     else
-    #       # Original command
-    #       sudo make -j$(nproc) image V=s \
-    #         PROFILE="${PROFILE}" \
-    #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
-    #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-    #     fi
-        
-    #     # Check if build succeeded
-    #     if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
-    #       echo "BUILD_RESULT=ALL_PACKAGES" >> $GITHUB_ENV
-    #       echo "✅ Build with ALL packages succeeded!"
-    #       exit 0
-    #     else
-    #       echo "❌ Build with ALL packages failed, will try with fewer packages"
-    #       # Show logs or errors
-    #       cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
-    #       exit 1
-    #     fi
 
     # - name: Build Firmware with Essential Packages Only
     #   shell: bash
@@ -376,9 +372,9 @@ runs:
     #     cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
     #     sudo make clean
         
-    #     COMBINED_PACKAGE_LIST="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
+    #     combined_packages="${REMOVED_PACKAGES} ${{ inputs.base_packages }} ${EXTRA_PACKAGES} ${ESSENTIAL_PACKAGES}"
         
-    #     echo "📦 Attempting build with ESSENTIAL packages: ${COMBINED_PACKAGE_LIST}"
+    #     echo "📦 Attempting build with ESSENTIAL packages: ${combined_packages}"
         
     #     # Check if DEVICE_EXTRA is set and add it to the build command if it is
     #     if [ -n "${DEVICE_EXTRA}" ]; then
@@ -386,12 +382,12 @@ runs:
     #       sudo make -j$(nproc) image V=s \
     #         PROFILE="${PROFILE}" \
     #         ${DEVICE_EXTRA} \
-    #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
+    #         PACKAGES="${combined_packages}" \
     #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     else
     #       sudo make -j$(nproc) image V=s \
     #         PROFILE="${PROFILE}" \
-    #         PACKAGES="${COMBINED_PACKAGE_LIST}" \
+    #         PACKAGES="${combined_packages}" \
     #         FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
     #     fi
         
