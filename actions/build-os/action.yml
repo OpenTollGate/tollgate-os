@@ -225,15 +225,16 @@ runs:
       shell: bash
       id: build-os
       run: |
-        combined_packages="${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }} ${{ env.TOLLGATE_CUSTOM_PACKAGES }}"
-        echo "ℹ️ Building TollGate OS with the following packages: ${combined_packages}"
+        combined_packages="${{ env.TOLLGATE_CUSTOM_PACKAGES }} ${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }}"
+        combined_packages_normalized=$(echo "$combined_packages" | tr -s ' ')
+        echo "ℹ️ Building TollGate OS with the following packages: ${combined_packages_normalized} (normalized)"
 
         cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
         
         # Original command
         sudo make -j$(nproc) image V=s \
           PROFILE="${{ inputs.device_id }}" \
-          PACKAGES="${combined_packages}" \
+          PACKAGES="${combined_packages_normalized}" \
           FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
         
         # Check if build succeeded
@@ -242,9 +243,7 @@ runs:
           echo "✅ Build with ALL packages succeeded!"
           exit 0
         else
-          echo "❌ Build with ALL packages failed, will try with fewer packages"
-          # Show logs or errors
-          cat ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/logs/package/*.txt 2>/dev/null || echo "No package logs found"
+          echo "❌ Build failed"
           exit 1
         fi
 
