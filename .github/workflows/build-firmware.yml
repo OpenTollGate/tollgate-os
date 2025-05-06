@@ -12,13 +12,14 @@ jobs:
   build:
     strategy:
       matrix:
-        model: [
+        device_id: [
+          'glinet_gl-mt3000',
+          'glinet_gl-ar300m16', # don't know which is which (nand/nor)
+          'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
+          # 'gl-mt6000',
+
           #'gl-mt300n-v2',
           #'gl-ar300m16',
-          'gl-ar300m',
-          'gl-ar300m-nor',
-          'gl-mt3000',
-          'gl-mt6000',
 #          'gl-e750',
 #          'archer_mr200'
         ]
@@ -53,11 +54,11 @@ jobs:
             echo "channel=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build OpenWRT Image
-        id: build-openwrt-image
-        uses: ./actions/build-firmware
+      - name: Build TollGateOS for each target
+        id: build-os-image
+        uses: ./actions/build-os
         with:
-          model: ${{ matrix.model }}
+          device_id: ${{ matrix.device_id }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           files_path: "./files"
@@ -70,6 +71,6 @@ jobs:
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.model }}.img
-          path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+          name: tollgate-os-${{ matrix.device_id }}-${{ steps.determine-os-version.outputs.version }}.img
+          path: ${{ steps.build-os-image.outputs.firmware_path }}
           retention-days: 5
