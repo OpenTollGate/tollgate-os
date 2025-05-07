@@ -8,5 +8,10 @@
     "author": "testauth",
     "name": "testname",
     "version": "testversion"
+  },
+  {
+    "author": "a",
+    "name": "b",
+    "version": "c"
   }
 ]
