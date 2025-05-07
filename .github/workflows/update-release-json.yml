@@ -59,11 +59,10 @@ jobs:
           echo "RELEASE_CHANNEL=$RELEASE_CHANNEL" >> $GITHUB_ENV
           echo "PACKAGES_FILE=$PACKAGES_FILE" >> $GITHUB_ENV
 
-      - name: Create if not exists
+      - name: Create if package not exists
         if: ${{ env.package_exists == 'false' }}
         run: |
-          
-          echo "📦 Adding new package to ${{ env.PACKAGES_FILE }}:"
+          echo "🆕 Adding new package to ${{ env.PACKAGES_FILE }}:"
           echo "  Name: ${{ env.PACKAGE_NAME }}"
           echo "  Author: ${{ env.PACKAGE_AUTHOR }}"
           echo "  Version: ${{ env.PACKAGE_VERSION }}"
@@ -86,6 +85,15 @@ jobs:
           # Show the updated file content
           echo "Updated ${{ env.PACKAGES_FILE }} content:"
           cat "${{ env.PACKAGES_FILE }}"
+
+      - name: Update if package exists
+        if: ${{ env.package_exists == 'true' }}
+        run: |
+          echo "🆕 package_exists: ${{ env.PACKAGE_EXISTS }}:"
+
+      - uses: EndBug/add-and-commit@v9 # You can change this to use a specific version.
+        with:
+          author: "Update packages Workflow"
 
           
       #     # Process and save events
