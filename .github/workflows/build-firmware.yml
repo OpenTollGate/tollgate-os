@@ -16,7 +16,6 @@ jobs:
       os_version: ${{ steps.determine-os-version.outputs.os_version }}
       os_release_channel: ${{ steps.determine-release-channel.outputs.os_release_channel }}
     steps:
-    - uses: actions/checkout@v4
     - id: commit-hash
       uses: prompt/actions-commit-hash@v3
 

@@ -2,18 +2,12 @@
 name: Update Release JSON with Real Events
 
 on:
-  push:
-    branches:
-      - '*'
-      - '!develop'
-    paths:
-      - '.github/workflows/update-release-json.yml'
-      - 'actions/update-from-nip94/**'
   workflow_dispatch:
     inputs:
-      run_id:
-        description: 'Run ID of the build workflow'
+      nip_94_event_id:
+        description: 'The nostr eventId of the package nip94 event.'
         required: true
+
   repository_dispatch:
     types: [update-release-json]
 
@@ -31,24 +25,12 @@ jobs:
           path: current-branch
           fetch-depth: 1
 
-      - name: Checkout develop branch (for release.json)
-        uses: actions/checkout@v4
-        with:
-          ref: develop
-          path: develop-branch
-          token: ${{ secrets.REPOSCOPE }}
-          fetch-depth: 1
-
-      - name: Copy release.json to working directory
-        run: |
-          mkdir -p current-branch/files/etc/tollgate/
-          cp develop-branch/files/etc/tollgate/release.json current-branch/files/etc/tollgate/
-          echo "Copied release.json from develop to current branch"
-
       - name: Install nak
         run: |
           sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
           sudo chmod +x /usr/local/bin/nak
+
+          echo "RELAYS=wss://relay.damus.io wss://relay.primal.net wss://relay.tollgate.me" >> $GITHUB_ENV
 
       - name: Fetch and Process NIP-94 Events
         working-directory: current-branch
@@ -57,136 +39,133 @@ jobs:
           PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
           
           if [ -z "$PUBKEY" ]; then
-            echo "::error::NIP_94_PUBKEY secret is not set"
+            echo "❌ NIP_94_PUBKEY secret is not set"
             exit 1
           fi
           
           echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
+          event_response=$(nak req -a "$PUBKEY" -k 1063 -q --limit 1 ${{ env.RELAYS }})
           
-          # Extract only the event data (removing connection messages)
-          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          echo "event_response: ${event_response}"
           
-          # Create directory for events
-          mkdir -p event_files
+      #     # Process and save events
+      #     cat events_data.txt | jq . > event_files/all_events.json
+      #     cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
           
-          # Process and save events
-          cat events_data.txt | jq . > event_files/all_events.json
-          cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
+      #     # Extract and sort events by timestamp
+      #     mkdir -p sorted_events
           
-          # Extract and sort events by timestamp
-          mkdir -p sorted_events
+      #     echo "Extracting and sorting NIP-94 events by timestamp..."
           
-          echo "Extracting and sorting NIP-94 events by timestamp..."
-          
-          # Process each event in events_data.txt
-          cat events_data.txt | jq -c '.' | while read -r event; do
-            # Extract key information
-            EVENT_ID=$(echo "$event" | jq -r '.id')
-            CREATED_AT=$(echo "$event" | jq -r '.created_at')
-            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
-            FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
-            URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
-            HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
+      #     # Process each event in events_data.txt
+      #     cat events_data.txt | jq -c '.' | while read -r event; do
+      #       # Extract key information
+      #       EVENT_ID=$(echo "$event" | jq -r '.id')
+      #       CREATED_AT=$(echo "$event" | jq -r '.created_at')
+      #       ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
+      #       FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
+      #       PACKAGE_NAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "package_name") | .[1] // "unknown"')
+      #       URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
+      #       HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
             
-            # Skip events with missing URL or hash
-            if [[ -z "$URL" || -z "$HASH" ]]; then
-              echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
-              continue
-            fi
+      #       # Skip events with missing URL or hash
+      #       if [[ -z "$URL" || -z "$HASH" ]]; then
+      #         echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
+      #         continue
+      #       fi
             
-            # Extract module name from filename
-            MODULE=""
-            if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-              MODULE="${BASH_REMATCH[1]}"
-            elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
-              MODULE="${BASH_REMATCH[1]}"
-            fi
+      #       # Extract module name from filename
+      #       MODULE=""
+      #       if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+      #         MODULE="${BASH_REMATCH[1]}"
+      #       elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
+      #         MODULE="${BASH_REMATCH[1]}"
+      #       fi
             
-            if [[ -n "$MODULE" && -n "$ARCH" ]]; then
-              # Create a unique key for this module/architecture
-              KEY="${MODULE}-${ARCH}"
+      #       if [[ -n "$MODULE" && -n "$ARCH" ]]; then
+      #         # Create a unique key for this module/architecture
+      #         KEY="${MODULE}-${ARCH}"
               
-              # Create sorted filename (timestamp_key_eventid.json)
-              # Zero-pad timestamp to ensure proper sorting
-              SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
+      #         # Create sorted filename (timestamp_key_eventid.json)
+      #         # Zero-pad timestamp to ensure proper sorting
+      #         SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
               
-              echo "$event" > "$SORTED_FILE"
-              echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
-            else
-              echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
-            fi
-          done
+      #         echo "$event" > "$SORTED_FILE"
+      #         echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
+      #       else
+      #         echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
+      #       fi
+      #     done
           
-          echo "Creating newest_events directory for only the latest events..."
-          mkdir -p newest_events
+      #     echo "Creating newest_events directory for only the latest events..."
+      #     mkdir -p newest_events
           
-          # Find the newest event for each module/architecture
-          # List files in reverse order (newest first)
-          declare -A processed_keys
-          counter=0
+      #     # Find the newest event for each module/architecture
+      #     # List files in reverse order (newest first)
+      #     declare -A processed_keys
+      #     counter=0
           
-          for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
-            # Extract key from filename
-            filename=$(basename "$file")
-            key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
+      #     for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
+      #       # Extract key from filename
+      #       filename=$(basename "$file")
+      #       key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
             
-            if [[ -z "${processed_keys[$key]}" ]]; then
-              # This is the first (newest) occurrence of this key
-              processed_keys[$key]=1
-              # Use simple, sequential filenames that the action will recognize
-              cp "$file" "newest_events/event_${counter}.json"
-              created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
-              echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
-              # Display the hash of the event for verification
-              HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
-              echo "   Hash: $HASH"
-              counter=$((counter+1))
-            else
-              echo "⏭️ Skipping older event for $key: $file"
-            fi
-          done
+      #       if [[ -z "${processed_keys[$key]}" ]]; then
+      #         # This is the first (newest) occurrence of this key
+      #         processed_keys[$key]=1
+      #         # Use simple, sequential filenames that the action will recognize
+      #         cp "$file" "newest_events/event_${counter}.json"
+      #         created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
+      #         echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
+      #         # Display the hash of the event for verification
+      #         HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
+      #         echo "   Hash: $HASH"
+      #         counter=$((counter+1))
+      #       else
+      #         echo "⏭️ Skipping older event for $key: $file"
+      #       fi
+      #     done
           
-          echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
-          echo "Contents of newest_events directory:"
-          ls -la newest_events/ || echo "No events found"
+      #     echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
+      #     echo "Contents of newest_events directory:"
+      #     ls -la newest_events/ || echo "No events found"
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+      # - name: Set up Python
+      #   uses: actions/setup-python@v4
+      #   with:
+      #     python-version: '3.10'
 
-      # Run the Python script directly instead of using the action
-      - name: Run the update script directly
-        run: |
-          # Make the script executable
-          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
+      # # Run the Python script directly instead of using the action
+      # - name: Run the update script directly
+      #   run: |
+      #     # Make the script executable
+      #     chmod +x current-branch/actions/update-from-nip94/update_release_json.py
           
-          # Run the Python script directly
-          python3 current-branch/actions/update-from-nip94/update_release_json.py \
-            --events-dir "current-branch/newest_events" \
-            --release-json "current-branch/files/etc/tollgate/release.json" \
-            --verbose
+      #     # Run the Python script directly
+      #     python3 current-branch/actions/update-from-nip94/update_release_json.py \
+      #       --events-dir "current-branch/newest_events" \
+      #       --release-json "current-branch/files/etc/tollgate/release.json" \
+      #       --verbose
           
-          echo "Changes to release.json:"
-          diff -u current-branch/files/etc/tollgate/release.json.bak current-branch/files/etc/tollgate/release.json || echo "No changes detected"
+      #     echo "Changes to release.json:"
+      #     diff -u current-branch/files/etc/tollgate/release.json.bak current-branch/files/etc/tollgate/release.json || echo "No changes detected"
 
-      - name: Copy updated release.json back to develop and push
-        run: |
-          mkdir -p develop-branch/files/etc/tollgate/
-          cp current-branch/files/etc/tollgate/release.json develop-branch/files/etc/tollgate/
+      # - name: Copy updated release.json back to develop and push
+      #   run: |
+      #     mkdir -p develop-branch/files/etc/tollgate/
+      #     cp current-branch/files/etc/tollgate/release.json develop-branch/files/etc/tollgate/
           
-          cd develop-branch
+      #     cd develop-branch
           
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+      #     git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config --global user.name "github-actions[bot]"
           
-          if git diff --exit-code files/etc/tollgate/release.json; then
-            echo "No changes to commit."
-            exit 0
-          fi
+      #     if git diff --exit-code files/etc/tollgate/release.json; then
+      #       echo "No changes to commit."
+      #       exit 0
+      #     fi
           
-          git add files/etc/tollgate/release.json
-          git commit -m "Update release.json with latest NIP-94 events"
-          git push origin develop
+      #     git add files/etc/tollgate/release.json
+      #     git commit -m "Update release.json with latest NIP-94 events"
+      #     git push origin develop
 
