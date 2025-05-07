@@ -65,18 +65,24 @@ jobs:
           
           echo "📦 Adding new package to ${{ env.PACKAGES_FILE }}:"
           echo "  Name: ${{ env.PACKAGE_NAME }}"
-          echo "  Author: ${{ env.PACKAGE_AUTHOR}}"
-          echo "  Version: ${{ env.PACKAGE_VERSION}}"
+          echo "  Author: ${{ env.PACKAGE_AUTHOR }}"
+          echo "  Version: ${{ env.PACKAGE_VERSION }}"
           
           # Create a temporary file with the new package entry
           TEMP_FILE=$(mktemp)
           
+          # Store values in local variables for jq
+          AUTHOR="${{ env.PACKAGE_AUTHOR }}"
+          NAME="${{ env.PACKAGE_NAME }}"
+          VERSION="${{ env.PACKAGE_VERSION }}"
+          FILE="${{ env.PACKAGES_FILE }}"
+          
           # Add the new package to the JSON file
-          jq --arg author "${{ env.PACKAGE_AUTHOR}}" \
-             --arg name "${{ env.PACKAGE_NAME }}" \
-             --arg version "${{ env.PACKAGE_VERSION}}" \
+          jq --arg author "$AUTHOR" \
+             --arg name "$NAME" \
+             --arg version "$VERSION" \
              '. += [{"author": $author, "name": $name, "version": $version}]' \
-             "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
+             "$FILE" > "$TEMP_FILE"
           
           # Replace the original file with the updated one
           mv "$TEMP_FILE" "${{ env.PACKAGES_FILE }}"
