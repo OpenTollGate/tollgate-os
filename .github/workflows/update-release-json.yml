@@ -36,8 +36,11 @@ jobs:
         run: |
           PACKAGE_NAME="${{ github.event.inputs.package_name || github.event.client_payload.package_name }}"
           RELEASE_CHANNEL=${{ github.event.inputs.package_release_channel || github.event.client_payload.package_release_channel }}
+          PACKAGE_VERSION=${{ github.event.inputs.package_version || github.event.client_payload.package_version }}
+          PACKAGE_AUTHOR=${{ github.event.inputs.package_author || github.event.client_payload.package_author }}
 
           PACKAGES_FILE="packages_${RELEASE_CHANNEL}.json"
+          
           
           # Check if the package exists in the appropriate packages file
           PACKAGE_EXISTS=$(jq -r --arg name "$PACKAGE_NAME" '.[] | select(.name == $name) | .name' "$PACKAGES_FILE")
@@ -49,6 +52,41 @@ jobs:
             echo "❌ Package '$PACKAGE_NAME' does not exist in $PACKAGES_FILE"
             echo "package_exists=false" >> $GITHUB_ENV
           fi
+
+          echo "PACKAGE_AUTHOR=$PACKAGE_AUTHOR" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_CHANNEL=$RELEASE_CHANNEL" >> $GITHUB_ENV
+          echo "PACKAGES_FILE=$PACKAGES_FILE" >> $GITHUB_ENV
+
+      - name: Create if not exists
+        if: ${{ env.package_exists == 'false' }}
+        run: |
+          
+          echo "📦 Adding new package to ${{ env.PACKAGES_FILE }}:"
+          echo "  Name: ${{ env.PACKAGE_NAME }}"
+          echo "  Author: ${{ env.PACKAGE_AUTHOR}}"
+          echo "  Version: ${{ env.PACKAGE_VERSION}}"
+          
+          # Create a temporary file with the new package entry
+          TEMP_FILE=$(mktemp)
+          
+          # Add the new package to the JSON file
+          jq --arg author "${{ env.PACKAGE_AUTHOR}}" \
+             --arg name "${{ env.PACKAGE_NAME }}" \
+             --arg version ${{ env.PACKAGE_VERSION}}" \
+             '. += [{"author": $author, "name": $name, "version": $version}]' \
+             "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
+          
+          # Replace the original file with the updated one
+          mv "$TEMP_FILE" "${{ env.PACKAGES_FILE }}"
+          
+          echo "✅ Package added successfully to ${{ env.PACKAGES_FILE }}"
+          
+          # Show the updated file content
+          echo "Updated ${{ env.PACKAGES_FILE }} content:"
+          cat "${{ env.PACKAGES_FILE }}"
+
           
       #     # Process and save events
       #     cat events_data.txt | jq . > event_files/all_events.json
