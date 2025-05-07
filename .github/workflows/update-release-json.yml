@@ -4,8 +4,17 @@ name: Update Release JSON with Real Events
 on:
   workflow_dispatch:
     inputs:
-      nip_94_event_id:
-        description: 'The nostr eventId of the package nip94 event.'
+      package_author:
+        description: 'The author of the package'
+        required: true
+      package_name:
+        description: 'The name of the package'
+        required: true
+      package_version:
+        description: 'The version of the package'
+        required: true
+      package_release_channel:
+        description: 'The package release channel (stable/dev)'
         required: true
 
   repository_dispatch:
@@ -19,34 +28,27 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout current branch (with action code)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          path: current-branch
           fetch-depth: 1
 
-      - name: Install nak
+      - name: Check if package exists
         run: |
-          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
-          sudo chmod +x /usr/local/bin/nak
+          PACKAGE_NAME="${{ github.event.inputs.package_name || github.event.client_payload.package_name }}"
+          RELEASE_CHANNEL=${{ github.event.inputs.package_release_channel || github.event.client_payload.package_release_channel }}
 
-          echo "RELAYS=wss://relay.damus.io wss://relay.primal.net wss://relay.tollgate.me" >> $GITHUB_ENV
-
-      - name: Fetch and Process NIP-94 Events
-        working-directory: current-branch
-        run: |
-          # Get the pubkey from secrets
-          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
+          PACKAGES_FILE="packages_${RELEASE_CHANNEL}.json"
           
-          if [ -z "$PUBKEY" ]; then
-            echo "❌ NIP_94_PUBKEY secret is not set"
-            exit 1
+          # Check if the package exists in the appropriate packages file
+          PACKAGE_EXISTS=$(jq -r --arg name "$PACKAGE_NAME" '.[] | select(.name == $name) | .name' "$PACKAGES_FILE")
+          
+          if [[ -n "$PACKAGE_EXISTS" ]]; then
+            echo "✅ Package '$PACKAGE_NAME' exists in $PACKAGES_FILE"
+            echo "package_exists=true" >> $GITHUB_ENV
+          else
+            echo "❌ Package '$PACKAGE_NAME' does not exist in $PACKAGES_FILE"
+            echo "package_exists=false" >> $GITHUB_ENV
           fi
-          
-          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          event_responses=$(nak req -a "$PUBKEY" -id ${{ inputs.nip_94_event_id }} -k 1063 -q --limit 1 ${{ env.RELAYS }})
-          
-          echo "event_responses: ${event_responses}"
           
       #     # Process and save events
       #     cat events_data.txt | jq . > event_files/all_events.json
