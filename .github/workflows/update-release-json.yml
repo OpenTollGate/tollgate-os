@@ -44,9 +44,9 @@ jobs:
           fi
           
           echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
-          event_response=$(nak req -a "$PUBKEY" -k 1063 -q --limit 1 ${{ env.RELAYS }})
+          event_responses=$(nak req -a "$PUBKEY" -id ${{ inputs.nip_94_event_id }} -k 1063 -q --limit 1 ${{ env.RELAYS }})
           
-          echo "event_response: ${event_response}"
+          echo "event_responses: ${event_responses}"
           
       #     # Process and save events
       #     cat events_data.txt | jq . > event_files/all_events.json
