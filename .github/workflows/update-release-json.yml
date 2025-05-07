@@ -74,7 +74,7 @@ jobs:
           # Add the new package to the JSON file
           jq --arg author "${{ env.PACKAGE_AUTHOR}}" \
              --arg name "${{ env.PACKAGE_NAME }}" \
-             --arg version ${{ env.PACKAGE_VERSION}}" \
+             --arg version "${{ env.PACKAGE_VERSION}}" \
              '. += [{"author": $author, "name": $name, "version": $version}]' \
              "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
           
