@@ -75,7 +75,9 @@ jobs:
           AUTHOR="${{ env.PACKAGE_AUTHOR }}"
           NAME="${{ env.PACKAGE_NAME }}"
           VERSION="${{ env.PACKAGE_VERSION }}"
-          FILE="${{ env.PACKAGES_FILE }}"
+          FILE="$(cat ${{ env.PACKAGES_FILE }})"
+
+          echo $FILE
           
           # Add the new package to the JSON file
           jq --arg author "$AUTHOR" \
