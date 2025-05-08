@@ -112,7 +112,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Extract event details
-        event_id, created_at, url, hash_value, architecture, filename = extract_event_data(event_data)
+        event_id, created_at, url, hash_value, architecture, filename, package_name = extract_event_data(event_data)
         
         # Skip events with missing required fields
         if not all([url, hash_value, architecture, filename]):
