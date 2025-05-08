@@ -1,5 +1,4 @@
-# .github/workflows/update-release-json.yml in tollgate-os
-name: Update Release JSON with Real Events
+name: Update Packages
 
 on:
   workflow_dispatch:
