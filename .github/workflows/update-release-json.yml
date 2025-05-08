@@ -105,6 +105,14 @@ jobs:
             echo "⚠️ WARNING: Author has changed!"
             echo "  Old author: $EXISTING_AUTHOR"
             echo "  New author: ${{ env.PACKAGE_AUTHOR }}"
+            
+            # Set GitHub Actions warning annotation
+            echo "::warning::Author has changed for package ${{ env.PACKAGE_NAME }}. Old: $EXISTING_AUTHOR, New: ${{ env.PACKAGE_AUTHOR }}"
+            
+            # Set warning flag in environment
+            echo "author_changed=true" >> $GITHUB_ENV
+          else
+            echo "author_changed=false" >> $GITHUB_ENV
           fi
           
           # Create a temporary file for the updated JSON
