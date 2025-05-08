@@ -10,8 +10,8 @@
     "version": "testversion"
   },
   {
-    "author": "a",
+    "author": "newAuthor",
     "name": "b",
-    "version": "c"
+    "version": "v1.10"
   }
 ]
