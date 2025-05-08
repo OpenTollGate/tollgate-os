@@ -34,34 +34,6 @@ def load_json_file(file_path: str) -> Optional[Dict]:
         print(f"Error loading {file_path}: {e}")
         return None
 
-
-def extract_module_from_filename(filename: str) -> Optional[str]:
-    """Extract module name from filename.
-    
-    Args:
-        filename: The filename to extract module name from
-        
-    Returns:
-        Module name or None if it couldn't be extracted
-    """
-    # Pattern 1: tollgate-module-basic-go*  (MORE SPECIFIC - CHECK FIRST)
-    match = re.match(r'tollgate-module-(.+)-go', filename)
-    if match:
-        return match.group(1)
-        
-    # Pattern 2: tollgate-module-basic.ipk
-    match = re.match(r'tollgate-module-([^.]+)(?:\.|$)', filename)
-    if match:
-        return match.group(1)
-    
-    # Pattern 3: basic-gl-mt3000-*.ipk  (MOST GENERIC - CHECK LAST)
-    match = re.match(r'^([^-]+)-', filename)
-    if match:
-        return match.group(1)
-    
-    return None
-
-
 def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """Extract relevant data from NIP-94 event.
     
@@ -69,7 +41,7 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
         event_data: The parsed event data
         
     Returns:
-        Tuple of (event_id, created_at, url, hash_value, architecture, filename)
+        Tuple of (event_id, created_at, url, hash_value, architecture, filename, package_name)
     """
     event_id = event_data.get('id', '')
     created_at = event_data.get('created_at', 0)
@@ -79,6 +51,7 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
     hash_value = None
     architecture = None
     filename = None
+    package_name = None
     
     for tag in event_data.get('tags', []):
         if len(tag) < 2:
@@ -92,8 +65,11 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
             architecture = tag[1]
         elif tag[0] == 'filename':
             filename = tag[1]
+            architecture = tag[1]
+        elif tag[0] == 'package_name':
+            package_name = tag[1]
     
-    return event_id, created_at, url, hash_value, architecture, filename
+    return event_id, created_at, url, hash_value, architecture, filename, package_name
 
 
 def process_events(events_dir: str, release_json_path: str, verbose: bool = False) -> bool:
@@ -144,7 +120,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Extract module name from filename
-        module = extract_module_from_filename(filename)
+        module = package_name
         if not module:
             print(f"Warning: Could not extract module name from {filename}, skipping")
             continue
