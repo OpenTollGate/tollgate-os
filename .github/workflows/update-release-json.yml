@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   update:
+    name: "Update ${{ github.event.inputs.package_name || github.event.client_payload.package_name }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
