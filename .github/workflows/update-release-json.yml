@@ -89,7 +89,42 @@ jobs:
       - name: Update if package exists
         if: ${{ env.package_exists == 'true' }}
         run: |
-          echo "🆕 package_exists: ${{ env.PACKAGE_EXISTS }}:"
+          echo "🔄 Updating existing package in ${{ env.PACKAGES_FILE }}:"
+          echo "  Name: ${{ env.PACKAGE_NAME }}"
+          echo "  New Version: ${{ env.PACKAGE_VERSION }}"
+          
+          # Get the existing package info
+          EXISTING_AUTHOR=$(jq -r --arg name "${{ env.PACKAGE_NAME }}" '.[] | select(.name == $name) | .author' "${{ env.PACKAGES_FILE }}")
+          EXISTING_VERSION=$(jq -r --arg name "${{ env.PACKAGE_NAME }}" '.[] | select(.name == $name) | .version' "${{ env.PACKAGES_FILE }}")
+          
+          echo "  Current Author: $EXISTING_AUTHOR"
+          echo "  Current Version: $EXISTING_VERSION"
+          
+          # Check if author has changed
+          if [[ "$EXISTING_AUTHOR" != "${{ env.PACKAGE_AUTHOR }}" ]]; then
+            echo "⚠️ WARNING: Author has changed!"
+            echo "  Old author: $EXISTING_AUTHOR"
+            echo "  New author: ${{ env.PACKAGE_AUTHOR }}"
+          fi
+          
+          # Create a temporary file for the updated JSON
+          TEMP_FILE=$(mktemp)
+          
+          # Update the package entry
+          jq --arg name "${{ env.PACKAGE_NAME }}" \
+             --arg author "${{ env.PACKAGE_AUTHOR }}" \
+             --arg version "${{ env.PACKAGE_VERSION }}" \
+             'map(if .name == $name then {"author": $author, "name": $name, "version": $version} else . end)' \
+             "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
+          
+          # Replace the original file with the updated one
+          mv "$TEMP_FILE" "${{ env.PACKAGES_FILE }}"
+          
+          echo "✅ Package updated successfully in ${{ env.PACKAGES_FILE }}"
+          
+          # Show the updated file content
+          echo "Updated ${{ env.PACKAGES_FILE }} content:"
+          cat "${{ env.PACKAGES_FILE }}"
 
       - uses: EndBug/add-and-commit@v9 # You can change this to use a specific version.
         with:
