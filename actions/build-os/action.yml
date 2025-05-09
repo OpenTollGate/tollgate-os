@@ -255,13 +255,14 @@ runs:
         echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
         echo "TOLLGATE_OS_FIRMWARE_PATH=$tollgate_os_firmware_path" >> $GITHUB_ENV
 
-    - name: Upload Firmware to Blossom
-      id: upload_firmware
-      uses: c03rad0r/cli-blossom-uploader-go@main
+
+    - name: Blossom Artifact upload
+      id: blossom_upload
+      uses: Origami74/upload-blossom-action@v0.1.1
       with:
         host: "https://blossom.swissdash.site"
         filePath: ${{ env.TOLLGATE_OS_FIRMWARE_PATH }}
-        nostrPrivateKey: ${{ inputs.NSECBECH }}
+        nostrPrivateKey:  ${{ inputs.NSECBECH }}
 
     - name: Publish Firmware NIP-94 Metadata
       id: publish_firmware
@@ -271,7 +272,7 @@ runs:
         url: ${{ steps.upload_firmware.outputs.url }}
         mimeType: "application/octet-stream"
         fileHash: ${{ steps.upload_firmware.outputs.hash }}
-        originalHash: ${{ env.FIRMWARE_HASH }}
+        originalHash: ${{ steps.upload_firmware.outputs.hash }}
         filename: ${{ steps.find-firmware.outputs.firmware_name }}
         content: "TollGate OS Firmware for ${{ inputs.device_id }}"
         nsec: ${{ inputs.nsec }}
