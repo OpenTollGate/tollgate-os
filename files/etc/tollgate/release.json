@@ -8,11 +8,6 @@
         {
           "version": "0.0.1",
           "architectures": {
-            "arm64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/4ba0c44bcc3fda7b4d51ac40fd0456be6dbb5c07efac02aaf18f186cc2e39bcd.ipk",
-              "hash": "sha256:4ba0c44bcc3fda7b4d51ac40fd0456be6dbb5c07efac02aaf18f186cc2e39bcd",
-              "eventId": "59dfc6280b15a7d9393c6a70780413e36dd57d245e64d6ca67a5ae1c03422fc3"
-            },
             "aarch64_cortex-a53": {
               "url": "https://blossom.swissdash.site/f3e8e5616e5159b612b11d9d76a4cf46712873cf939e04526a920a57f8848148.ipk",
               "hash": "sha256:f3e8e5616e5159b612b11d9d76a4cf46712873cf939e04526a920a57f8848148",
