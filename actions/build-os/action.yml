@@ -257,7 +257,7 @@ runs:
 
 
     - name: Blossom Artifact upload
-      id: blossom_upload
+      id: upload_firmware
       uses: Origami74/upload-blossom-action@v0.1.1
       with:
         host: "https://blossom.swissdash.site"
