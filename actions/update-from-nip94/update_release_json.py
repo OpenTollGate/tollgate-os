@@ -137,7 +137,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
         # Add to events_by_key, keeping track of timestamp for sorting
         if key not in events_by_key or events_by_key[key]['created_at'] < created_at:
             events_by_key[key] = {
-                'module': module,
+                'package_name': module,
                 'architecture': architecture,
                 'url': url,
                 'hash': hash_value,
