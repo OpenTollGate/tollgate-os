@@ -184,16 +184,25 @@ runs:
         
         echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
+        tollgate_packages=$(jq -r '.modules' packages_${{ inputs.release_channel }}.json)
+        
+        tollgate_packages_external=$(jq -r '.external | join(" ")')
+        tollgate_packages_custom_length=$(echo "${tollgate_packages_external}" | wc -w)
+
+        echo "🔍 Found $tollgate_packages_custom_length TollGate EXTERNAL package(s):"
+        echo "ℹ️ TollGate EXTERNAL package(s): $tollgate_packages_external"
+        
         # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
-        tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
-        tollgate_packages_length=$(echo "${tollgate_packages}" | jq 'length')
+        # Release.json is deprecated, new changes should be added to packages_[release_channel].json
+        tollgate_packages_custom=$(jq -r '.modules' files/etc/tollgate/release.json)
+        tollgate_packages_custom_length=$(echo "${tollgate_packages_custom}" | jq 'length')
         
-        echo "🔍 Found $tollgate_packages_length TollGate package(s)."
+        echo "🔍 Found $tollgate_packages_custom_length TollGate CUSTOM package(s)."
         
-        for ((i=0; i<$tollgate_packages_length; i++)); do
-          tollgate_package_name=$(echo $tollgate_packages | jq -r --arg i "${i}" '.[$i | tonumber].name')
+        for ((i=0; i<$tollgate_packages_custom_length; i++)); do
+          tollgate_package_name=$(echo $tollgate_packages_custom | jq -r --arg i "${i}" '.[$i | tonumber].name')
           tollgate_package_name_full="tollgate-module-${tollgate_package_name}-go"
-          tollgate_package_url=$(echo $tollgate_packages | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i | tonumber].versions[0].architectures[$arch].url')
+          tollgate_package_url=$(echo $tollgate_packages_custom | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i | tonumber].versions[0].architectures[$arch].url')
 
           echo "📦 Downloading tollgate package: $tollgate_package_name_full from $tollgate_package_url"
 
@@ -212,6 +221,7 @@ runs:
 
         echo "ℹ️ TollGate custom packages added: $tollgate_custom_packages"
         echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
+        echo "TOLLGATE_EXTERNAL_PACKAGES=$tollgate_packages_external" >> $GITHUB_ENV
 
     - name: Generate Package Index
       shell: bash
@@ -227,7 +237,7 @@ runs:
       shell: bash
       id: build-os
       run: |
-        combined_packages="${{ env.TOLLGATE_CUSTOM_PACKAGES }} ${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }}"
+        combined_packages="${{ env.TOLLGATE_CUSTOM_PACKAGES }} ${{ env.TOLLGATE_EXTERNAL_PACKAGES }} ${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }}"
         combined_packages_normalized=$(echo "$combined_packages" | tr -s ' ')
         echo "ℹ️ Building TollGate OS with the following packages: ${combined_packages_normalized} (normalized)"
 
