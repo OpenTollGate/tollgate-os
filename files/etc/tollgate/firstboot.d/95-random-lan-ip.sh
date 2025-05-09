@@ -1,6 +1,12 @@
 #!/bin/sh
 # TollGate - Generate random LAN IP address on first boot
 
+FLAG_FILE="/etc/tollgate/firstboot/lan_ip_randomized"
+if [ -f "$FLAG_FILE" ]; then
+    echo "LAN IP already randomized. Exiting."
+    exit 0
+fi
+
 INSTALL_JSON="/etc/tollgate/install.json"
 if [ -f "$INSTALL_JSON" ]; then
     IP_RANDOMIZED=$(jq -r '.ip_address_randomized' "$INSTALL_JSON")
@@ -12,9 +18,6 @@ else
     echo "install.json not found. Exiting."
     exit 1
 fi
-
-# We don't need to check for a flag file since uci-defaults scripts 
-# are automatically run only once after installation or upgrade
 
 # Helper function to safely set UCI values with error handling
 uci_safe_set() {
@@ -60,7 +63,6 @@ case $RANGE_SELECT in
     1)
         # 10.0.0.0/8 range
         OCTET1=10
-        # Ensure we actually use the random values
         OCTET2=$((1 + RANDOM % 254))  # 1-254
         OCTET3=$((1 + RANDOM % 254))  # 1-254
         ;;
@@ -80,7 +82,6 @@ esac
 
 # Avoid common third octets in the 192.168.x.x range to reduce conflicts
 if [ $OCTET1 -eq 192 ] && [ $OCTET2 -eq 168 ]; then
-    # Avoid common values like 0, 1, 100
     while [ $OCTET3 -eq 0 ] || [ $OCTET3 -eq 1 ] || [ $OCTET3 -eq 100 ]; do
         OCTET3=$((RANDOM % 256))
     done
@@ -96,20 +97,14 @@ uci commit network
 
 # Update hosts file
 if grep -q "status.client" /etc/hosts; then
-    # Replace existing entry
     sed -i "s/.*status\.client/$RANDOM_IP status.client/" /etc/hosts
 else
-    # Add new entry
     echo "$RANDOM_IP status.client" >> /etc/hosts
 fi
 
 # NoDogSplash config check and update (only if installed)
 if [ -f "/etc/config/nodogsplash" ]; then
     if uci -q get nodogsplash.@nodogsplash[0] >/dev/null; then
-        # statuspath is typically a URI path, not an IP
-        # If you need to set it to a full URL:
-        # uci set nodogsplash.@nodogsplash[0].statuspath="http://$RANDOM_IP/status"
-        # uci commit nodogsplash
         echo "NoDogSplash detected, would update its config if needed"
     fi
 fi
@@ -117,20 +112,19 @@ fi
 # Also update the default gateway and broadcast address accordingly
 NETMASK="255.255.255.0"  # Using standard /24 subnet
 uci_safe_set network lan netmask "$NETMASK"
- 
+
 # Calculate subnet information for correct operation
-# For a /24 network, the broadcast is always x.y.z.255
 BROADCAST="$OCTET1.$OCTET2.$OCTET3.255"
 uci_safe_set network lan broadcast "$BROADCAST"
 
-# No need for a flag file - uci-defaults handles this automatically
-
 # Schedule network restart (safer than immediate restart during boot)
-(sleep 5 && /etc/init.d/network restart &&
+(sleep 5 && /etc/init.d/network restart && 
  [ -f "/etc/init.d/nodogsplash" ] && /etc/init.d/nodogsplash restart) &
 
 # Update install.json with the new random IP
 jq '.ip_address_randomized = "'"$RANDOM_IP"'"' "$INSTALL_JSON" > "$INSTALL_JSON.tmp" && mv "$INSTALL_JSON.tmp" "$INSTALL_JSON"
 
+# Create flag file
+touch "$FLAG_FILE"
 
 exit 0
