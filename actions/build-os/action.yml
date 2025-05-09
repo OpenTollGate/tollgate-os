@@ -186,7 +186,7 @@ runs:
         
         tollgate_packages=$(jq -r '.modules' packages_${{ inputs.release_channel }}.json)
         
-        tollgate_packages_external=$(jq -r '.external | join(" ")')
+        tollgate_packages_external=$(echo "${tollgate_packages}" | jq -r '.external | join(" ")')
         tollgate_packages_custom_length=$(echo "${tollgate_packages_external}" | wc -w)
 
         echo "🔍 Found $tollgate_packages_custom_length TollGate EXTERNAL package(s):"
