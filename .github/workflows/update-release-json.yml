@@ -1,21 +1,19 @@
-name: Update Packages
+# .github/workflows/update-release-json.yml in tollgate-os
+name: Update Release JSON with Real Events
 
 on:
+  push:
+    branches:
+      - '*'
+      - '!develop'
+    paths:
+      - '.github/workflows/update-release-json.yml'
+      - 'actions/update-from-nip94/**'
   workflow_dispatch:
     inputs:
-      package_author:
-        description: 'The author of the package'
+      run_id:
+        description: 'Run ID of the build workflow'
         required: true
-      package_name:
-        description: 'The name of the package'
-        required: true
-      package_version:
-        description: 'The version of the package'
-        required: true
-      package_release_channel:
-        description: 'The package release channel (stable/dev)'
-        required: true
-
   repository_dispatch:
     types: [update-release-json]
 
@@ -25,238 +23,170 @@ permissions:
 
 jobs:
   update:
-    name: "Update ${{ github.event.inputs.package_name || github.event.client_payload.package_name }}"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout current branch (with action code)
+        uses: actions/checkout@v4
         with:
+          path: current-branch
           fetch-depth: 1
 
-      - name: Check if package exists
-        run: |
-          PACKAGE_NAME="${{ github.event.inputs.package_name || github.event.client_payload.package_name }}"
-          RELEASE_CHANNEL=${{ github.event.inputs.package_release_channel || github.event.client_payload.package_release_channel }}
-          PACKAGE_VERSION=${{ github.event.inputs.package_version || github.event.client_payload.package_version }}
-          PACKAGE_AUTHOR=${{ github.event.inputs.package_author || github.event.client_payload.package_author }}
-
-          PACKAGES_FILE="packages_${RELEASE_CHANNEL}.json"
-          
-          
-          # Check if the package exists in the appropriate packages file
-          PACKAGE_EXISTS=$(jq -r --arg name "$PACKAGE_NAME" '.[] | select(.name == $name) | .name' "$PACKAGES_FILE")
-          
-          if [[ -n "$PACKAGE_EXISTS" ]]; then
-            echo "✅ Package '$PACKAGE_NAME' exists in $PACKAGES_FILE"
-            echo "package_exists=true" >> $GITHUB_ENV
-          else
-            echo "❌ Package '$PACKAGE_NAME' does not exist in $PACKAGES_FILE"
-            echo "package_exists=false" >> $GITHUB_ENV
-          fi
-
-          echo "PACKAGE_AUTHOR=$PACKAGE_AUTHOR" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
-          echo "RELEASE_CHANNEL=$RELEASE_CHANNEL" >> $GITHUB_ENV
-          echo "PACKAGES_FILE=$PACKAGES_FILE" >> $GITHUB_ENV
-
-      - name: Create if package not exists
-        if: ${{ env.package_exists == 'false' }}
-        run: |
-          echo "🆕 Adding new package to ${{ env.PACKAGES_FILE }}:"
-          echo "  Name: ${{ env.PACKAGE_NAME }}"
-          echo "  Author: ${{ env.PACKAGE_AUTHOR }}"
-          echo "  Version: ${{ env.PACKAGE_VERSION }}"
-          
-          # Create a temporary file with the new package entry
-          TEMP_FILE=$(mktemp)
-          
-          # Add the new package to the JSON file
-          jq --arg author "${{ env.PACKAGE_AUTHOR }}" \
-             --arg name "${{ env.PACKAGE_NAME }}" \
-             --arg version "${{ env.PACKAGE_VERSION }}" \
-             '. += [{"author": $author, "name": $name, "version": $version}]' \
-             "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
-          
-          # Replace the original file with the updated one
-          mv "$TEMP_FILE" "${{ env.PACKAGES_FILE }}"
-          
-          echo "✅ Package added successfully to ${{ env.PACKAGES_FILE }}"
-          
-          # Show the updated file content
-          echo "Updated ${{ env.PACKAGES_FILE }} content:"
-          cat "${{ env.PACKAGES_FILE }}"
-
-      - name: Update if package exists
-        if: ${{ env.package_exists == 'true' }}
-        run: |
-          echo "🔄 Updating existing package in ${{ env.PACKAGES_FILE }}:"
-          echo "  Name: ${{ env.PACKAGE_NAME }}"
-          echo "  New Version: ${{ env.PACKAGE_VERSION }}"
-          
-          # Get the existing package info
-          EXISTING_AUTHOR=$(jq -r --arg name "${{ env.PACKAGE_NAME }}" '.[] | select(.name == $name) | .author' "${{ env.PACKAGES_FILE }}")
-          EXISTING_VERSION=$(jq -r --arg name "${{ env.PACKAGE_NAME }}" '.[] | select(.name == $name) | .version' "${{ env.PACKAGES_FILE }}")
-          
-          echo "  Current Author: $EXISTING_AUTHOR"
-          echo "  Current Version: $EXISTING_VERSION"
-          
-          # Check if author has changed
-          if [[ "$EXISTING_AUTHOR" != "${{ env.PACKAGE_AUTHOR }}" ]]; then
-            echo "⚠️ WARNING: Author has changed!"
-            echo "  Old author: $EXISTING_AUTHOR"
-            echo "  New author: ${{ env.PACKAGE_AUTHOR }}"
-            
-            # Set GitHub Actions warning annotation
-            echo "::warning::Author has changed for package ${{ env.PACKAGE_NAME }}. Old: $EXISTING_AUTHOR, New: ${{ env.PACKAGE_AUTHOR }}"
-            
-            # Set warning flag in environment
-            echo "author_changed=true" >> $GITHUB_ENV
-          else
-            echo "author_changed=false" >> $GITHUB_ENV
-          fi
-          
-          # Create a temporary file for the updated JSON
-          TEMP_FILE=$(mktemp)
-          
-          # Update the package entry
-          jq --arg name "${{ env.PACKAGE_NAME }}" \
-             --arg author "${{ env.PACKAGE_AUTHOR }}" \
-             --arg version "${{ env.PACKAGE_VERSION }}" \
-             'map(if .name == $name then {"author": $author, "name": $name, "version": $version} else . end)' \
-             "${{ env.PACKAGES_FILE }}" > "$TEMP_FILE"
-          
-          # Replace the original file with the updated one
-          mv "$TEMP_FILE" "${{ env.PACKAGES_FILE }}"
-          
-          echo "✅ Package updated successfully in ${{ env.PACKAGES_FILE }}"
-          
-          # Show the updated file content
-          echo "Updated ${{ env.PACKAGES_FILE }} content:"
-          cat "${{ env.PACKAGES_FILE }}"
-
-      - uses: EndBug/add-and-commit@v9 # You can change this to use a specific version.
+      - name: Checkout develop branch (for release.json)
+        uses: actions/checkout@v4
         with:
-          author: "Update packages Workflow"
+          ref: develop
+          path: develop-branch
+          token: ${{ secrets.REPOSCOPE }}
+          fetch-depth: 1
 
-          
-      #     # Process and save events
-      #     cat events_data.txt | jq . > event_files/all_events.json
-      #     cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
-          
-      #     # Extract and sort events by timestamp
-      #     mkdir -p sorted_events
-          
-      #     echo "Extracting and sorting NIP-94 events by timestamp..."
-          
-      #     # Process each event in events_data.txt
-      #     cat events_data.txt | jq -c '.' | while read -r event; do
-      #       # Extract key information
-      #       EVENT_ID=$(echo "$event" | jq -r '.id')
-      #       CREATED_AT=$(echo "$event" | jq -r '.created_at')
-      #       ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
-      #       FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
-      #       PACKAGE_NAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "package_name") | .[1] // "unknown"')
-      #       URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
-      #       HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
-            
-      #       # Skip events with missing URL or hash
-      #       if [[ -z "$URL" || -z "$HASH" ]]; then
-      #         echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
-      #         continue
-      #       fi
-            
-      #       # Extract module name from filename
-      #       MODULE=""
-      #       if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-      #         MODULE="${BASH_REMATCH[1]}"
-      #       elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
-      #         MODULE="${BASH_REMATCH[1]}"
-      #       fi
-            
-      #       if [[ -n "$MODULE" && -n "$ARCH" ]]; then
-      #         # Create a unique key for this module/architecture
-      #         KEY="${MODULE}-${ARCH}"
-              
-      #         # Create sorted filename (timestamp_key_eventid.json)
-      #         # Zero-pad timestamp to ensure proper sorting
-      #         SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
-              
-      #         echo "$event" > "$SORTED_FILE"
-      #         echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
-      #       else
-      #         echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
-      #       fi
-      #     done
-          
-      #     echo "Creating newest_events directory for only the latest events..."
-      #     mkdir -p newest_events
-          
-      #     # Find the newest event for each module/architecture
-      #     # List files in reverse order (newest first)
-      #     declare -A processed_keys
-      #     counter=0
-          
-      #     for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
-      #       # Extract key from filename
-      #       filename=$(basename "$file")
-      #       key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
-            
-      #       if [[ -z "${processed_keys[$key]}" ]]; then
-      #         # This is the first (newest) occurrence of this key
-      #         processed_keys[$key]=1
-      #         # Use simple, sequential filenames that the action will recognize
-      #         cp "$file" "newest_events/event_${counter}.json"
-      #         created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
-      #         echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
-      #         # Display the hash of the event for verification
-      #         HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
-      #         echo "   Hash: $HASH"
-      #         counter=$((counter+1))
-      #       else
-      #         echo "⏭️ Skipping older event for $key: $file"
-      #       fi
-      #     done
-          
-      #     echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
-      #     echo "Contents of newest_events directory:"
-      #     ls -la newest_events/ || echo "No events found"
+      - name: Copy release.json to working directory
+        run: |
+          mkdir -p current-branch/files/etc/tollgate/
+          cp develop-branch/files/etc/tollgate/release.json current-branch/files/etc/tollgate/
+          echo "Copied release.json from develop to current branch"
 
-      # - name: Set up Python
-      #   uses: actions/setup-python@v4
-      #   with:
-      #     python-version: '3.10'
+      - name: Install nak
+        run: |
+          sudo wget https://github.com/fiatjaf/nak/releases/download/v0.12.4/nak-v0.12.4-linux-amd64 -O /usr/local/bin/nak
+          sudo chmod +x /usr/local/bin/nak
 
-      # # Run the Python script directly instead of using the action
-      # - name: Run the update script directly
-      #   run: |
-      #     # Make the script executable
-      #     chmod +x current-branch/actions/update-from-nip94/update_release_json.py
+      - name: Fetch and Process NIP-94 Events
+        working-directory: current-branch
+        run: |
+          # Get the pubkey from secrets
+          PUBKEY="${{ secrets.NIP_94_PUBKEY }}"
           
-      #     # Run the Python script directly
-      #     python3 current-branch/actions/update-from-nip94/update_release_json.py \
-      #       --events-dir "current-branch/newest_events" \
-      #       --release-json "current-branch/files/etc/tollgate/release.json" \
-      #       --verbose
+          if [ -z "$PUBKEY" ]; then
+            echo "::error::NIP_94_PUBKEY secret is not set"
+            exit 1
+          fi
           
-      #     echo "Changes to release.json:"
-      #     diff -u current-branch/files/etc/tollgate/release.json.bak current-branch/files/etc/tollgate/release.json || echo "No changes detected"
+          echo "Fetching recent NIP-94 events for pubkey: $PUBKEY"
+          nak req -a "$PUBKEY" -k 1063 --limit 50 wss://relay.damus.io > event_response.txt
+          
+          # Extract only the event data (removing connection messages)
+          cat event_response.txt | grep -v "connecting to" | grep -v "NOTICE" > events_data.txt
+          
+          # Create directory for events
+          mkdir -p event_files
+          
+          # Process and save events
+          cat events_data.txt | jq . > event_files/all_events.json
+          cat event_files/all_events.json | jq -c '.tags[] | select(.[0] == "filename")[1]' | sort | uniq
+          
+          # Extract and sort events by timestamp
+          mkdir -p sorted_events
+          
+          echo "Extracting and sorting NIP-94 events by timestamp..."
+          
+          # Process each event in events_data.txt
+          cat events_data.txt | jq -c '.' | while read -r event; do
+            # Extract key information
+            EVENT_ID=$(echo "$event" | jq -r '.id')
+            CREATED_AT=$(echo "$event" | jq -r '.created_at')
+            ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
+            FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
+            URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
+            HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
+          
+            # Skip events with missing URL or hash
+            if [[ -z "$URL" || -z "$HASH" ]]; then
+              echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
+              continue
+            fi
+          
+            # Extract module name from filename
+            MODULE=""
+            if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+            fi
+          
+            if [[ -n "$MODULE" && -n "$ARCH" ]]; then
+              # Create a unique key for this module/architecture
+              KEY="${MODULE}-${ARCH}"
+          
+              # Create sorted filename (timestamp_key_eventid.json)
+              # Zero-pad timestamp to ensure proper sorting
+              SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
+          
+              echo "$event" > "$SORTED_FILE"
+              echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
+            else
+              echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
+            fi
+          done
+          
+          echo "Creating newest_events directory for only the latest events..."
+          mkdir -p newest_events
+          
+          # Find the newest event for each module/architecture
+          # List files in reverse order (newest first)
+          declare -A processed_keys
+          counter=0
+          
+          for file in $(ls -r sorted_events/*.json 2>/dev/null || echo ""); do
+            # Extract key from filename
+            filename=$(basename "$file")
+            key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
+          
+            if [[ -z "${processed_keys[$key]}" ]]; then
+              # This is the first (newest) occurrence of this key
+              processed_keys[$key]=1
+              # Use simple, sequential filenames that the action will recognize
+              cp "$file" "newest_events/event_${counter}.json"
+              created_at=$(echo "$filename" | sed -E 's/^0*([0-9]+)_.+$/\1/')
+              echo "✅ Using newest event for $key (created_at: $created_at) as event_${counter}.json"
+              # Display the hash of the event for verification
+              HASH=$(cat "$file" | jq -r '.tags[] | select(.[0] == "x") | .[1] // "no-hash-found"')
+              echo "   Hash: $HASH"
+              counter=$((counter+1))
+            else
+              echo "⏭️ Skipping older event for $key: $file"
+            fi
+          done
+          
+          echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
+          echo "Contents of newest_events directory:"
+          ls -la newest_events/ || echo "No events found"
 
-      # - name: Copy updated release.json back to develop and push
-      #   run: |
-      #     mkdir -p develop-branch/files/etc/tollgate/
-      #     cp current-branch/files/etc/tollgate/release.json develop-branch/files/etc/tollgate/
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Run the Python script directly instead of using the action
+      - name: Run the update script directly
+        run: |
+          # Make the script executable
+          chmod +x current-branch/actions/update-from-nip94/update_release_json.py
           
-      #     cd develop-branch
+          # Run the Python script directly
+          python3 current-branch/actions/update-from-nip94/update_release_json.py \
+            --events-dir "current-branch/newest_events" \
+            --release-json "current-branch/files/etc/tollgate/release.json" \
+            --verbose
           
-      #     git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      #     git config --global user.name "github-actions[bot]"
+          echo "Changes to release.json:"
+          diff -u current-branch/files/etc/tollgate/release.json.bak current-branch/files/etc/tollgate/release.json || echo "No changes detected"
+
+      - name: Copy updated release.json back to develop and push
+        run: |
+          mkdir -p develop-branch/files/etc/tollgate/
+          cp current-branch/files/etc/tollgate/release.json develop-branch/files/etc/tollgate/
           
-      #     if git diff --exit-code files/etc/tollgate/release.json; then
-      #       echo "No changes to commit."
-      #       exit 0
-      #     fi
+          cd develop-branch
           
-      #     git add files/etc/tollgate/release.json
-      #     git commit -m "Update release.json with latest NIP-94 events"
-      #     git push origin develop
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
+          if git diff --exit-code files/etc/tollgate/release.json; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          
+          git add files/etc/tollgate/release.json
+          git commit -m "Update release.json with latest NIP-94 events"
+          git push origin develop
 
