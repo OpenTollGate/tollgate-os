@@ -201,16 +201,15 @@ runs:
         
         for ((i=0; i<$tollgate_packages_custom_length; i++)); do
           tollgate_package_name=$(echo $tollgate_packages_custom | jq -r --arg i "${i}" '.[$i | tonumber].name')
-          tollgate_package_name_full="tollgate-module-${tollgate_package_name}-go"
           tollgate_package_url=$(echo $tollgate_packages_custom | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i | tonumber].versions[0].architectures[$arch].url')
 
-          echo "📦 Downloading tollgate package: $tollgate_package_name_full from $tollgate_package_url"
+          echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
 
           if curl -L -f --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 5 -o "${{ env.PACKAGES_DIR }}/${tollgate_package_name}.ipk" "${tollgate_package_url}"; then
-              echo "✅ Successfully downloaded ${tollgate_package_name_full}"
-              tollgate_custom_packages="${tollgate_custom_packages} ${tollgate_package_name_full} "
+              echo "✅ Successfully downloaded ${tollgate_package_name}"
+              tollgate_custom_packages="${tollgate_custom_packages} ${tollgate_package_name} "
             else
-              echo "❌ Error: Failed to download ${tollgate_package_name_full} after 3 attempts"
+              echo "❌ Error: Failed to download ${tollgate_package_name} after 3 attempts"
               exit 1;
             fi
         done
