@@ -35,33 +35,6 @@ def load_json_file(file_path: str) -> Optional[Dict]:
         return None
 
 
-def extract_module_from_filename(filename: str) -> Optional[str]:
-    """Extract module name from filename.
-    
-    Args:
-        filename: The filename to extract module name from
-        
-    Returns:
-        Module name or None if it couldn't be extracted
-    """
-    # Pattern 1: tollgate-module-basic-go*  (MORE SPECIFIC - CHECK FIRST)
-    match = re.match(r'tollgate-module-(.+)-go', filename)
-    if match:
-        return match.group(1)
-        
-    # Pattern 2: tollgate-module-basic.ipk
-    match = re.match(r'tollgate-module-([^.]+)(?:\.|$)', filename)
-    if match:
-        return match.group(1)
-    
-    # Pattern 3: basic-gl-mt3000-*.ipk  (MOST GENERIC - CHECK LAST)
-    match = re.match(r'^([^-]+)-', filename)
-    if match:
-        return match.group(1)
-    
-    return None
-
-
 def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """Extract relevant data from NIP-94 event.
     
@@ -79,6 +52,7 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
     hash_value = None
     architecture = None
     filename = None
+    package_name = None
     
     for tag in event_data.get('tags', []):
         if len(tag) < 2:
@@ -92,8 +66,11 @@ def extract_event_data(event_data: Dict) -> Tuple[str, int, Optional[str], Optio
             architecture = tag[1]
         elif tag[0] == 'filename':
             filename = tag[1]
+            architecture = tag[1]
+        elif tag[0] == 'package_name':
+            package_name = tag[1]
     
-    return event_id, created_at, url, hash_value, architecture, filename
+    return event_id, created_at, url, hash_value, architecture, filename, package_name
 
 
 def process_events(events_dir: str, release_json_path: str, verbose: bool = False) -> bool:
@@ -116,7 +93,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
     # Extract available modules from release.json
     available_modules = [module['name'] for module in release_data.get('modules', [])]
     if verbose:
-        print(f"Available modules in release.json: {available_modules}")
+        print(f"Available packages in release.json: {available_modules}")
     
     # Get all event files
     event_files = glob.glob(os.path.join(events_dir, '*.json'))
@@ -136,7 +113,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Extract event details
-        event_id, created_at, url, hash_value, architecture, filename = extract_event_data(event_data)
+        event_id, created_at, url, hash_value, architecture, filename, package_name = extract_event_data(event_data)
         
         # Skip events with missing required fields
         if not all([url, hash_value, architecture, filename]):
@@ -144,14 +121,14 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
             continue
         
         # Extract module name from filename
-        module = extract_module_from_filename(filename)
+        module = package_name
         if not module:
-            print(f"Warning: Could not extract module name from {filename}, skipping")
+            print(f"Warning: event has no package_name, skipping")
             continue
         
         # Skip if module not in release.json
         if module not in available_modules:
-            print(f"Warning: Module {module} not found in release.json, skipping")
+            print(f"Warning: package {module} not found in release.json, skipping")
             continue
         
         # Create a key for this module/architecture
@@ -160,7 +137,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
         # Add to events_by_key, keeping track of timestamp for sorting
         if key not in events_by_key or events_by_key[key]['created_at'] < created_at:
             events_by_key[key] = {
-                'module': module,
+                'package_name': module,
                 'architecture': architecture,
                 'url': url,
                 'hash': hash_value,
@@ -176,7 +153,7 @@ def process_events(events_dir: str, release_json_path: str, verbose: bool = Fals
     # Process the events and update release.json
     update_count = 0
     for key, event in events_by_key.items():
-        module = event['module']
+        module = event['package_name']
         architecture = event['architecture']
         url = event['url']
         hash_value = event['hash']

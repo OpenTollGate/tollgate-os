@@ -9,67 +9,86 @@ on:
     - cron: '0 0 * * *'  # Run at midnight UTC every day
 
 jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    name: "Set TollGate OS version + Release channel"
+    outputs:
+      os_version: ${{ steps.determine-os-version.outputs.os_version }}
+      os_release_channel: ${{ steps.determine-release-channel.outputs.os_release_channel }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required for commit height
+        
+    - id: commit-hash
+      uses: prompt/actions-commit-hash@v3
+
+    - name: Set version variable
+      id: determine-os-version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          # If this is a tag push, use the tag name (vX.X.X)
+          os_version=${GITHUB_REF_NAME}
+        else
+          # If this is a branch push, use [branch].[height].[hash] format
+          COMMIT_HEIGHT=$(git rev-list --count HEAD)
+          os_version=${GITHUB_REF_NAME}.${COMMIT_HEIGHT}.${{ steps.commit-hash.outputs.short }}
+        fi
+
+        echo "ℹ️ OS Version: ${os_version}"
+        echo "os_version=${os_version}" >> $GITHUB_OUTPUT
+
+    - name: Set OS release channel
+      id: determine-release-channel
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          os_release_channel=stable
+        else
+          os_release_channel=dev
+        fi
+
+        echo "ℹ️ OS Release channel: ${os_release_channel}"
+        echo "os_release_channel=${os_release_channel}" >> $GITHUB_OUTPUT
+
   build:
+    needs: initialize
     strategy:
       matrix:
-        model: [
+        device_id: [
+          'glinet_gl-mt3000',
+          'glinet_gl-mt6000',
+          'glinet_gl-ar300m16', # don't know which is which (nand/nor)
+          'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
+
           #'gl-mt300n-v2',
           #'gl-ar300m16',
-          'gl-ar300m',
-          'gl-ar300m-nor',
-          'gl-mt3000',
-          'gl-mt6000',
 #          'gl-e750',
 #          'archer_mr200'
         ]
       fail-fast: false
 
     runs-on: ubuntu-latest
-    name: Build ${{ matrix.model }}
+    name: Build ${{ matrix.device_id }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - id: commit-hash
-        uses: prompt/actions-commit-hash@v3
-
-      - name: Set version variable
-        id: determine-os-version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            # If this is a tag push, use the tag name
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-          else
-            # If this is a branch push, use branch-shortCommitHash format
-            echo "version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
-          fi
-        
-      - name: Set version variable
-        id: determine-release-channel
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            echo "channel=stable" >> $GITHUB_OUTPUT
-          else
-            echo "channel=dev" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build OpenWRT Image
-        id: build-openwrt-image
-        uses: ./actions/build-firmware
+      - name: Build TollGateOS for ${{ matrix.device_id }}
+        id: build-os-image
+        uses: ./actions/build-os
         with:
-          model: ${{ matrix.model }}
+          device_id: ${{ matrix.device_id }}
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
-          files_path: "./files"
+          os_files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
-          # openwrt_version: '24.10.1'
-          tollgate_os_version: ${{ steps.determine-os-version.outputs.version }}
-          release_channel: ${{ steps.determine-release-channel.outputs.channel }}
+          openwrt_version: '24.10.1'
+          tollgate_os_version: ${{ needs.initialize.outputs.os_version }}
+          release_channel: ${{ needs.initialize.outputs.os_release_channel }}
       
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.model }}.img
-          path: ${{ steps.build-openwrt-image.outputs.firmware_path }}
+          name: tollgate-os-${{ matrix.device_id }}-${{ needs.initialize.outputs.version }}.img
+          path: ${{ steps.build-os-image.outputs.firmware_path }}
           retention-days: 5
