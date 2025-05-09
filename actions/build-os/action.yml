@@ -184,7 +184,7 @@ runs:
         
         echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
-        tollgate_packages=$(jq -r '.modules' packages_${{ inputs.release_channel }}.json)
+        tollgate_packages=$(cat packages_${{ inputs.release_channel }}.json)
         
         tollgate_packages_external=$(echo "${tollgate_packages}" | jq -r '.external | join(" ")')
         tollgate_packages_custom_length=$(echo "${tollgate_packages_external}" | wc -w)
