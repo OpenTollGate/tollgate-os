@@ -84,44 +84,37 @@ jobs:
             # Extract key information
             EVENT_ID=$(echo "$event" | jq -r '.id')
             CREATED_AT=$(echo "$event" | jq -r '.created_at')
+            PACKAGE_NAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "package_name") | .[1] // "unknown"')
             ARCH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "architecture") | .[1] // "unknown"')
             FILENAME=$(echo "$event" | jq -r '.tags[] | select(.[0] == "filename") | .[1] // "unknown"')
             URL=$(echo "$event" | jq -r '.tags[] | select(.[0] == "url") | .[1] // ""')
             HASH=$(echo "$event" | jq -r '.tags[] | select(.[0] == "x") | .[1] // ""')
-            
+          
             # Skip events with missing URL or hash
             if [[ -z "$URL" || -z "$HASH" ]]; then
               echo "⚠️ Skipping event $EVENT_ID: Missing URL or hash"
               continue
             fi
-            
-            # Extract module name from filename
-            MODULE=""
-            if [[ "$FILENAME" =~ ^([^-]+)- ]]; then
-              MODULE="${BASH_REMATCH[1]}"
-            elif [[ "$FILENAME" =~ tollgate-module-(.+)-go ]]; then
-              MODULE="${BASH_REMATCH[1]}"
-            fi
-            
-            if [[ -n "$MODULE" && -n "$ARCH" ]]; then
-              # Create a unique key for this module/architecture
-              KEY="${MODULE}-${ARCH}"
-              
+          
+            if [[ -n "$PACKAGE_NAME" && -n "$ARCH" ]]; then
+              # Create a unique key for this PACKAGE_NAME/architecture
+              KEY="${PACKAGE_NAME}-${ARCH}"
+          
               # Create sorted filename (timestamp_key_eventid.json)
               # Zero-pad timestamp to ensure proper sorting
               SORTED_FILE="sorted_events/$(printf "%020d" $CREATED_AT)_${KEY}_${EVENT_ID}.json"
-              
+          
               echo "$event" > "$SORTED_FILE"
               echo "Saved event $EVENT_ID (created: $CREATED_AT) for $KEY to $SORTED_FILE"
             else
-              echo "⚠️ Skipping event $EVENT_ID: Missing module ($MODULE) or architecture ($ARCH)"
+              echo "⚠️ Skipping event $EVENT_ID: Missing PACKAGE_NAME ($PACKAGE_NAME) or architecture ($ARCH)"
             fi
           done
           
           echo "Creating newest_events directory for only the latest events..."
           mkdir -p newest_events
           
-          # Find the newest event for each module/architecture
+          # Find the newest event for each PACKAGE_NAME/architecture
           # List files in reverse order (newest first)
           declare -A processed_keys
           counter=0
@@ -130,7 +123,7 @@ jobs:
             # Extract key from filename
             filename=$(basename "$file")
             key=$(echo "$filename" | sed -E 's/^[0-9]+_(.+)_.+\.json$/\1/')
-            
+          
             if [[ -z "${processed_keys[$key]}" ]]; then
               # This is the first (newest) occurrence of this key
               processed_keys[$key]=1
@@ -147,7 +140,7 @@ jobs:
             fi
           done
           
-          echo "Processed ${#processed_keys[@]} unique module/architecture combinations"
+          echo "Processed ${#processed_keys[@]} unique PACKAGE_NAME/architecture combinations"
           echo "Contents of newest_events directory:"
           ls -la newest_events/ || echo "No events found"
 

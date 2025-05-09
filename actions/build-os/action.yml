@@ -1,0 +1,292 @@
+name: 'Build OpenWRT Image'
+description: 'Builds an OpenWRT firmware image with TollGate packages'
+author: 'c03rad0r'
+
+branding:
+  color: orange
+  icon: box
+
+inputs:
+  device_id:
+    description: 'The target device id to build for'
+    required: true
+  openwrt_version:
+    description: 'OpenWRT version'
+    default: '23.05.3'
+  tollgate_os_version:
+    description: 'TollGate OS version'
+    default: 'v0.0.0'
+  release_channel:
+    description: 'TollGate OS release channel (stable, dev, beta, etc)'
+    default: 'dev'
+  nostr_secret_key:
+    description: 'Nostr secret key'
+    required: true
+  nostr_public_key:
+    description: 'Nostr public key'
+    required: true
+  nostr_relays:
+    description: 'Comma-separated list of Nostr relays'
+    default: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
+  base_packages:
+    description: 'Base packages to include'
+    default: >-
+      base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
+      kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
+      libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
+      ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
+      uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+  os_files_path:
+    description: 'Path to default files directory'
+    default: 'tollgate-image-builder/files'
+    required: false
+  nsecbech:
+    description: 'Nostr secret key for Blossom in bech32 format'
+    required: true
+  nsec:
+    description: 'Nostr secret key for event signing'
+    required: true
+
+outputs:
+  firmware_path:
+    description: 'Path to the built firmware file'
+    value: ${{ steps.build-os.outputs.firmware_path }}
+  firmware_name:
+    description: 'Name of the built firmware file'
+    value: ${{ steps.build-os.outputs.firmware_name }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Initialize
+      shell: bash
+      run: |
+
+        builddir=/tmp/tollgate-os-build
+        mkdir $builddir
+
+        echo "BUILDDIR=$builddir" >> $GITHUB_ENV
+        
+   
+   # Example extraction source: https://downloads.openwrt.org/releases/24.10.1/.overview.json
+    - name: Get Target details by device_id
+      shell: bash
+      run: |
+        echo "ℹ️ Fetching target based on device id"
+        all_targets=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/.overview.json )
+      
+        # Extract target from the correct path in the JSON structure
+        current_target=$( echo "$all_targets" | jq -r --arg device "${{ inputs.device_id }}" '.profiles[] | select(.id == $device) | .target' )
+        
+        # Check if target was found
+        if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
+          echo "::error::Device ID '${{ inputs.device_id }}' not found in the OpenWrt overview file"
+          exit 1
+        fi
+        
+        echo "ℹ️ Current device: ${{ inputs.device_id }}"
+        echo "ℹ️ Current target: $current_target (for device)"
+
+        echo "CURRENT_TARGET=$current_target" >> $GITHUB_ENV
+
+
+    # Example extraction source: https://downloads.openwrt.org/releases/24.10.1/targets/mediatek/filogic/profiles.json
+    - name: Get architecture details by target
+      shell: bash
+      run: |
+        echo "ℹ️ Fetching architecture based on discovered target"
+        target_profiles=$( curl -s https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.CURRENT_TARGET }}/profiles.json )
+      
+        # Exctract all relevant info for our OS build
+        architecture=$( echo "$target_profiles" | jq -r '.arch_packages' )
+        default_packages=$( echo "$target_profiles" | jq -r '.default_packages | map(tostring) | join(" ")')
+        device_packages=$( echo "$target_profiles" | jq -r --arg device "${{ inputs.device_id }}" '.profiles.[$device].device_packages | map(tostring) | join(" ")' )
+        supported_devices=$( echo "$target_profiles" | jq -r --arg device "${{ inputs.device_id }}" '.profiles.[$device].supported_devices | map(tostring) | join(" ")' )
+
+
+        echo "ℹ️ Current architecture: $architecture"
+        echo "ℹ️ Current default_packages: $default_packages"
+        echo "ℹ️ Current device_packages: $device_packages"
+        echo "ℹ️ Current supported_devices: $supported_devices"
+
+
+        echo "OS_ARCHITECTURE=$architecture" >> $GITHUB_ENV
+        echo "OS_DEFAULT_PACKAGES=$default_packages" >> $GITHUB_ENV
+        echo "OS_DEVICE_PACKAGES=$device_packages" >> $GITHUB_ENV
+        echo "OS_SUPPORTED_DEVICES=$supported_devices" >> $GITHUB_ENV
+
+    - name: Select correct ImageBuilder for this target
+      shell: bash
+      run: |
+        current_target_with_dash=$(echo "${{ env.CURRENT_TARGET }}" | tr '/' '-')
+
+        imagebuilder_name="openwrt-imagebuilder-${{ inputs.openwrt_version }}-${current_target_with_dash}.Linux-x86_64"
+        download_url="https://downloads.openwrt.org/releases/${{ inputs.openwrt_version }}/targets/${{ env.CURRENT_TARGET }}/${imagebuilder_name}.tar.xz"
+        
+        # If not present, fall back to .tar.zst extension
+        if ! curl --output /dev/null --silent --head --fail "$download_url"; then
+          download_url=$(echo "${download_url}" | sed 's/\.tar\.xz$/.tar.zst/')
+          echo "⚠️ Using Image Builder fallback url"
+        fi
+
+        echo $imagebuilder_name
+        echo $download_url
+
+        echo "IMAGEBUILDER_NAME=$imagebuilder_name" >> $GITHUB_ENV
+        echo "IMAGEBUILDER_DOWNLOAD_URL=$download_url" >> $GITHUB_ENV
+
+    
+    - name: Cache ImageBuilder
+      id: cache-imagebuilder
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.BUILDDIR }}
+        key: ${{ runner.os }}-imagebuilder-${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
+      
+    - name: Download and Extract ImageBuilder
+      if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd ${{ env.BUILDDIR }}
+            
+        curl -L -C - -O "${{ env.IMAGEBUILDER_DOWNLOAD_URL }}"
+ 
+        downloaded_url=${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
+        downloaded_filename="${downloaded_url##*/}"
+ 
+        if [[ "$downloaded_filename" == *.tar.zst ]]; then
+          tar --zstd -xf "$downloaded_filename"
+        else
+            tar xfJ "$downloaded_filename"
+        fi
+
+    - name: Prepare for copy Custom Files and Packages to OS
+      shell: bash
+      env:
+        NOSTR_SECRET_KEY: ${{ inputs.nostr_secret_key }}
+        NOSTR_PUBLIC_KEY: ${{ inputs.nostr_public_key }}
+        NOSTR_RELAYS: ${{ inputs.nostr_relays }}
+      run: |
+        mkdir -p ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files
+        if [ -d "${{ inputs.os_files_path }}" ]; then
+          cp -r ${{ inputs.os_files_path }}/* ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files/
+        fi
+
+        packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        mkdir -p "${packages_dir}"
+        echo "PACKAGES_DIR=$packages_dir" >> $GITHUB_ENV
+
+    - name: Download TollGate Packages from release.json
+      shell: bash
+      run: |
+        # Create + populate packages directory if it doesn't exist
+        touch "${{ env.PACKAGES_DIR }}/Packages" # prevents failures if no packages are downloaded
+        
+        echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
+        
+        # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
+        tollgate_packages=$(jq -r '.modules' files/etc/tollgate/release.json)
+        tollgate_packages_length=$(echo "${tollgate_packages}" | jq 'length')
+        
+        echo "🔍 Found $tollgate_packages_length TollGate package(s)."
+        
+        for ((i=0; i<$tollgate_packages_length; i++)); do
+          tollgate_package_name=$(echo $tollgate_packages | jq -r --arg i "${i}" '.[$i | tonumber].name')
+          tollgate_package_name_full="tollgate-module-${tollgate_package_name}-go"
+          tollgate_package_url=$(echo $tollgate_packages | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i | tonumber].versions[0].architectures[$arch].url')
+
+          echo "📦 Downloading tollgate package: $tollgate_package_name_full from $tollgate_package_url"
+
+          if curl -L -f --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 5 -o "${{ env.PACKAGES_DIR }}/${tollgate_package_name}.ipk" "${tollgate_package_url}"; then
+              echo "✅ Successfully downloaded ${tollgate_package_name_full}"
+              tollgate_custom_packages="${tollgate_custom_packages} ${tollgate_package_name_full} "
+            else
+              echo "❌ Error: Failed to download ${tollgate_package_name_full} after 3 attempts"
+              exit 1;
+            fi
+        done
+        
+        # List the downloaded packages
+        echo "📋 Downloaded packages in ${{ env.PACKAGES_DIR }}:"
+        ls -la "${{ env.PACKAGES_DIR }}"
+
+        echo "ℹ️ TollGate custom packages added: $tollgate_custom_packages"
+        echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
+
+    - name: Generate Package Index
+      shell: bash
+      run: |
+        cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
+        sudo bash -c 'mkhash() { if [ "$1" = "sha256" ]; then sha256sum "$2" | cut -d" " -f1; else sha256sum "$1" | cut -d" " -f1; fi; }; \
+        export -f mkhash; \
+        export MKHASH=mkhash; \
+        ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages && \
+        gzip -9c packages/local/Packages > packages/local/Packages.gz'
+
+    - name: Build Firmware with All Packages
+      shell: bash
+      id: build-os
+      run: |
+        combined_packages="${{ env.TOLLGATE_CUSTOM_PACKAGES }} ${{ env.OS_DEFAULT_PACKAGES }} ${{ env.OS_DEVICE_PACKAGES }}"
+        combined_packages_normalized=$(echo "$combined_packages" | tr -s ' ')
+        echo "ℹ️ Building TollGate OS with the following packages: ${combined_packages_normalized} (normalized)"
+
+        cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
+        
+        # Original command
+        sudo make -j$(nproc) image V=s \
+          PROFILE="${{ inputs.device_id }}" \
+          PACKAGES="${combined_packages_normalized}" \
+          FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
+        
+        # Check if build succeeded
+        tollgate_os_firmware_path=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
+        if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
+          echo "✅ TollGate OS Build succeeded!"
+          echo "ℹ️ TollGate OS files can be found here: $tollgate_os_firmware_path"
+        else
+          echo "❌ Build failed"
+          exit 1
+        fi
+
+        echo "firmware_path=${tollgate_os_firmware_path}" >> $GITHUB_OUTPUT
+        echo "firmware_name=$(basename ${tollgate_os_firmware_path})" >> $GITHUB_OUTPUT
+
+        echo "FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")" >> $GITHUB_ENV
+        echo "TOLLGATE_OS_FIRMWARE_PATH=$tollgate_os_firmware_path" >> $GITHUB_ENV
+
+
+    - name: Blossom Artifact upload
+      id: upload_firmware
+      uses: Origami74/upload-blossom-action@v0.1.1
+      with:
+        host: "https://blossom.swissdash.site"
+        filePath: ${{ env.TOLLGATE_OS_FIRMWARE_PATH }}
+
+    - name: Publish Firmware NIP-94 Metadata
+      id: publish_firmware
+      uses: OpenTollGate/nostr-publish-file-metadata-action@v0.1.0
+      with:
+        relays: ${{ inputs.nostr_relays }}
+        url: ${{ steps.upload_firmware.outputs.url }}
+        mimeType: "application/octet-stream"
+        fileHash: ${{ steps.upload_firmware.outputs.hash }}
+        originalHash: ${{ steps.upload_firmware.outputs.hash }}
+        filename: ${{ steps.find-firmware.outputs.firmware_name }}
+        content: "TollGate OS Firmware for ${{ inputs.device_id }}"
+        nsec: ${{ inputs.nsec }}
+        size: ${{ env.FIRMWARE_SIZE }}
+        customTags: |
+            architecture=${{ env.OS_ARCHITECTURE }}
+            device_id=${{ inputs.device_id }}
+            supported_devices=${{ env.OS_SUPPORTED_DEVICES }}
+            openwrt_version=${{ inputs.openwrt_version }}
+            tollgate_os_version=${{ inputs.tollgate_os_version }}
+            release_channel=${{ inputs.release_channel }}
+
+    - name: Verify Firmware Publication
+      id: verify_firmware
+      uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@v0.1.0
+      with:
+        eventId: ${{ steps.publish_firmware.outputs.eventId }}
+        relays: ${{ inputs.nostr_relays }}
