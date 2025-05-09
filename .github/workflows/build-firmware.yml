@@ -16,19 +16,23 @@ jobs:
       os_version: ${{ steps.determine-os-version.outputs.os_version }}
       os_release_channel: ${{ steps.determine-release-channel.outputs.os_release_channel }}
     steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required for commit height
+        
     - id: commit-hash
       uses: prompt/actions-commit-hash@v3
 
     - name: Set version variable
       id: determine-os-version
       run: |
-
         if [[ $GITHUB_REF == refs/tags/* ]]; then
-          # If this is a tag push, use the tag name
+          # If this is a tag push, use the tag name (vX.X.X)
           os_version=${GITHUB_REF_NAME}
         else
-          # If this is a branch push, use branch-shortCommitHash format
-          os_version=${GITHUB_REF_NAME}-${{ steps.commit-hash.outputs.short }}
+          # If this is a branch push, use [branch].[height].[hash] format
+          COMMIT_HEIGHT=$(git rev-list --count HEAD)
+          os_version=${GITHUB_REF_NAME}.${COMMIT_HEIGHT}.${{ steps.commit-hash.outputs.short }}
         fi
 
         echo "ℹ️ OS Version: ${os_version}"
