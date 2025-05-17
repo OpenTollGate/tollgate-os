@@ -2,31 +2,36 @@
   "version": "0.0.1",
   "modules": [
     {
-      "name": "basic",
+      "name": "tollgate-module-basic-go",
       "description": "TollGate Basic Module - TIP-01 functionality",
       "versions": [
         {
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/35b889a545ac0c2bb9c5396253bdf6f9a1e12ccb8620f67d1d50f701fbe8e6c8.ipk",
-              "hash": "sha256:35b889a545ac0c2bb9c5396253bdf6f9a1e12ccb8620f67d1d50f701fbe8e6c8",
-              "eventId": "1cf32a1eb1b6bd7d491349d8cd344a29da474631f35237dd2bcfd86a85ab5bd6"
-            },
-            "mips_24kc": {
-              "url": "https://blossom.swissdash.site/abd6c4076a9bb4705539f75ca3e67dbc9ce49d22c1f75ab01fb5baab8e42646b.ipk",
-              "hash": "sha256:abd6c4076a9bb4705539f75ca3e67dbc9ce49d22c1f75ab01fb5baab8e42646b",
-              "eventId": "5f5b96629cfa7fd5865c3f4219fd3c04656cd7d7863a3eda467f7d4f06dca92f"
-            },
-            "x86_64": {
-              "url": "https://blossom.swissdash.site/[HASH].zip",
-              "hash": "sha256:[HASH]",
-              "eventId": "[NIP94_EVENT_ID]"
+              "url": "https://blossom.swissdash.site/83f8b791940956915dbe05640b0d7aeb0cc501e7856b184cdfe635c7136fd2dc.ipk",
+              "hash": "sha256:83f8b791940956915dbe05640b0d7aeb0cc501e7856b184cdfe635c7136fd2dc",
+              "eventId": "125e195498edc5a4139910c1da9eb3eb20db0f2f574c78d61daa667f9bcde31d"
             },
             "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/7b07245a6ce1e41d9da38cfcde825d1ccd2e3af67f359884d01e320cccf2cf40.bin",
-              "hash": "sha256:7b07245a6ce1e41d9da38cfcde825d1ccd2e3af67f359884d01e320cccf2cf40",
-              "eventId": "54bfdf5e7e333656109a99458bcb80d04b486e75317d5e7ab287442cc1d93298"
+              "url": "https://blossom.swissdash.site/82566a9a583f2ee14fe6e5420708bdda2b07a75ee8147cff31c3a1f7cc7821f3.ipk",
+              "hash": "sha256:82566a9a583f2ee14fe6e5420708bdda2b07a75ee8147cff31c3a1f7cc7821f3",
+              "eventId": "d2c7e4c57ee07a2a6dd9520f02a111e9416697a3f04634c8d5cfa863b82f1c75"
+            },
+            "mips_24kc": {
+              "url": "https://blossom.swissdash.site/c0c92910220b307120d17836f7db8332359bb6f0112efca71e794101873987a9.ipk",
+              "hash": "sha256:c0c92910220b307120d17836f7db8332359bb6f0112efca71e794101873987a9",
+              "eventId": "dbba34a0858c08381421148565bd3ec5cd967ac56561dafd0e2e6d4167a38692"
+            },
+            "arm_cortex-a7": {
+              "url": "https://blossom.swissdash.site/e76b29bff00e96c22e354e3c2d57f874e9f7369830e02258b134b4abaaa78e44.ipk",
+              "hash": "sha256:e76b29bff00e96c22e354e3c2d57f874e9f7369830e02258b134b4abaaa78e44",
+              "eventId": "2e9ac4007c1dc074c6ca7f06401011be2106029e73ee67459227d5dc26c6b451"
+            },
+            "arm64_cortex-a53": {
+              "url": "https://blossom.swissdash.site/ef39d69d398dbabb1c37c125896a28e034160c373fd7c6f447c22f0c641b652a.ipk",
+              "hash": "sha256:ef39d69d398dbabb1c37c125896a28e034160c373fd7c6f447c22f0c641b652a",
+              "eventId": "29734a59248cc0cd7123da75f1ee4b2e3c3c2b02e7742d17dd3a7fede3a61d25"
             }
           },
           "dependencies": []
