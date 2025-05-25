@@ -271,6 +271,7 @@ runs:
       with:
         host: "https://blossom.swissdash.site"
         filePath: ${{ env.TOLLGATE_OS_FIRMWARE_PATH }}
+        privatekey: ${{ inputs.NSEC }}
 
     - name: Publish Firmware NIP-94 Metadata
       id: publish_firmware
