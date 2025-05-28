@@ -55,7 +55,7 @@ jobs:
         device_id: [
           'glinet_gl-mt3000',
           'glinet_gl-mt6000',
-          'covr-x1860-a1',
+          'dlink_covr-x1860-a1',
           'glinet_gl-ar300m16', # don't know which is which (nand/nor)
           'glinet_gl-ar300m-nor', # don't know which is which (nand/nor) 
 
