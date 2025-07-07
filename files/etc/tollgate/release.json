@@ -9,24 +9,24 @@
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://blossom.swissdash.site/cfa1dd9de6ace2ced3be8b08b389513986e4d083cc18373e4fc06f81fa1f1437.ipk",
-              "hash": "sha256:cfa1dd9de6ace2ced3be8b08b389513986e4d083cc18373e4fc06f81fa1f1437",
-              "eventId": "532767faae4dcd03269eaac03ae7ea02bab2a47bc9d315ad00a037f56f602e25"
+              "url": "https://blossom.swissdash.site/78c858f14c17c3b7737a0a84f24202782af2041fa1b24a2a9564db138e3f079e.ipk",
+              "hash": "sha256:78c858f14c17c3b7737a0a84f24202782af2041fa1b24a2a9564db138e3f079e",
+              "eventId": "7f8ea2bf03606f527293b67f2e4e90771d7dc7d914688ed137e03625e4355995"
             },
             "mipsel_24kc": {
-              "url": "https://blossom.swissdash.site/bbef01ab92caa091cf404f4467c60ce5791674dd8869fabe73a2a08298175ec9.ipk",
-              "hash": "sha256:bbef01ab92caa091cf404f4467c60ce5791674dd8869fabe73a2a08298175ec9",
-              "eventId": "4920f56100b3e02d13a4fa41f95105fe5a6477ca8898f68ede4efedbab6b9d39"
+              "url": "https://blossom.swissdash.site/e8d905812074cde40eb4031b8fffe0e9c11a1654320e9a15305147a1f24ba0ef.ipk",
+              "hash": "sha256:e8d905812074cde40eb4031b8fffe0e9c11a1654320e9a15305147a1f24ba0ef",
+              "eventId": "b1513798b0f9af5ec19c5e035adf9ee1ad4499b3dd6001cf31a0d0a5535c76d7"
             },
             "mips_24kc": {
-              "url": "https://blossom.swissdash.site/60f4fd672670a3ca57c99eedc1fa82ed6682293611f01373635271010bd94dbb.ipk",
-              "hash": "sha256:60f4fd672670a3ca57c99eedc1fa82ed6682293611f01373635271010bd94dbb",
-              "eventId": "cdec4aa4314049f3d5da00aae88e9c0c690457383b4e991e1e1628e2624ca7a0"
+              "url": "https://blossom.swissdash.site/fb3477d6c4b839b3cc41bbe3d890edb53f149c7d57625760b992fb4cfff081d5.ipk",
+              "hash": "sha256:fb3477d6c4b839b3cc41bbe3d890edb53f149c7d57625760b992fb4cfff081d5",
+              "eventId": "79e7565dff76c6a5febce3b82255068e8cba79a8d8717b6c40a37f67c91c573e"
             },
             "arm_cortex-a7": {
-              "url": "https://blossom.swissdash.site/591deed53879f6a7364f8a329527579c101339bf130fc1ff883509f91a9207f1.ipk",
-              "hash": "sha256:591deed53879f6a7364f8a329527579c101339bf130fc1ff883509f91a9207f1",
-              "eventId": "9c20964626f7769115f14b4378330acc148755610986b7f5aec69ab0a7bae04f"
+              "url": "https://blossom.swissdash.site/a0f604163e2bb12dbacf6ba9a75b3f333138e2544e3ce4989141f43673bd940c.ipk",
+              "hash": "sha256:a0f604163e2bb12dbacf6ba9a75b3f333138e2544e3ce4989141f43673bd940c",
+              "eventId": "f7e507de048ccdc457ce2c7eabb8d5131bbee9fe15221cb30d5b82e168720c01"
             },
             "arm64_cortex-a53": {
               "url": "https://blossom.swissdash.site/73f0ade7daf36405e580cb7ceb8bbd93f8b35b4b74209bdd5b70eea23ffeb962.ipk",
@@ -34,9 +34,9 @@
               "eventId": "95726da9aed6fa93d2ba72ecb77de95b4b1910cade1b6c2dcd854ff5c56bd7c6"
             },
             "aarch64_cortex-a72": {
-              "url": "https://blossom.swissdash.site/be981bdd540c648392a66642d1bcb4c0eb8aab5fb2239d6e8f37728b026935aa.ipk",
-              "hash": "sha256:be981bdd540c648392a66642d1bcb4c0eb8aab5fb2239d6e8f37728b026935aa",
-              "eventId": "6062dbc3ebcd3feda823da8bbcf90ac4f9bfeb36e502b9fbde40abb1dc96a785"
+              "url": "https://blossom.swissdash.site/a6f52d892e670d5e3dc138a8d4640dcce419d1cb0c446c27b0153c2fb8024c30.ipk",
+              "hash": "sha256:a6f52d892e670d5e3dc138a8d4640dcce419d1cb0c446c27b0153c2fb8024c30",
+              "eventId": "eed1080992ba196d62ff3c175cb7f5d522aa910a42bd330407b42fe11ee60a66"
             }
           },
           "dependencies": []
