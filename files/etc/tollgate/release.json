@@ -2,8 +2,8 @@
   "version": "0.0.1",
   "modules": [
     {
-      "name": "tollgate-module-basic-go",
-      "description": "TollGate Basic Module - TIP-01 functionality",
+      "name": "tollgate-wrt",
+      "description": "TollGate wrt Module - TIP-01 functionality",
       "versions": [
         {
           "version": "0.0.1",
