@@ -6,7 +6,7 @@
   "custom": [
     {
       "author": "74fffd9c15ae65c42ec4e07dc274ca4221ad8b7046fefbd55f031ca945b7147a",
-      "name": "tollgate-module-basic-go",
+      "name": "tollgate-wrt",
       "version": "reserved-as-replacement-for-release.json"
     }
   ]
