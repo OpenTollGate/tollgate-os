@@ -20,8 +20,8 @@ def sample_release_json(temp_dir):
         "version": "0.0.1",
         "modules": [
             {
-                "name": "basic",
-                "description": "TollGate Basic Module",
+                "name": "wrt",
+                "description": "TollGate wrt Module",
                 "versions": [
                     {
                         "version": "0.0.1",
@@ -53,12 +53,12 @@ def sample_event(temp_dir):
         "pubkey": "testpubkey123",
         "created_at": 1743965913,
         "kind": 1063,
-        "content": "TollGate Module Package: basic for test",
+        "content": "TollGate Module Package: wrt for test",
         "tags": [
             ["url", "https://example.com/new.ipk"],
             ["m", "application/octet-stream"],
             ["x", "newhash123"],
-            ["filename", "basic-gl-mt3000-aarch64_cortex-a53.ipk"],
+            ["filename", "wrt-gl-mt3000-aarch64_cortex-a53.ipk"],
             ["architecture", "aarch64_cortex-a53"]
         ]
     }
@@ -71,11 +71,11 @@ def sample_event(temp_dir):
 
 def test_extract_module_from_filename():
     """Test module name extraction from filenames."""
-    # Test case 1: basic-gl-mt3000-aarch64_cortex-a53.ipk
-    assert urj.extract_module_from_filename("basic-gl-mt3000-aarch64_cortex-a53.ipk") == "basic"
+    # Test case 1: wrt-gl-mt3000-aarch64_cortex-a53.ipk
+    assert urj.extract_module_from_filename("wrt-gl-mt3000-aarch64_cortex-a53.ipk") == "wrt"
     
-    # Test case 2: tollgate-module-basic-go_1.0.ipk
-    assert urj.extract_module_from_filename("tollgate-module-basic-go_1.0.ipk") == "basic"
+    # Test case 2: tollgate-wrt_1.0.ipk
+    assert urj.extract_module_from_filename("tollgate-wrt_1.0.ipk") == "wrt"
     
     # Test case 3: tollgate-module-advanced.ipk
     assert urj.extract_module_from_filename("tollgate-module-advanced.ipk") == "advanced"
@@ -152,7 +152,7 @@ def test_process_events_multiple_events(temp_dir, sample_release_json):
             ["url", "https://example.com/old.ipk"],
             ["x", "oldhash"],
             ["architecture", "aarch64_cortex-a53"],
-            ["filename", "basic-old.ipk"]
+            ["filename", "wrt-old.ipk"]
         ]
     }
     
@@ -163,7 +163,7 @@ def test_process_events_multiple_events(temp_dir, sample_release_json):
             ["url", "https://example.com/new.ipk"],
             ["x", "newhash"],
             ["architecture", "aarch64_cortex-a53"],
-            ["filename", "basic-new.ipk"]
+            ["filename", "wrt-new.ipk"]
         ]
     }
     
