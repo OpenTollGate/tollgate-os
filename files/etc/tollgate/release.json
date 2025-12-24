@@ -9,9 +9,9 @@
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/36c16869b62c0b9492b8ca8075a90163433131b36a4aaea260c0d0515bead7c7.ipk",
-              "hash": "sha256:36c16869b62c0b9492b8ca8075a90163433131b36a4aaea260c0d0515bead7c7",
-              "eventId": "66b914950809339cb862ab1836ff68f095c74bd7f4bc5307e485526cb057b0c6"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/7f11d1e8d006edb9d809cd8a472aa304aa1fe6a6df70bac183fe16d67e1ed3a5",
+              "hash": "sha256:7f11d1e8d006edb9d809cd8a472aa304aa1fe6a6df70bac183fe16d67e1ed3a5",
+              "eventId": "5188193398f6de7cf144bfc8b2d39cc576eba4c9a271b91acab01ffb61777a43"
             },
             "mipsel_24kc": {
               "url": "https://blossom.swissdash.site/828954884585a56f59cf3264ba77bc702dd62638b69b005a42318ad54f65b223.ipk",
