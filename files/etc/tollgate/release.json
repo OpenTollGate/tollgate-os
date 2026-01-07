@@ -9,24 +9,24 @@
           "version": "0.0.1",
           "architectures": {
             "aarch64_cortex-a53": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/2d674cf768ccb31243fdd90a4e7bf8ff55b1010cd19cc28820ef9d2c99317cd1",
-              "hash": "sha256:2d674cf768ccb31243fdd90a4e7bf8ff55b1010cd19cc28820ef9d2c99317cd1",
-              "eventId": "95271ea6cb227c3d413dfcd8ec280a99531eb6586b83eaa44c61f4b949a690ba"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/e4db2b1d603a25a380595e73525dfc87788f95cad892568c0dc0e95e6277e475",
+              "hash": "sha256:e4db2b1d603a25a380595e73525dfc87788f95cad892568c0dc0e95e6277e475",
+              "eventId": "d027ea20f02bb9cbb5e751f0196ea5864355b540ff3366cc8aecc17f7cce9b06"
             },
             "mipsel_24kc": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/40fe54415fb4de955cf779c556473cbed24a9b4f8b6c2bf6671cbab97c19653d",
-              "hash": "sha256:40fe54415fb4de955cf779c556473cbed24a9b4f8b6c2bf6671cbab97c19653d",
-              "eventId": "9bbc8089451db8b6d43e89b53221cd189a417ae65721c77cb3a8ac49956124b4"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/c2fb01e44cc37505cc4cef6ee68c48ec12ab1ae51d2cf7f39334f4d1d5a93920",
+              "hash": "sha256:c2fb01e44cc37505cc4cef6ee68c48ec12ab1ae51d2cf7f39334f4d1d5a93920",
+              "eventId": "95eaf55c8227ef8a82ff2723b1246a4dee53d77cb4568edfb5fd08e4f7c4c507"
             },
             "mips_24kc": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/759fe5b2da222d4b7d1a90fe9702b631414dfffd607d53ea3de087b520be3971",
-              "hash": "sha256:759fe5b2da222d4b7d1a90fe9702b631414dfffd607d53ea3de087b520be3971",
-              "eventId": "bfe4e7bd72c78536e68351d916643dc887f165f0947a320bcc6794533af3441e"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/5792d9b82bae8543b1415cd1b7b4f0450a82a7a72fe1023fc16001fa20c27248",
+              "hash": "sha256:5792d9b82bae8543b1415cd1b7b4f0450a82a7a72fe1023fc16001fa20c27248",
+              "eventId": "b18797e33b028ef700b808bc47bbf83e127bb8fbcbb7a771542f6f207f0f7124"
             },
             "arm_cortex-a7": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/3e40baa9048084d5faab042f78091ca7edbabcc5240f86230e4429f678c0e894",
-              "hash": "sha256:3e40baa9048084d5faab042f78091ca7edbabcc5240f86230e4429f678c0e894",
-              "eventId": "cc6f55bed44a9fc854bfcf0dee5a194afdc6666f39c9810d1c1e5451dbd7d53c"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/6dc60a02399589528922b5259f61e660574a552c661fcb19ee85906a5f574567",
+              "hash": "sha256:6dc60a02399589528922b5259f61e660574a552c661fcb19ee85906a5f574567",
+              "eventId": "d80d71a18e578cc32f65c779c390aed4cdf690b8c0dab6856d8a56bfc8600c09"
             },
             "arm64_cortex-a53": {
               "url": "https://blossom.swissdash.site/73f0ade7daf36405e580cb7ceb8bbd93f8b35b4b74209bdd5b70eea23ffeb962.ipk",
@@ -34,9 +34,9 @@
               "eventId": "95726da9aed6fa93d2ba72ecb77de95b4b1910cade1b6c2dcd854ff5c56bd7c6"
             },
             "aarch64_cortex-a72": {
-              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/abe5619bba27fc523f58aba84640a086bd6ed210eb570a9a1ab521b3fa09b61f",
-              "hash": "sha256:abe5619bba27fc523f58aba84640a086bd6ed210eb570a9a1ab521b3fa09b61f",
-              "eventId": "f22d67a18e9216d3d2be250f308a144448283650d41907f8167aaef054b9192b"
+              "url": "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com/572e9838fe9d81f852e09ece27c7496ac7b4cafe5d65a6cad37b7deb1503a188",
+              "hash": "sha256:572e9838fe9d81f852e09ece27c7496ac7b4cafe5d65a6cad37b7deb1503a188",
+              "eventId": "a5a15ca29bcf8d1672d34523f3174b4ce73c364ae5b9a2509f166e84c8c5b2a4"
             },
             "x86_64": {
               "url": "https://blossom.swissdash.site/993aaea07198664c4da5f8dc3437514a015a6c5e488ecf43227ba0d9af5613fe.ipk",
