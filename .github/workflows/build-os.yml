@@ -1,0 +1,373 @@
+name: Build and Publish TollGate OS
+
+on:
+  workflow_dispatch:
+  push:
+
+## Add global env vars for the whole workflow
+env:
+  DEBUG: "true"
+
+jobs:
+  define-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          
+          # Create a human-readable matrix definition for device builds
+          cat > matrix.json << 'EOF'
+          {
+            "include": [
+              {
+                "device_id": "glinet_gl-mt3000",
+                "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-mt6000",
+                "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-ar300m16",
+                "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-ar300m-nor",
+                "openwrt_version": "24.10.1"
+              }
+            ]
+          }
+          EOF
+          
+          # Create a properly escaped JSON for GitHub output
+          echo "matrix=$(cat matrix.json | jq -c .)" >> $GITHUB_OUTPUT
+
+  determine-versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      os_version: ${{ steps.determine-os-version.outputs.os_version }}
+      release_channel: ${{ steps.determine-release-channel.outputs.release_channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for commit height
+          
+      - id: commit-hash
+        shell: bash
+        run: |
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          # Get short commit hash directly instead of using an action
+          SHORT_HASH=$(git rev-parse --short HEAD)
+          echo "short=$SHORT_HASH" >> $GITHUB_OUTPUT
+
+      - name: Set os_version variable
+        id: determine-os-version
+        shell: bash
+        run: |
+          # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # If this is a tag push, use the tag name (vX.X.X)
+            echo "os_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            # If this is a branch push, use [branch].[height].[hash] format
+            # Sanitize branch name by replacing forward slashes with hyphens
+            SANITIZED_BRANCH_NAME=$(echo "${GITHUB_REF_NAME}" | sed 's/\//-/g')
+            COMMIT_HEIGHT=$(git rev-list --count HEAD)
+            echo "os_version=${SANITIZED_BRANCH_NAME}.${COMMIT_HEIGHT}.${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Set release_channel variable
+        id: determine-release-channel
+        shell: bash
+        run: |
+          # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # Extract tag name from refs/tags/v1.2.3 format
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            
+            if [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha ]]; then
+             # Strict check for v1.2.3-alpha4 format (alpha releases only)
+              echo "release_channel=alpha" >> $GITHUB_OUTPUT
+            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta ]]; then
+             # Strict check for v1.2.3-beta4 format (beta releases only)
+              echo "release_channel=beta" >> $GITHUB_OUTPUT
+            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              # Strict check for v1.2.3 format (stable releases only)
+              echo "release_channel=stable" >> $GITHUB_OUTPUT
+            else
+              # Tag exists but doesn't match expected patterns
+              echo "release_channel=dev" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "release_channel=dev" >> $GITHUB_OUTPUT
+          fi
+
+  build-firmware:
+    needs: [determine-versioning, define-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.define-matrix.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize
+        run: |
+          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
+          echo "FIRMWARE_FILENAME=$FIRMWARE_FILENAME" >> $GITHUB_ENV
+
+      - name: Build TollGateOS for ${{ matrix.device_id }}
+        id: build-os-image
+        uses: ./actions/build-os
+        with:
+          device_id: ${{ matrix.device_id }}
+          nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
+          nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
+          os_files_path: "./files"
+          nsecbech: ${{ secrets.NSECBECH }}
+          nsec: ${{ secrets.NSEC_HEX }}
+          openwrt_version: ${{ matrix.openwrt_version }}
+          tollgate_os_version: ${{ needs.determine-versioning.outputs.os_version }}
+          release_channel: ${{ needs.determine-versioning.outputs.release_channel }}
+      
+      - name: Copy firmware to artifacts directory
+        run: |
+          mkdir -p /tmp/tollgate-artifacts
+          mkdir -p ./artifacts
+          cp "${{ steps.build-os-image.outputs.firmware_path }}" "/tmp/tollgate-artifacts/${{ env.FIRMWARE_FILENAME }}"
+          cp "${{ steps.build-os-image.outputs.firmware_path }}" "./artifacts/${{ env.FIRMWARE_FILENAME }}"
+
+      - name: GitHub Artifact upload
+        if: ${{ env.ACT != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FIRMWARE_FILENAME }}
+          path: ./artifacts/${{ env.FIRMWARE_FILENAME }}
+          retention-days: 5
+
+  publish-metadata:
+    needs: [determine-versioning, build-firmware, define-matrix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: ubuntu:latest
+      options: --user root
+      volumes:
+        - /tmp/tollgate-artifacts:/tmp/tollgate-artifacts
+    strategy:
+      matrix: ${{ fromJson(needs.define-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize
+        run: |
+          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
+          echo "FIRMWARE_FILENAME=$FIRMWARE_FILENAME" >> $GITHUB_ENV
+
+      - name: Install required tools
+        run: |
+          apt-get update
+          apt-get install -y curl jq
+
+      - name: Get artifact from volume (ACT) or download (GitHub)
+        shell: bash
+        run: |
+          mkdir -p ./artifacts
+          if [ "$ACT" = "true" ]; then
+            # In ACT, copy from mounted volume
+            cp /tmp/tollgate-artifacts/${{ env.FIRMWARE_FILENAME }} ./artifacts/
+          fi
+
+      - name: Download artifact from GitHub
+        if: ${{ env.ACT != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.FIRMWARE_FILENAME }}
+          path: ./artifacts
+
+      - name: Get firmware details
+        shell: bash
+        run: |
+          FIRMWARE_PATH=$(find ./artifacts -name "${{ env.FIRMWARE_FILENAME }}" -type f | head -n1)
+          FILE_SIZE=$(stat -c%s "$FIRMWARE_PATH")
+          echo "FIRMWARE_PATH=$FIRMWARE_PATH" >> $GITHUB_ENV
+          echo "FIRMWARE_SIZE=$FILE_SIZE" >> $GITHUB_ENV
+
+      - name: Get device architecture and details
+        shell: bash
+        run: |
+          echo "ℹ️ Fetching target based on device id"
+          all_targets=$(curl -s https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/.overview.json)
+        
+          # Extract target from the correct path in the JSON structure
+          current_target=$(echo "$all_targets" | jq -r --arg device "${{ matrix.device_id }}" '.profiles[] | select(.id == $device) | .target')
+          
+          if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
+            echo "::error::Device ID '${{ matrix.device_id }}' not found in the OpenWrt overview file"
+            exit 1
+          fi
+          
+          echo "ℹ️ Current device: ${{ matrix.device_id }}"
+          echo "ℹ️ Current target: $current_target"
+
+          # Get architecture details
+          target_profiles=$(curl -s https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${current_target}/profiles.json)
+          architecture=$(echo "$target_profiles" | jq -r '.arch_packages')
+          supported_devices=$(echo "$target_profiles" | jq -r --arg device "${{ matrix.device_id }}" '.profiles.[$device].supported_devices | map(tostring) | join(",")')
+
+          echo "OS_ARCHITECTURE=$architecture" >> $GITHUB_ENV
+          echo "OS_SUPPORTED_DEVICES=$supported_devices" >> $GITHUB_ENV
+
+      - name: Install nak
+        shell: bash
+        run: |
+          echo "Downloading nak for linux-amd64..."
+          curl -L "https://github.com/fiatjaf/nak/releases/download/v0.16.2/nak-v0.16.2-linux-amd64" -o /usr/local/bin/nak
+          chmod +x /usr/local/bin/nak
+          
+          # Verify installation
+          if nak --version; then
+            echo "✅ nak installed successfully"
+          else
+            echo "❌ nak installation failed"
+            exit 1
+          fi
+
+      - name: Blossom Artifact upload using nak
+        id: blossom_upload
+        shell: bash
+        env:
+          BLOSSOM_SERVER: "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com"
+          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+        run: |
+          # Upload file to Blossom using nak (redirect stdin from /dev/null to avoid pipe detection)
+          UPLOAD_RESPONSE=$(nak blossom upload --server "$BLOSSOM_SERVER" --sec "$NSEC_HEX" "${{ env.FIRMWARE_PATH }}" < /dev/null)
+          
+          echo "Upload response:"
+          echo "$UPLOAD_RESPONSE"
+          
+          # Extract sha256 hash from JSON response
+          FILE_HASH=$(echo "$UPLOAD_RESPONSE" | jq -r '.sha256')
+          
+          if [ -z "$FILE_HASH" ] || [ "$FILE_HASH" = "null" ]; then
+            echo "❌ Failed to extract hash from upload response"
+            exit 1
+          fi
+          
+          # Construct Blossom URL
+          BLOSSOM_URL="$BLOSSOM_SERVER/$FILE_HASH"
+          
+          echo "url=$BLOSSOM_URL" >> $GITHUB_OUTPUT
+          echo "hash=$FILE_HASH" >> $GITHUB_OUTPUT
+          echo "✅ Uploaded to Blossom: $BLOSSOM_URL"
+
+      - name: Publish Firmware NIP-94 Metadata
+        id: publish_firmware
+        shell: bash
+        env:
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+        run: |
+          set -e  # Exit on any error
+          
+          # Create NIP-94 event
+          echo "Creating NIP-94 event..."
+          nak event --sec "$NSEC_HEX" -k 1063 \
+            -c "TollGate OS Firmware for ${{ matrix.device_id }}" \
+            --tag url="${{ steps.blossom_upload.outputs.url }}" \
+            --tag m="application/octet-stream" \
+            --tag x="${{ steps.blossom_upload.outputs.hash }}" \
+            --tag ox="${{ steps.blossom_upload.outputs.hash }}" \
+            --tag size="${{ env.FIRMWARE_SIZE }}" \
+            --tag filename="${{ env.FIRMWARE_FILENAME }}" \
+            --tag A="${{ env.OS_ARCHITECTURE }}" \
+            --tag device_id="${{ matrix.device_id }}" \
+            --tag d="${{ matrix.device_id }}" \
+            --tag supported_devices="${{ env.OS_SUPPORTED_DEVICES }}" \
+            --tag openwrt_version="${{ matrix.openwrt_version }}" \
+            --tag v="${{ needs.determine-versioning.outputs.os_version }}" \
+            --tag c="${{ needs.determine-versioning.outputs.release_channel }}" \
+            > event.json 2> event.err
+          
+          NAK_EXIT=$?
+          
+          echo "Event creation exit code: $NAK_EXIT"
+          echo "event.json size: $(wc -c < event.json 2>/dev/null || echo '0') bytes"
+          echo "event.err size: $(wc -c < event.err 2>/dev/null || echo '0') bytes"
+          
+          if [ -s event.err ]; then
+            echo "=== Event stderr ==="
+            cat event.err
+            echo "===================="
+          fi
+          
+          if [ $NAK_EXIT -ne 0 ]; then
+            echo "❌ Failed to create event (exit code: $NAK_EXIT)"
+            cat event.json 2>/dev/null || echo "No event.json created"
+            exit $NAK_EXIT
+          fi
+          
+          if [ ! -s event.json ]; then
+            echo "❌ event.json is empty"
+            exit 1
+          fi
+          
+          echo "=== Event JSON ==="
+          cat event.json
+          echo "=================="
+          
+          # Validate and extract event ID
+          EVENT_ID=$(jq -r '.id' event.json)
+          
+          if [ -z "$EVENT_ID" ] || [ "$EVENT_ID" = "null" ]; then
+            echo "❌ Failed to extract event ID"
+            exit 1
+          fi
+          
+          echo "Event created with ID: $EVENT_ID"
+          
+          # Step 2: Publish to relays
+          echo "Publishing to relays..."
+          cat event.json | nak event $RELAYS 2>&1
+          
+          echo "eventId=$EVENT_ID" >> $GITHUB_OUTPUT
+          echo "✅ Published NIP-94 event: $EVENT_ID"
+
+      - name: Verify Firmware NIP-94 Event
+        id: verify_firmware
+        if: ${{ steps.publish_firmware.outputs.eventId != '' }}
+        env:
+          EVENT_ID: ${{ steps.publish_firmware.outputs.eventId }}
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+        run: |
+          echo "Verifying event $EVENT_ID on relays..."
+          FOUND=0
+          for relay in $RELAYS; do
+            echo "Checking $relay..."
+            RESULT=$(nak req -i "$EVENT_ID" "$relay" 2>/dev/null || echo "")
+            if [ -n "$RESULT" ]; then
+              echo "✅ Found on $relay"
+              FOUND=1
+            else
+              echo "⚠️  Not found on $relay"
+            fi
+          done
+          
+          if [ $FOUND -eq 0 ]; then
+            echo "❌ Event not found on any relay"
+            exit 1
+          fi
+          
+          echo "✅ Event verified on at least one relay"
