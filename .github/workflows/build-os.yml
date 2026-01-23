@@ -155,6 +155,7 @@ jobs:
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           os_files_path: "./build-source/files"
+          source_path: "./build-source"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: ${{ matrix.openwrt_version }}
