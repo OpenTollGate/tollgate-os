@@ -189,12 +189,6 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.define-matrix.outputs.matrix) }}
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-          fetch-depth: 0
-
       - name: Initialize
         run: |
           FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
