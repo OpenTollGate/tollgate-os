@@ -135,7 +135,7 @@ jobs:
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           os_files_path: "./files"
           nsecbech: ${{ secrets.NSECBECH }}
-          nsec: ${{ secrets.NSEC_HEX }}
+          nsec: ${{ secrets.NSEC }}
           openwrt_version: ${{ matrix.openwrt_version }}
           tollgate_os_version: ${{ needs.determine-versioning.outputs.os_version }}
           release_channel: ${{ needs.determine-versioning.outputs.release_channel }}
@@ -250,7 +250,7 @@ jobs:
         shell: bash
         env:
           BLOSSOM_SERVER: "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com"
-          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+          NSEC_HEX: ${{ secrets.NSEC }}
         run: |
           # Upload file to Blossom using nak (redirect stdin from /dev/null to avoid pipe detection)
           UPLOAD_RESPONSE=$(nak blossom upload --server "$BLOSSOM_SERVER" --sec "$NSEC_HEX" "${{ env.FIRMWARE_PATH }}" < /dev/null)
@@ -278,7 +278,7 @@ jobs:
         shell: bash
         env:
           RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
-          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+          NSEC_HEX: ${{ secrets.NSEC }}
         run: |
           set -e  # Exit on any error
           
