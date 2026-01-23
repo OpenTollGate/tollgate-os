@@ -40,10 +40,6 @@ inputs:
     description: 'Path to default files directory'
     default: 'tollgate-image-builder/files'
     required: false
-  source_path:
-    description: 'Path to source code directory (for packages.json and release.json)'
-    default: '.'
-    required: false
   nsecbech:
     description: 'Nostr secret key for Blossom in bech32 format'
     required: true
@@ -188,7 +184,7 @@ runs:
         
         echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
         
-        tollgate_packages=$(cat ${{ inputs.source_path }}/packages_${{ inputs.release_channel }}.json)
+        tollgate_packages=$(cat packages_${{ inputs.release_channel }}.json)
         
         tollgate_packages_external=$(echo "${tollgate_packages}" | jq -r '.external | join(" ")')
         tollgate_packages_custom_length=$(echo "${tollgate_packages_external}" | wc -w)
@@ -198,7 +194,7 @@ runs:
         
         # Example source file: https://github.com/OpenTollGate/tollgate-os/blob/main/files/etc/tollgate/release.json
         # Release.json is deprecated, new changes should be added to packages_[release_channel].json
-        tollgate_packages_custom=$(jq -r '.modules' ${{ inputs.source_path }}/files/etc/tollgate/release.json)
+        tollgate_packages_custom=$(jq -r '.modules' files/etc/tollgate/release.json)
         tollgate_packages_custom_length=$(echo "${tollgate_packages_custom}" | jq 'length')
         
         echo "🔍 Found $tollgate_packages_custom_length TollGate CUSTOM package(s)."
