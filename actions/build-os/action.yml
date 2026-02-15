@@ -41,8 +41,8 @@ inputs:
     default: 'tollgate-image-builder/files'
     required: false
   custom_packages_path:
-    description: 'Path to directory containing custom .ipk packages (optional, if not provided will use legacy release.json)'
-    required: false
+    description: 'Path to directory containing custom .ipk packages'
+    required: true
   nsecbech:
     description: 'Nostr secret key for Blossom in bech32 format'
     required: true
@@ -179,72 +179,38 @@ runs:
         mkdir -p "${packages_dir}"
         echo "PACKAGES_DIR=$packages_dir" >> $GITHUB_ENV
 
-    - name: Copy or Download TollGate Packages
+    - name: Copy Custom Packages
       shell: bash
       run: |
-        # Create + populate packages directory if it doesn't exist
-        touch "${{ env.PACKAGES_DIR }}/Packages" # prevents failures if no packages are downloaded
+        echo "ℹ️ Using custom packages from: ${{ inputs.custom_packages_path }}"
         
-        if [ -n "${{ inputs.custom_packages_path }}" ] && [ -d "${{ inputs.custom_packages_path }}" ]; then
-          echo "ℹ️ Using custom packages from: ${{ inputs.custom_packages_path }}"
-          
-          # Copy custom packages to the build directory
-          cp -v "${{ inputs.custom_packages_path }}"/*.ipk "${{ env.PACKAGES_DIR }}/" || true
-          
-          # Extract package names from .ipk files
-          tollgate_custom_packages=""
-          for ipk in "${{ inputs.custom_packages_path }}"/*.ipk; do
-            if [ -f "$ipk" ]; then
-              # Extract package name from filename (remove version and .ipk)
-              pkg_name=$(basename "$ipk" | sed 's/_[0-9].*//')
-              tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
-              echo "📦 Added package: ${pkg_name}"
-            fi
-          done
-          
-          echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
-          echo "TOLLGATE_EXTERNAL_PACKAGES=" >> $GITHUB_ENV
-        else
-          echo "ℹ️ No custom packages path provided, using legacy release.json method"
-          echo "🔍 Looking for packages for architecture: ${{ env.OS_ARCHITECTURE }}"
-          
-          # Legacy method: download from packages_[channel].json and release.json
-          if [ -f "packages_${{ inputs.release_channel }}.json" ]; then
-            tollgate_packages=$(cat packages_${{ inputs.release_channel }}.json)
-            tollgate_packages_external=$(echo "${tollgate_packages}" | jq -r '.external | join(" ")')
-            echo "ℹ️ TollGate EXTERNAL package(s): $tollgate_packages_external"
-          else
-            tollgate_packages_external=""
-          fi
-          
-          # Download from release.json
-          if [ -f "files/etc/tollgate/release.json" ]; then
-            tollgate_packages_custom=$(jq -r '.modules' files/etc/tollgate/release.json)
-            tollgate_packages_custom_length=$(echo "${tollgate_packages_custom}" | jq 'length')
-            
-            echo "🔍 Found $tollgate_packages_custom_length TollGate CUSTOM package(s)."
-            
-            for ((i=0; i<$tollgate_packages_custom_length; i++)); do
-              tollgate_package_name=$(echo $tollgate_packages_custom | jq -r --arg i "${i}" '.[$i | tonumber].name')
-              tollgate_package_url=$(echo $tollgate_packages_custom | jq -r --arg arch "${{ env.OS_ARCHITECTURE }}" --arg i "${i}" '.[$i | tonumber].versions[0].architectures[$arch].url')
-
-              echo "📦 Downloading tollgate package: $tollgate_package_name from $tollgate_package_url"
-
-              if curl -L -f --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 5 -o "${{ env.PACKAGES_DIR }}/${tollgate_package_name}.ipk" "${tollgate_package_url}"; then
-                  echo "✅ Successfully downloaded ${tollgate_package_name}"
-                  tollgate_custom_packages="${tollgate_custom_packages} ${tollgate_package_name} "
-                else
-                  echo "❌ Error: Failed to download ${tollgate_package_name} after 3 attempts"
-                  exit 1;
-                fi
-            done
-          fi
-          
-          echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
-          echo "TOLLGATE_EXTERNAL_PACKAGES=$tollgate_packages_external" >> $GITHUB_ENV
+        if [ ! -d "${{ inputs.custom_packages_path }}" ]; then
+          echo "❌ Custom packages directory not found: ${{ inputs.custom_packages_path }}"
+          exit 1
         fi
         
-        # List the downloaded packages
+        # Copy custom packages to the build directory
+        cp -v "${{ inputs.custom_packages_path }}"/*.ipk "${{ env.PACKAGES_DIR }}/" || true
+        
+        # Extract package names from .ipk files
+        tollgate_custom_packages=""
+        for ipk in "${{ inputs.custom_packages_path }}"/*.ipk; do
+          if [ -f "$ipk" ]; then
+            # Extract package name from filename (remove version and .ipk)
+            pkg_name=$(basename "$ipk" | sed 's/_[0-9].*//')
+            tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
+            echo "📦 Added package: ${pkg_name}"
+          fi
+        done
+        
+        if [ -z "$tollgate_custom_packages" ]; then
+          echo "⚠️ No packages found in ${{ inputs.custom_packages_path }}"
+        fi
+        
+        echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
+        echo "TOLLGATE_EXTERNAL_PACKAGES=" >> $GITHUB_ENV
+        
+        # List the packages
         echo "📋 Packages in ${{ env.PACKAGES_DIR }}:"
         ls -la "${{ env.PACKAGES_DIR }}"
 
