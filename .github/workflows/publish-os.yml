@@ -11,7 +11,7 @@ on:
         description: 'Override tollgate-wrt package author pubkey (optional, defaults to packages.json)'
         required: false
         type: string
-  push:
+  # push:
 
 ## Add global env vars for the whole workflow
 env:
@@ -380,7 +380,7 @@ jobs:
         if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.FIRMWARE_FILENAME }}
+          name: firmware-${{ matrix.device_id }}-${{ matrix.compression }}
           path: ./artifacts/${{ env.FIRMWARE_FILENAME }}
           retention-days: 5
 
@@ -431,7 +431,7 @@ jobs:
         if: ${{ env.ACT != 'true' }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.FIRMWARE_FILENAME }}
+          name: firmware-${{ matrix.device_id }}-${{ matrix.compression }}
           path: ./artifacts
 
       - name: Get firmware details
