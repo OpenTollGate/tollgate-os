@@ -65,7 +65,6 @@ jobs:
             {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4"},
             {"device_id": "dlink_covr-x1860-a1", "openwrt_version": "24.10.4"},
             {"device_id": "ubnt_unifiac-pro", "openwrt_version": "24.10.4"}
-            # {"device_id": "dlink_covr-c1200-a1", "openwrt_version": "24.10.3"} ## FIX: firmware image is too large for the device's flash memory (15.5MB > 14.8MB)
           ]'
           
           # For each device, get its architecture and find available compressions
