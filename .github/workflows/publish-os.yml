@@ -35,6 +35,28 @@ jobs:
               {
                 "device_id": "glinet_gl-mt3000",
                 "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-mt6000",
+                "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-ar300m16",
+                "openwrt_version": "24.10.1"
+              },
+              {
+                "device_id": "glinet_gl-ar300m-nor",
+                "openwrt_version": "24.10.1"
+              }
+              },
+              {
+                "device_id": "generic",
+                "openwrt_version": "24.10.1"
+              }
+              },
+              {
+                "device_id": "dlink_covr-x1860-a1",
+                "openwrt_version": "24.10.1"
               }
             ]
           }
