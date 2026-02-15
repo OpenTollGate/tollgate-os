@@ -189,41 +189,40 @@ runs:
           exit 1
         fi
         
-        # Copy all .ipk files to the build directory
-        # Files may be named with hash (from Blossom) or with package name
-        for file in "${{ inputs.custom_packages_path }}"/*; do
-          if [ -f "$file" ]; then
-            # Check if it's an ipk file (by content, not extension)
-            if file "$file" | grep -q "Debian binary package"; then
-              cp -v "$file" "${{ env.PACKAGES_DIR }}/"
-              echo "✅ Copied: $(basename "$file")"
-            fi
-          fi
-        done
+        echo "📋 Files in source directory:"
+        ls -lah "${{ inputs.custom_packages_path }}"
+        
+        # Copy all files (they should all be .ipk packages)
+        cp -v "${{ inputs.custom_packages_path }}"/* "${{ env.PACKAGES_DIR }}/" 2>/dev/null || true
+        
+        echo "📋 Files copied to packages directory:"
+        ls -lah "${{ env.PACKAGES_DIR }}"
         
         # Extract package names by inspecting the .ipk files with tar
         tollgate_custom_packages=""
         for ipk in "${{ env.PACKAGES_DIR }}"/*; do
-          if [ -f "$ipk" ] && file "$ipk" | grep -q "Debian binary package"; then
+          if [ -f "$ipk" ]; then
+            echo "ℹ️ Inspecting: $(basename "$ipk")"
             # Extract control file to get package name
-            pkg_name=$(tar -xzOf "$ipk" ./control.tar.gz | tar -xzOf - ./control | grep "^Package:" | cut -d' ' -f2)
+            pkg_name=$(tar -xzOf "$ipk" ./control.tar.gz 2>/dev/null | tar -xzOf - ./control 2>/dev/null | grep "^Package:" | cut -d' ' -f2 || echo "")
             if [ -n "$pkg_name" ]; then
               tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
-              echo "📦 Found package: ${pkg_name}"
+              echo "✅ Found package: ${pkg_name}"
+            else
+              echo "⚠️  Could not extract package name from $(basename "$ipk")"
             fi
           fi
         done
         
         if [ -z "$tollgate_custom_packages" ]; then
-          echo "⚠️ No packages found in ${{ inputs.custom_packages_path }}"
+          echo "❌ No valid packages found in ${{ inputs.custom_packages_path }}"
+          exit 1
         fi
         
         echo "TOLLGATE_CUSTOM_PACKAGES=$tollgate_custom_packages" >> $GITHUB_ENV
         echo "TOLLGATE_EXTERNAL_PACKAGES=" >> $GITHUB_ENV
         
-        # List the packages
-        echo "📋 Packages in ${{ env.PACKAGES_DIR }}:"
-        ls -la "${{ env.PACKAGES_DIR }}"
+        echo "✅ Final package list: $tollgate_custom_packages"
 
     - name: Generate Package Index
       shell: bash
