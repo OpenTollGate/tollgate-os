@@ -50,6 +50,7 @@ jobs:
       release_channel: ${{ steps.determine-release-channel.outputs.release_channel }}
       tollgate_wrt_version: ${{ steps.determine-package-version.outputs.tollgate_wrt_version }}
       tollgate_wrt_author: ${{ steps.determine-package-version.outputs.tollgate_wrt_author }}
+      tollgate_wrt_compression: ${{ steps.determine-package-version.outputs.tollgate_wrt_compression }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -125,6 +126,7 @@ jobs:
           # Extract tollgate-wrt config from packages.json
           PACKAGES_VERSION=$(jq -r '.packages."tollgate-wrt".version' packages.json)
           PACKAGES_AUTHOR=$(jq -r '.packages."tollgate-wrt".author' packages.json)
+          PACKAGES_COMPRESSION=$(jq -r '.packages."tollgate-wrt".compression // "none"' packages.json)
           
           if [ -z "$PACKAGES_VERSION" ] || [ "$PACKAGES_VERSION" = "null" ]; then
             echo "❌ tollgate-wrt version not found in packages.json"
@@ -139,6 +141,7 @@ jobs:
           echo "ℹ️ packages.json config:"
           echo "  Version: $PACKAGES_VERSION"
           echo "  Author: $PACKAGES_AUTHOR"
+          echo "  Compression: $PACKAGES_COMPRESSION"
           
           # Determine version (with override support)
           if [ -n "${{ inputs.override_tollgate_wrt_version }}" ]; then
@@ -165,10 +168,12 @@ jobs:
           
           echo "tollgate_wrt_version=$FINAL_VERSION" >> $GITHUB_OUTPUT
           echo "tollgate_wrt_author=$FINAL_AUTHOR" >> $GITHUB_OUTPUT
+          echo "tollgate_wrt_compression=$PACKAGES_COMPRESSION" >> $GITHUB_OUTPUT
           
           echo "✅ Final package config:"
           echo "  Version: $FINAL_VERSION"
           echo "  Author: $FINAL_AUTHOR"
+          echo "  Compression: $PACKAGES_COMPRESSION"
 
   build-firmware:
     needs: [determine-versioning, define-matrix]

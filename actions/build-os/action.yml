@@ -189,17 +189,28 @@ runs:
           exit 1
         fi
         
-        # Copy custom packages to the build directory
-        cp -v "${{ inputs.custom_packages_path }}"/*.ipk "${{ env.PACKAGES_DIR }}/" || true
+        # Copy all .ipk files to the build directory
+        # Files may be named with hash (from Blossom) or with package name
+        for file in "${{ inputs.custom_packages_path }}"/*; do
+          if [ -f "$file" ]; then
+            # Check if it's an ipk file (by content, not extension)
+            if file "$file" | grep -q "Debian binary package"; then
+              cp -v "$file" "${{ env.PACKAGES_DIR }}/"
+              echo "✅ Copied: $(basename "$file")"
+            fi
+          fi
+        done
         
-        # Extract package names from .ipk files
+        # Extract package names by inspecting the .ipk files with tar
         tollgate_custom_packages=""
-        for ipk in "${{ inputs.custom_packages_path }}"/*.ipk; do
-          if [ -f "$ipk" ]; then
-            # Extract package name from filename (remove version and .ipk)
-            pkg_name=$(basename "$ipk" | sed 's/_[0-9].*//')
-            tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
-            echo "📦 Added package: ${pkg_name}"
+        for ipk in "${{ env.PACKAGES_DIR }}"/*; do
+          if [ -f "$ipk" ] && file "$ipk" | grep -q "Debian binary package"; then
+            # Extract control file to get package name
+            pkg_name=$(tar -xzOf "$ipk" ./control.tar.gz | tar -xzOf - ./control | grep "^Package:" | cut -d' ' -f2)
+            if [ -n "$pkg_name" ]; then
+              tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
+              echo "📦 Found package: ${pkg_name}"
+            fi
           fi
         done
         
