@@ -20,50 +20,76 @@ env:
 jobs:
   define-matrix:
     runs-on: ubuntu-latest
+    needs: [determine-versioning]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Install nak
+        shell: bash
+        run: |
+          echo "Downloading nak for linux-amd64..."
+          curl -L "https://github.com/fiatjaf/nak/releases/download/v0.16.2/nak-v0.16.2-linux-amd64" -o /usr/local/bin/nak
+          chmod +x /usr/local/bin/nak
+          nak --version
+
       - id: set-matrix
+        shell: bash
+        env:
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
         run: |
           # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
           : ${GITHUB_OUTPUT:=/tmp/github_output}
           
-          # Create a human-readable matrix definition for device builds
-          cat > matrix.json << 'EOF'
-          {
-            "include": [
-              {
-                "device_id": "glinet_gl-mt3000",
-                "openwrt_version": "24.10.1"
-              },
-              {
-                "device_id": "glinet_gl-mt6000",
-                "openwrt_version": "24.10.1"
-              },
-              {
-                "device_id": "glinet_gl-ar300m16",
-                "openwrt_version": "24.10.1"
-              },
-              {
-                "device_id": "glinet_gl-ar300m-nor",
-                "openwrt_version": "24.10.1"
-              }
-              },
-              {
-                "device_id": "generic",
-                "openwrt_version": "24.10.1"
-              }
-              },
-              {
-                "device_id": "dlink_covr-x1860-a1",
-                "openwrt_version": "24.10.1"
-              }
-            ]
-          }
-          EOF
+          PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
+          PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
+          
+          echo "ℹ️ Discovering available compression types for version $PACKAGE_VERSION"
+          
+          # Fetch all packages for this version and author
+          EVENTS=$(nak req -k 1063 \
+            -a "$PACKAGE_AUTHOR" \
+            --tag n=tollgate-wrt \
+            --tag v="$PACKAGE_VERSION" \
+            $RELAYS | jq -s '.')
+          
+          # Extract unique compression types
+          COMPRESSIONS=$(echo "$EVENTS" | jq -r '[.[] | .tags[] | select(.[0] == "compression") | .[1]] | unique | .[]')
+          
+          echo "ℹ️ Available compression types:"
+          echo "$COMPRESSIONS"
+          
+          # Base device configurations
+          DEVICES='[
+            {"device_id": "glinet_gl-mt3000", "openwrt_version": "24.10.4"},
+            {"device_id": "glinet_gl-mt6000", "openwrt_version": "24.10.4"},
+            {"device_id": "glinet_gl-ar300m16", "openwrt_version": "24.10.4"},
+            {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4"},
+            {"device_id": "dlink_covr-x1860-a1", "openwrt_version": "24.10.4"},
+            {"device_id": "ubnt_unifiac-pro", "openwrt_version": "24.10.4"},
+            {"device_id": "dlink_covr-c1200-a1", "openwrt_version": "24.10.3"}
+          ]'
+          
+          # Create matrix with device + compression combinations
+          MATRIX=$(echo "$DEVICES" | jq --argjson compressions "$(echo "$COMPRESSIONS" | jq -R . | jq -s .)" '
+            {
+              include: [
+                .[] as $device |
+                $compressions[] as $compression |
+                $device + {compression: $compression}
+              ]
+            }
+          ')
+          
+          echo "ℹ️ Generated matrix:"
+          echo "$MATRIX" | jq .
           
           # Create a properly escaped JSON for GitHub output
-          echo "matrix=$(cat matrix.json | jq -c .)" >> $GITHUB_OUTPUT
+          echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
 
   determine-versioning:
     runs-on: ubuntu-latest
@@ -196,7 +222,13 @@ jobs:
 
       - name: Initialize
         run: |
-          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
+          # Add compression suffix to firmware filename
+          if [ "${{ matrix.compression }}" != "none" ]; then
+            COMPRESSION_SUFFIX="-${{ matrix.compression }}"
+          else
+            COMPRESSION_SUFFIX=""
+          fi
+          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.tollgate_wrt_version }}${COMPRESSION_SUFFIX}.bin
           echo "FIRMWARE_FILENAME=$FIRMWARE_FILENAME" >> $GITHUB_ENV
 
       - name: Get device architecture
@@ -233,12 +265,14 @@ jobs:
         run: |
           PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
           PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
+          PACKAGE_COMPRESSION="${{ matrix.compression }}"
           ARCHITECTURE="${{ env.DEVICE_ARCHITECTURE }}"
           
           echo "ℹ️ Searching for tollgate-wrt package:"
           echo "  Version: $PACKAGE_VERSION"
           echo "  Author: $PACKAGE_AUTHOR"
           echo "  Architecture: $ARCHITECTURE"
+          echo "  Compression: $PACKAGE_COMPRESSION"
           
           # Search for NIP-94 events with matching author, version, and architecture
           # Using kind 1063 (file metadata), filtering by package name, version, architecture, and author pubkey
@@ -257,8 +291,18 @@ jobs:
             exit 1
           fi
           
+          # Filter by compression type (compression tag is not filterable in nak)
+          FILTERED_EVENTS=$(echo "$EVENTS" | jq --arg comp "$PACKAGE_COMPRESSION" '[.[] | select(.tags[] | select(.[0] == "compression" and .[1] == $comp))]')
+          
+          if [ "$(echo "$FILTERED_EVENTS" | jq 'length')" -eq 0 ]; then
+            echo "❌ No package found with compression type: $PACKAGE_COMPRESSION"
+            echo "ℹ️ Available packages:"
+            echo "$EVENTS" | jq -r '.[] | .tags[] | select(.[0] == "compression") | "  - \(.[1])"' | sort -u
+            exit 1
+          fi
+          
           # Get the first matching event
-          EVENT=$(echo "$EVENTS" | jq '.[0]')
+          EVENT=$(echo "$FILTERED_EVENTS" | jq '.[0]')
           
           # Extract download URL and hash
           PACKAGE_URL=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "url") | .[1]')
@@ -333,8 +377,15 @@ jobs:
 
       - name: Initialize
         run: |
-          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
+          # Add compression suffix to firmware filename
+          if [ "${{ matrix.compression }}" != "none" ]; then
+            COMPRESSION_SUFFIX="-${{ matrix.compression }}"
+          else
+            COMPRESSION_SUFFIX=""
+          fi
+          FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.tollgate_wrt_version }}${COMPRESSION_SUFFIX}.bin
           echo "FIRMWARE_FILENAME=$FIRMWARE_FILENAME" >> $GITHUB_ENV
+          echo "COMPRESSION_TYPE=${{ matrix.compression }}" >> $GITHUB_ENV
 
       - name: Install required tools
         run: |
@@ -445,7 +496,7 @@ jobs:
           # Create NIP-94 event
           echo "Creating NIP-94 event..."
           nak event --sec "$NSEC_HEX" -k 1063 \
-            -c "TollGate OS Firmware for ${{ matrix.device_id }}" \
+            -c "TollGate OS Firmware for ${{ matrix.device_id }} (${{ env.COMPRESSION_TYPE }} compression)" \
             --tag url="${{ steps.blossom_upload.outputs.url }}" \
             --tag m="application/octet-stream" \
             --tag x="${{ steps.blossom_upload.outputs.hash }}" \
@@ -460,6 +511,7 @@ jobs:
             --tag v="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}" \
             --tag c="${{ needs.determine-versioning.outputs.release_channel }}" \
             --tag n="tollgate-os" \
+            --tag compression="${{ env.COMPRESSION_TYPE }}" \
             > event.json 2> event.err
           
           NAK_EXIT=$?
