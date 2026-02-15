@@ -1,7 +1,47 @@
-# TollGate OS Firmware Build Action
+# TollGate OS
 ![logo](TollGate_Logo-C-black.png)
 
-A GitHub Action that uses OpenWRT's image-builder to create base firmware for supported devices without needing to recompile all packages.
+TollGate OS is a custom OpenWRT-based firmware distribution that integrates with the Nostr protocol for decentralized package management and distribution.
+
+## Overview
+
+This repository builds and publishes TollGate OS firmware images for multiple device types. The build system:
+
+- **Fetches packages from Nostr**: Uses NIP-94 metadata events to discover and download packages (like `tollgate-wrt`) from decentralized Nostr relays
+- **Builds custom firmware**: Uses OpenWRT's image-builder to create firmware images without recompiling all packages
+- **Publishes to Nostr**: Uploads built firmware to Blossom storage and publishes metadata back to Nostr for decentralized distribution
+- **Version management**: Uses [`packages.json`](packages.json) to define which package versions to include in builds
+
+## Supported Devices
+
+- GL.iNet GL-MT3000
+- GL.iNet GL-MT6000
+- GL.iNet GL-AR300M16
+- GL.iNet GL-AR300M-NOR
+
+## Package Configuration
+
+The [`packages.json`](packages.json) file defines which packages are included in the build:
+
+```json
+{
+  "packages": {
+    "tollgate-wrt": {
+      "author": "74fffd9c15ae65c42ec4e07dc274ca4221ad8b7046fefbd55f031ca945b7147a",
+      "version": "v0.3.2"
+    }
+  }
+}
+```
+
+The build workflow fetches packages from Nostr by filtering for:
+- Author pubkey (ensures packages come from trusted sources)
+- Package name and version
+- Device architecture
+
+## Workflow
+
+See [`docs/build-os-workflow.md`](docs/build-os-workflow.md) for detailed documentation on the build and publish workflow.
 
 ## Issues / Contributions
 

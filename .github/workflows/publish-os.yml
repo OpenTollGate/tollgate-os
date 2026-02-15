@@ -3,10 +3,13 @@ name: Build and Publish TollGate OS
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Git ref (branch, tag, or commit SHA) to build'
+      override_tollgate_wrt_version:
+        description: 'Override tollgate-wrt package version (optional, defaults to packages.json)'
         required: false
-        default: ''
+        type: string
+      override_tollgate_wrt_author:
+        description: 'Override tollgate-wrt package author pubkey (optional, defaults to packages.json)'
+        required: false
         type: string
   push:
 
@@ -57,6 +60,8 @@ jobs:
     outputs:
       os_version: ${{ steps.determine-os-version.outputs.os_version }}
       release_channel: ${{ steps.determine-release-channel.outputs.release_channel }}
+      tollgate_wrt_version: ${{ steps.determine-package-version.outputs.tollgate_wrt_version }}
+      tollgate_wrt_author: ${{ steps.determine-package-version.outputs.tollgate_wrt_author }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,6 +122,66 @@ jobs:
             echo "release_channel=dev" >> $GITHUB_OUTPUT
           fi
 
+      - name: Read packages.json and determine package config
+        id: determine-package-version
+        shell: bash
+        run: |
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          
+          # Read packages.json
+          if [ ! -f "packages.json" ]; then
+            echo "❌ packages.json not found"
+            exit 1
+          fi
+          
+          # Extract tollgate-wrt config from packages.json
+          PACKAGES_VERSION=$(jq -r '.packages."tollgate-wrt".version' packages.json)
+          PACKAGES_AUTHOR=$(jq -r '.packages."tollgate-wrt".author' packages.json)
+          
+          if [ -z "$PACKAGES_VERSION" ] || [ "$PACKAGES_VERSION" = "null" ]; then
+            echo "❌ tollgate-wrt version not found in packages.json"
+            exit 1
+          fi
+          
+          if [ -z "$PACKAGES_AUTHOR" ] || [ "$PACKAGES_AUTHOR" = "null" ]; then
+            echo "❌ tollgate-wrt author not found in packages.json"
+            exit 1
+          fi
+          
+          echo "ℹ️ packages.json config:"
+          echo "  Version: $PACKAGES_VERSION"
+          echo "  Author: $PACKAGES_AUTHOR"
+          
+          # Determine version (with override support)
+          if [ -n "${{ inputs.override_tollgate_wrt_version }}" ]; then
+            FINAL_VERSION="${{ inputs.override_tollgate_wrt_version }}"
+            echo "ℹ️ Using override version: $FINAL_VERSION"
+          elif [[ $GITHUB_REF == refs/tags/* ]]; then
+            # If building a tag, use the same version for the package
+            FINAL_VERSION="${GITHUB_REF_NAME}"
+            echo "ℹ️ Using version from OS tag: $FINAL_VERSION"
+          else
+            # Use version from packages.json
+            FINAL_VERSION="$PACKAGES_VERSION"
+            echo "ℹ️ Using version from packages.json: $FINAL_VERSION"
+          fi
+          
+          # Determine author (with override support)
+          if [ -n "${{ inputs.override_tollgate_wrt_author }}" ]; then
+            FINAL_AUTHOR="${{ inputs.override_tollgate_wrt_author }}"
+            echo "ℹ️ Using override author: $FINAL_AUTHOR"
+          else
+            FINAL_AUTHOR="$PACKAGES_AUTHOR"
+            echo "ℹ️ Using author from packages.json: $FINAL_AUTHOR"
+          fi
+          
+          echo "tollgate_wrt_version=$FINAL_VERSION" >> $GITHUB_OUTPUT
+          echo "tollgate_wrt_author=$FINAL_AUTHOR" >> $GITHUB_OUTPUT
+          
+          echo "✅ Final package config:"
+          echo "  Version: $FINAL_VERSION"
+          echo "  Author: $FINAL_AUTHOR"
+
   build-firmware:
     needs: [determine-versioning, define-matrix]
     runs-on: ubuntu-latest
@@ -134,6 +199,91 @@ jobs:
           FIRMWARE_FILENAME=tollgate-os-${{ matrix.device_id }}-${{ needs.determine-versioning.outputs.os_version }}.bin
           echo "FIRMWARE_FILENAME=$FIRMWARE_FILENAME" >> $GITHUB_ENV
 
+      - name: Get device architecture
+        shell: bash
+        run: |
+          echo "ℹ️ Fetching target based on device id"
+          all_targets=$(curl -s https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/.overview.json)
+        
+          current_target=$(echo "$all_targets" | jq -r --arg device "${{ matrix.device_id }}" '.profiles[] | select(.id == $device) | .target')
+          
+          if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
+            echo "::error::Device ID '${{ matrix.device_id }}' not found"
+            exit 1
+          fi
+          
+          target_profiles=$(curl -s https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${current_target}/profiles.json)
+          architecture=$(echo "$target_profiles" | jq -r '.arch_packages')
+          
+          echo "DEVICE_ARCHITECTURE=$architecture" >> $GITHUB_ENV
+          echo "ℹ️ Device architecture: $architecture"
+
+      - name: Install nak
+        shell: bash
+        run: |
+          echo "Downloading nak for linux-amd64..."
+          curl -L "https://github.com/fiatjaf/nak/releases/download/v0.16.2/nak-v0.16.2-linux-amd64" -o /usr/local/bin/nak
+          chmod +x /usr/local/bin/nak
+          nak --version
+
+      - name: Fetch tollgate-wrt package from Nostr
+        shell: bash
+        env:
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+        run: |
+          PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
+          PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
+          ARCHITECTURE="${{ env.DEVICE_ARCHITECTURE }}"
+          
+          echo "ℹ️ Searching for tollgate-wrt package:"
+          echo "  Version: $PACKAGE_VERSION"
+          echo "  Author: $PACKAGE_AUTHOR"
+          echo "  Architecture: $ARCHITECTURE"
+          
+          # Search for NIP-94 events with matching author, version, and architecture
+          # Using kind 1063 (file metadata), filtering by package name, version, architecture, and author pubkey
+          EVENTS=$(nak req -k 1063 \
+            -a "$PACKAGE_AUTHOR" \
+            --tag n=tollgate-wrt \
+            --tag v="$PACKAGE_VERSION" \
+            --tag A="$ARCHITECTURE" \
+            $RELAYS | jq -s '.')
+          
+          if [ "$(echo "$EVENTS" | jq 'length')" -eq 0 ]; then
+            echo "❌ No package found for:"
+            echo "  Author: $PACKAGE_AUTHOR"
+            echo "  Version: $PACKAGE_VERSION"
+            echo "  Architecture: $ARCHITECTURE"
+            exit 1
+          fi
+          
+          # Get the first matching event
+          EVENT=$(echo "$EVENTS" | jq '.[0]')
+          
+          # Extract download URL and hash
+          PACKAGE_URL=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "url") | .[1]')
+          PACKAGE_HASH=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "x") | .[1]')
+          PACKAGE_FILENAME=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "filename") | .[1]')
+          
+          echo "✅ Found package:"
+          echo "  URL: $PACKAGE_URL"
+          echo "  Hash: $PACKAGE_HASH"
+          echo "  Filename: $PACKAGE_FILENAME"
+          
+          # Download the package
+          mkdir -p ./custom-packages
+          curl -L -o "./custom-packages/$PACKAGE_FILENAME" "$PACKAGE_URL"
+          
+          # Verify hash
+          DOWNLOADED_HASH=$(sha256sum "./custom-packages/$PACKAGE_FILENAME" | cut -d' ' -f1)
+          if [ "$DOWNLOADED_HASH" != "$PACKAGE_HASH" ]; then
+            echo "❌ Hash mismatch! Expected: $PACKAGE_HASH, Got: $DOWNLOADED_HASH"
+            exit 1
+          fi
+          
+          echo "✅ Package downloaded and verified"
+          echo "TOLLGATE_WRT_PACKAGE_PATH=./custom-packages/$PACKAGE_FILENAME" >> $GITHUB_ENV
+
       - name: Build TollGateOS for ${{ matrix.device_id }}
         id: build-os-image
         uses: ./actions/build-os
@@ -142,6 +292,7 @@ jobs:
           nostr_secret_key: ${{ secrets.NOSTR_SECRET_KEY }}
           nostr_public_key: ${{ secrets.NOSTR_PUBLIC_KEY }}
           os_files_path: "./files"
+          custom_packages_path: "./custom-packages"
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: ${{ matrix.openwrt_version }}
@@ -306,8 +457,9 @@ jobs:
             --tag d="${{ matrix.device_id }}" \
             --tag supported_devices="${{ env.OS_SUPPORTED_DEVICES }}" \
             --tag openwrt_version="${{ matrix.openwrt_version }}" \
-            --tag v="${{ needs.determine-versioning.outputs.os_version }}" \
+            --tag v="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}" \
             --tag c="${{ needs.determine-versioning.outputs.release_channel }}" \
+            --tag n="tollgate-os" \
             > event.json 2> event.err
           
           NAK_EXIT=$?
