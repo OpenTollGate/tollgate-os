@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       os_version: ${{ steps.determine-os-version.outputs.os_version }}
-      release_channel: ${{ steps.determine-release-channel.outputs.release_channel }}
+      release_channel: ${{ steps.determine-package-version.outputs.release_channel }}
       tollgate_wrt_version: ${{ steps.determine-package-version.outputs.tollgate_wrt_version }}
       tollgate_wrt_author: ${{ steps.determine-package-version.outputs.tollgate_wrt_author }}
       tollgate_wrt_compression: ${{ steps.determine-package-version.outputs.tollgate_wrt_compression }}
@@ -83,34 +83,6 @@ jobs:
             echo "os_version=${SANITIZED_BRANCH_NAME}.${COMMIT_HEIGHT}.${{ steps.commit-hash.outputs.short }}" >> $GITHUB_OUTPUT
           fi
         
-      - name: Set release_channel variable
-        id: determine-release-channel
-        shell: bash
-        run: |
-          # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
-          : ${GITHUB_OUTPUT:=/tmp/github_output}
-          
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            # Extract tag name from refs/tags/v1.2.3 format
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-            
-            if [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha ]]; then
-             # Strict check for v1.2.3-alpha4 format (alpha releases only)
-              echo "release_channel=alpha" >> $GITHUB_OUTPUT
-            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta ]]; then
-             # Strict check for v1.2.3-beta4 format (beta releases only)
-              echo "release_channel=beta" >> $GITHUB_OUTPUT
-            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              # Strict check for v1.2.3 format (stable releases only)
-              echo "release_channel=stable" >> $GITHUB_OUTPUT
-            else
-              # Tag exists but doesn't match expected patterns
-              echo "release_channel=dev" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "release_channel=dev" >> $GITHUB_OUTPUT
-          fi
-
       - name: Read packages.json and determine package config
         id: determine-package-version
         shell: bash
@@ -166,14 +138,27 @@ jobs:
             echo "ℹ️ Using author from packages.json: $FINAL_AUTHOR"
           fi
           
+          # Determine release channel from package version
+          if [[ $FINAL_VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha ]]; then
+            RELEASE_CHANNEL="alpha"
+          elif [[ $FINAL_VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta ]]; then
+            RELEASE_CHANNEL="beta"
+          elif [[ $FINAL_VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            RELEASE_CHANNEL="stable"
+          else
+            RELEASE_CHANNEL="dev"
+          fi
+          
           echo "tollgate_wrt_version=$FINAL_VERSION" >> $GITHUB_OUTPUT
           echo "tollgate_wrt_author=$FINAL_AUTHOR" >> $GITHUB_OUTPUT
           echo "tollgate_wrt_compression=$PACKAGES_COMPRESSION" >> $GITHUB_OUTPUT
+          echo "release_channel=$RELEASE_CHANNEL" >> $GITHUB_OUTPUT
           
           echo "✅ Final package config:"
           echo "  Version: $FINAL_VERSION"
           echo "  Author: $FINAL_AUTHOR"
           echo "  Compression: $PACKAGES_COMPRESSION"
+          echo "  Release Channel: $RELEASE_CHANNEL"
 
   build-firmware:
     needs: [determine-versioning, define-matrix]
