@@ -11,6 +11,8 @@ on:
         description: 'Author pubkey override tollgate-wrt package'
         required: false
         type: string
+  repository_dispatch:
+    types: [build-os]
   # push:
 
 ## Add global env vars for the whole workflow
@@ -188,9 +190,10 @@ jobs:
           echo "  Author: $PACKAGES_AUTHOR"
           echo "  Compression: $PACKAGES_COMPRESSION"
           
-          # Determine version (with override support)
-          if [ -n "${{ inputs.override_tollgate_wrt_version }}" ]; then
-            FINAL_VERSION="${{ inputs.override_tollgate_wrt_version }}"
+          # Determine version (with override support from workflow_dispatch or repository_dispatch)
+          OVERRIDE_VERSION="${{ inputs.override_tollgate_wrt_version || github.event.client_payload.override_tollgate_wrt_version }}"
+          if [ -n "$OVERRIDE_VERSION" ]; then
+            FINAL_VERSION="$OVERRIDE_VERSION"
             echo "ℹ️ Using override version: $FINAL_VERSION"
           elif [[ $GITHUB_REF == refs/tags/* ]]; then
             # If building a tag, use the same version for the package
@@ -202,9 +205,10 @@ jobs:
             echo "ℹ️ Using version from packages.json: $FINAL_VERSION"
           fi
           
-          # Determine author (with override support)
-          if [ -n "${{ inputs.override_tollgate_wrt_author }}" ]; then
-            FINAL_AUTHOR="${{ inputs.override_tollgate_wrt_author }}"
+          # Determine author (with override support from workflow_dispatch or repository_dispatch)
+          OVERRIDE_AUTHOR="${{ inputs.override_tollgate_wrt_author || github.event.client_payload.override_tollgate_wrt_author }}"
+          if [ -n "$OVERRIDE_AUTHOR" ]; then
+            FINAL_AUTHOR="$OVERRIDE_AUTHOR"
             echo "ℹ️ Using override author: $FINAL_AUTHOR"
           else
             FINAL_AUTHOR="$PACKAGES_AUTHOR"
