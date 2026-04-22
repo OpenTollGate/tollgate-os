@@ -320,13 +320,24 @@ jobs:
             exit 1
           fi
           
-          # Filter by compression type (compression tag is not filterable in nak)
-          FILTERED_EVENTS=$(echo "$EVENTS" | jq --arg comp "$PACKAGE_COMPRESSION" '[.[] | select(.tags[] | select(.[0] == "compression" and .[1] == $comp))]')
-          
+          # Post-receive filter for compression and format. Nostr relays
+          # only index single-letter tag names (NIP-01) so 'compression'
+          # and 'format' must be filtered client-side. format=ipk is
+          # required because the basic-go pipeline now publishes both .ipk
+          # and .apk events for the same (arch, compression); the OpenWrt
+          # 24.x image builder used here consumes .ipk only, so without
+          # the filter the first matching event may be an .apk and the
+          # downstream 'extract package name' step fails.
+          FILTERED_EVENTS=$(echo "$EVENTS" | jq --arg comp "$PACKAGE_COMPRESSION" '
+            [ .[] |
+              select(.tags[] | select(.[0] == "compression" and .[1] == $comp)) |
+              select(.tags[] | select(.[0] == "format" and .[1] == "ipk"))
+            ]')
+
           if [ "$(echo "$FILTERED_EVENTS" | jq 'length')" -eq 0 ]; then
-            echo "❌ No package found with compression type: $PACKAGE_COMPRESSION"
-            echo "ℹ️ Available packages:"
-            echo "$EVENTS" | jq -r '.[] | .tags[] | select(.[0] == "compression") | "  - \(.[1])"' | sort -u
+            echo "❌ No .ipk package found with compression type: $PACKAGE_COMPRESSION"
+            echo "ℹ️ Available (compression, format) pairs for this version+arch:"
+            echo "$EVENTS" | jq -r '.[] | [(.tags[] | select(.[0] == "compression") | .[1]), (.tags[] | select(.[0] == "format") | .[1]) // "unknown"] | "  - \(.[0]) (\(.[1]))"' | sort -u
             exit 1
           fi
           
