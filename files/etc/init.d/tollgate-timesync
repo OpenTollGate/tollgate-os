@@ -1,0 +1,33 @@
+#!/bin/sh /etc/rc.common
+# TollGate first-boot NTP sync.
+# Retries ntpd -q in the background until one successful sync ever, then
+# marks /etc/tollgate_timesynced and stays a no-op on subsequent boots.
+# Fixes https://github.com/OpenTollGate/tollgate-module-basic-go/issues/42
+# — Cashu token validation needs a sane clock, and sysfixtime leaves a
+# fresh flash at the firmware build date until sysntpd catches up.
+
+START=45
+STOP=90
+
+FLAG=/etc/tollgate_timesynced
+
+start() {
+    [ -f "$FLAG" ] && exit 0
+
+    (
+        SERVERS=$(uci -q get system.ntp.server | tr ' ' '\n' | grep -v '^$')
+        [ -z "$SERVERS" ] && SERVERS="0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org"
+        NTP_ARGS=""
+        for s in $SERVERS; do NTP_ARGS="$NTP_ARGS -p $s"; done
+
+        while true; do
+            if ntpd -q -n $NTP_ARGS >/dev/null 2>&1; then
+                touch "$FLAG"
+                logger -t tollgate-timesync "clock synced at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+                exit 0
+            fi
+            logger -t tollgate-timesync "sync failed, retrying in 30s"
+            sleep 30
+        done
+    ) &
+}
