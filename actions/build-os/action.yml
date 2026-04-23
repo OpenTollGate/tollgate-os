@@ -13,6 +13,9 @@ inputs:
   openwrt_version:
     description: 'OpenWRT version'
     default: '23.05.3'
+  package_format:
+    description: 'Custom package format: ipk (OpenWrt 24.x) or apk (OpenWrt 25.x)'
+    default: 'ipk'
   tollgate_os_version:
     description: 'TollGate OS version'
     default: 'v0.0.0'
@@ -141,7 +144,7 @@ runs:
     
     - name: Cache ImageBuilder
       id: cache-imagebuilder
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.BUILDDIR }}
         key: ${{ runner.os }}-imagebuilder-${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
@@ -175,7 +178,19 @@ runs:
           cp -r ${{ inputs.os_files_path }}/* ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files/
         fi
 
-        packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        # ipk image builders: PACKAGE_DIR=$(TOPDIR)/packages, but custom
+        # ipks conventionally go under packages/local/ (own feed) so the
+        # main package list isn't shadowed. opkg picks them up via the
+        # generated Packages.gz that lives next to them.
+        # apk image builders: PACKAGE_DIR=$(TOPDIR)/packages directly,
+        # and `apk mkndx` runs in that directory looking for *.apk. There
+        # is no separate "local" subdir — the packages.adb index sits
+        # alongside upstream feeds at the top level.
+        if [ "${{ inputs.package_format }}" = "apk" ]; then
+          packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages"
+        else
+          packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        fi
         mkdir -p "${packages_dir}"
         echo "PACKAGES_DIR=$packages_dir" >> $GITHUB_ENV
 
@@ -198,19 +213,50 @@ runs:
         echo "📋 Files copied to packages directory:"
         ls -lah "${{ env.PACKAGES_DIR }}"
         
-        # Extract package names by inspecting the .ipk files with tar
+        # Extract package names from each artifact.
+        #
+        # IMPORTANT: iterate the SOURCE dir (custom_packages_path), not
+        # PACKAGES_DIR. On apk builds PACKAGES_DIR is the imagebuilder's
+        # top-level packages/ which already contains upstream apks
+        # (base-files, kernel, libc, README.md, ...) that we must not
+        # treat as custom dependencies — apk would reject names like
+        # "base-files-1699~f505120278.apk" as invalid world specs.
+        #
+        # ipk: gzipped tar with debian-binary, control.tar.gz, data.tar.gz
+        #      at the top level. Read control.tar.gz/./control 'Package:'.
+        # apk: ADB (Alpine apk-tools v3) binary format. We don't ship a
+        #      v3 apk binary on the runner, so parse the package name out
+        #      of the filename instead — basic-go always names artifacts
+        #      <pkgname>_<version>_<arch>[-<compression>].apk.
         tollgate_custom_packages=""
-        for ipk in "${{ env.PACKAGES_DIR }}"/*; do
-          if [ -f "$ipk" ]; then
-            echo "ℹ️ Inspecting: $(basename "$ipk")"
-            # Extract control file to get package name
-            pkg_name=$(tar -xzOf "$ipk" ./control.tar.gz 2>/dev/null | tar -xzOf - ./control 2>/dev/null | grep "^Package:" | cut -d' ' -f2 || echo "")
-            if [ -n "$pkg_name" ]; then
-              tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
-              echo "✅ Found package: ${pkg_name}"
-            else
-              echo "⚠️  Could not extract package name from $(basename "$ipk")"
-            fi
+        for pkg in "${{ inputs.custom_packages_path }}"/*; do
+          [ -f "$pkg" ] || continue
+          base=$(basename "$pkg")
+          echo "ℹ️ Inspecting: $base"
+          case "$base" in
+            *.ipk)
+              pkg_name=$(tar -xzOf "$pkg" ./control.tar.gz 2>/dev/null \
+                | tar -xzOf - ./control 2>/dev/null \
+                | grep "^Package:" | cut -d' ' -f2 || echo "")
+              ;;
+            *.apk)
+              # apk file is renamed to canonical Alpine form
+              # '<name>-<version>.apk' before this step (see publish-os
+              # 'Fetch tollgate-wrt' step). Both <name> and <version>
+              # contain '-' so there's no robust way to split on the
+              # filename without parsing PKGINFO. We always pull a
+              # single 'tollgate-wrt' package, so just hardcode it.
+              pkg_name="tollgate-wrt"
+              ;;
+            *)
+              pkg_name=""
+              ;;
+          esac
+          if [ -n "$pkg_name" ]; then
+            tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
+            echo "✅ Found package: ${pkg_name}"
+          else
+            echo "⚠️  Could not extract package name from $base"
           fi
         done
         
@@ -224,7 +270,13 @@ runs:
         
         echo "✅ Final package list: $tollgate_custom_packages"
 
-    - name: Generate Package Index
+    - name: Generate Package Index (ipk only)
+      # Skip on apk: the OpenWrt-25 image builder runs `apk mkndx
+      # --output packages.adb *.apk` automatically inside `make image`
+      # (see imagebuilder/Makefile package_index target). For ipk we
+      # still need ipkg-make-index.sh because the 24.x builder won't
+      # regenerate Packages on its own.
+      if: inputs.package_format != 'apk'
       shell: bash
       run: |
         cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
@@ -249,7 +301,17 @@ runs:
           PROFILE="${{ inputs.device_id }}" \
           PACKAGES="${combined_packages_normalized}" \
           FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-        
+
+        # Reclaim ownership of build_dir/. The OpenWrt-25 imagebuilder
+        # invokes apk under sudo and ends up writing root-owned files
+        # under build_dir/target-*-musl/root[.orig]-*/etc/. The post-job
+        # actions/cache step runs as 'runner' and bails on these:
+        #   tar: ...root.orig-mediatek/etc/shadow: Cannot open: Permission denied
+        # The tar errors don't fail the build but the cache never saves,
+        # so every run re-downloads the imagebuilder. Chown back so the
+        # cache step can read everything.
+        sudo chown -R "$(id -u):$(id -g)" "${{ env.BUILDDIR }}"
+
         # Check if build succeeded
         tollgate_os_firmware_path=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
         if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then

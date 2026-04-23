@@ -11,6 +11,10 @@ on:
         description: 'Author pubkey override tollgate-wrt package'
         required: false
         type: string
+      full_compression:
+        description: 'Build all UPX compression variants (overrides the branch gate)'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [build-os]
   # push:
@@ -26,7 +30,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
@@ -59,14 +63,27 @@ jobs:
             --tag v="$PACKAGE_VERSION" \
             $RELAYS | jq -s '.')
           
-          # Base device configurations
+          # Base device configurations.
+          #
+          # 'format' selects which basic-go artifact to install on top of
+          # the image:
+          #   ipk -> OpenWrt 24.x and older (opkg, tar-gz wrapper)
+          #   apk -> OpenWrt 25.x and newer (apk-tools v3, ADB format)
+          #
+          # apk coverage in basic-go today is mediatek-filogic only, so
+          # only the cortex-a53 devices have a 25.x row. Add other
+          # archs here once basic-go publishes apks for them.
           DEVICES='[
-            {"device_id": "glinet_gl-mt3000", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-mt6000", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-ar300m16", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4"},
-            {"device_id": "dlink_covr-x1860-a1", "openwrt_version": "24.10.4"},
-            {"device_id": "ubnt_unifiac-pro", "openwrt_version": "24.10.4"}
+            {"device_id": "glinet_gl-mt3000",     "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-mt6000",     "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-ar300m16",   "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "dlink_covr-x1860-a1",  "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "ubnt_unifiac-pro",     "openwrt_version": "24.10.4", "format": "ipk"},
+
+            {"device_id": "glinet_gl-mt3000",     "openwrt_version": "25.12.2", "format": "apk"},
+            {"device_id": "glinet_gl-mt6000",     "openwrt_version": "25.12.2", "format": "apk"},
+            {"device_id": "comfast_cf-wr632ax",   "openwrt_version": "25.12.2", "format": "apk"}
           ]'
           
           # For each device, get its architecture and find available compressions
@@ -75,46 +92,80 @@ jobs:
           for device_json in $(echo "$DEVICES" | jq -c '.[]'); do
             DEVICE_ID=$(echo "$device_json" | jq -r '.device_id')
             OPENWRT_VERSION=$(echo "$device_json" | jq -r '.openwrt_version')
-            
-            echo "ℹ️ Processing device: $DEVICE_ID"
-            
+            FORMAT=$(echo "$device_json" | jq -r '.format')
+
+            echo "ℹ️ Processing device: $DEVICE_ID (OpenWrt $OPENWRT_VERSION, .$FORMAT)"
+
             # Get device architecture
             all_targets=$(curl -s "https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/.overview.json")
             current_target=$(echo "$all_targets" | jq -r --arg device "$DEVICE_ID" '.profiles[] | select(.id == $device) | .target')
-            
+
             if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
-              echo "⚠️  Device ID '$DEVICE_ID' not found, skipping"
+              echo "⚠️  Device ID '$DEVICE_ID' not found in OpenWrt $OPENWRT_VERSION overview, skipping"
               continue
             fi
-            
+
             target_profiles=$(curl -s "https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/${current_target}/profiles.json")
             architecture=$(echo "$target_profiles" | jq -r '.arch_packages')
-            
+
             echo "  Architecture: $architecture"
-            
-            # Find compressions available for this architecture
-            ARCH_COMPRESSIONS=$(echo "$EVENTS" | jq -r --arg arch "$architecture" '
-              [.[] | select(.tags[] | select(.[0] == "A" and .[1] == $arch)) | .tags[] | select(.[0] == "compression") | .[1]] | unique | .[]
+
+            # Find compressions available for this (architecture, format).
+            # Filter on both single-letter A (architecture) and multi-letter
+            # 'format' tags client-side — relays don't index multi-letter
+            # tag names per NIP-01.
+            ARCH_COMPRESSIONS=$(echo "$EVENTS" | jq -r --arg arch "$architecture" --arg fmt "$FORMAT" '
+              [ .[]
+                | select(.tags[] | select(.[0] == "A" and .[1] == $arch))
+                | select(.tags[] | select(.[0] == "format" and .[1] == $fmt))
+                | .tags[] | select(.[0] == "compression") | .[1]
+              ] | unique | .[]
             ')
-            
+
             if [ -z "$ARCH_COMPRESSIONS" ]; then
-              echo "  ⚠️  No packages found for architecture $architecture"
+              echo "  ⚠️  No .${FORMAT} packages found for architecture $architecture"
               continue
             fi
-            
-            echo "  Available compressions: $(echo "$ARCH_COMPRESSIONS" | tr '\n' ' ')"
-            
+
+            echo "  Available compressions (.${FORMAT}): $(echo "$ARCH_COMPRESSIONS" | tr '\n' ' ')"
+
             # Add device + compression combinations to matrix
             for compression in $ARCH_COMPRESSIONS; do
-              MATRIX_ITEMS=$(echo "$MATRIX_ITEMS" | jq --arg device "$DEVICE_ID" --arg version "$OPENWRT_VERSION" --arg comp "$compression" '. + [{device_id: $device, openwrt_version: $version, compression: $comp}]')
+              MATRIX_ITEMS=$(echo "$MATRIX_ITEMS" | jq \
+                --arg device "$DEVICE_ID" \
+                --arg version "$OPENWRT_VERSION" \
+                --arg fmt "$FORMAT" \
+                --arg comp "$compression" \
+                '. + [{device_id: $device, openwrt_version: $version, format: $fmt, compression: $comp}]')
             done
           done
           
           MATRIX=$(echo "{\"include\": $MATRIX_ITEMS}")
-          
-          echo "ℹ️ Generated matrix:"
+
+          # Compression gate (mirrors basic-go's gate). UPX variants are
+          # expensive — each compressed cell builds a full firmware. Keep
+          # them on shipped artifacts only:
+          #   - push to main
+          #   - tags matching v*
+          #   - any pull_request event
+          #   - workflow_dispatch with full_compression=true
+          # Branch pushes get only the uncompressed (compression=none)
+          # cells. The override_tollgate_wrt_version input is unaffected:
+          # it picks which basic-go version to install, not how many OS
+          # firmware variants to produce.
+          if [[ "${{ github.event.inputs.full_compression }}" == "true" ]]; then
+            echo "ℹ️ full_compression=true — keeping all variants."
+          elif [[ "$GITHUB_REF" != "refs/heads/main" \
+               && "$GITHUB_REF" != refs/tags/v* \
+               && "$GITHUB_EVENT_NAME" != "pull_request" \
+               && "$GITHUB_EVENT_NAME" != "repository_dispatch" ]]; then
+            echo "ℹ️ Non-release ref ($GITHUB_REF, event=$GITHUB_EVENT_NAME) — dropping compression variants."
+            MATRIX=$(echo "$MATRIX" | jq '{include: [.include[] | select(.compression == "none")]}')
+          fi
+
+          echo "ℹ️ Final matrix:"
           echo "$MATRIX" | jq .
-          
+
           # Create a properly escaped JSON for GitHub output
           echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
 
@@ -127,7 +178,7 @@ jobs:
       tollgate_wrt_author: ${{ steps.determine-package-version.outputs.tollgate_wrt_author }}
       tollgate_wrt_compression: ${{ steps.determine-package-version.outputs.tollgate_wrt_compression }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0 # Required for commit height
@@ -244,7 +295,7 @@ jobs:
       matrix: ${{ fromJson(needs.define-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
@@ -295,13 +346,15 @@ jobs:
           PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
           PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
           PACKAGE_COMPRESSION="${{ matrix.compression }}"
+          PACKAGE_FORMAT="${{ matrix.format }}"
           ARCHITECTURE="${{ env.DEVICE_ARCHITECTURE }}"
-          
+
           echo "ℹ️ Searching for tollgate-wrt package:"
           echo "  Version: $PACKAGE_VERSION"
           echo "  Author: $PACKAGE_AUTHOR"
           echo "  Architecture: $ARCHITECTURE"
           echo "  Compression: $PACKAGE_COMPRESSION"
+          echo "  Format: .$PACKAGE_FORMAT"
           
           # Search for NIP-94 events with matching author, version, and architecture
           # Using kind 1063 (file metadata), filtering by package name, version, architecture, and author pubkey
@@ -322,20 +375,20 @@ jobs:
           
           # Post-receive filter for compression and format. Nostr relays
           # only index single-letter tag names (NIP-01) so 'compression'
-          # and 'format' must be filtered client-side. format=ipk is
-          # required because the basic-go pipeline now publishes both .ipk
-          # and .apk events for the same (arch, compression); the OpenWrt
-          # 24.x image builder used here consumes .ipk only, so without
-          # the filter the first matching event may be an .apk and the
-          # downstream 'extract package name' step fails.
-          FILTERED_EVENTS=$(echo "$EVENTS" | jq --arg comp "$PACKAGE_COMPRESSION" '
-            [ .[] |
-              select(.tags[] | select(.[0] == "compression" and .[1] == $comp)) |
-              select(.tags[] | select(.[0] == "format" and .[1] == "ipk"))
-            ]')
+          # and 'format' must be filtered client-side. The format choice
+          # comes from the matrix entry — ipk for OpenWrt 24.x devices,
+          # apk for 25.x — because basic-go publishes both for the same
+          # (arch, compression) and the image builder per OpenWrt version
+          # consumes only one.
+          FILTERED_EVENTS=$(echo "$EVENTS" \
+            | jq --arg comp "$PACKAGE_COMPRESSION" --arg fmt "$PACKAGE_FORMAT" '
+              [ .[] |
+                select(.tags[] | select(.[0] == "compression" and .[1] == $comp)) |
+                select(.tags[] | select(.[0] == "format" and .[1] == $fmt))
+              ]')
 
           if [ "$(echo "$FILTERED_EVENTS" | jq 'length')" -eq 0 ]; then
-            echo "❌ No .ipk package found with compression type: $PACKAGE_COMPRESSION"
+            echo "❌ No .$PACKAGE_FORMAT package found with compression type: $PACKAGE_COMPRESSION"
             echo "ℹ️ Available (compression, format) pairs for this version+arch:"
             echo "$EVENTS" | jq -r '.[] | [(.tags[] | select(.[0] == "compression") | .[1]), (.tags[] | select(.[0] == "format") | .[1]) // "unknown"] | "  - \(.[0]) (\(.[1]))"' | sort -u
             exit 1
@@ -366,6 +419,41 @@ jobs:
           fi
           
           echo "✅ Package downloaded and verified"
+
+          # apk-tools resolves index entries by the canonical Alpine
+          # filename "<name>-<version>.apk". basic-go names artifacts
+          # "<name>_<branch_version>_<arch>[-<comp>].apk", which the
+          # imagebuilder's mkndx step indexes by the package's internal
+          # version but then can't find on disk -> "package mentioned
+          # in index not found". Rename to canonical form here.
+          #
+          # Mirror basic-go/packaging/normalize-apk-version.sh:
+          #   release tag (vN.N.N[-(alpha|beta|rc|pre)N]) -> N.N.N[_xxx]-r0
+          #   anything else                                -> 0.0.0_git<HEIGHT>-r0
+          # where HEIGHT is the second dot-segment of PACKAGE_VERSION
+          # (i.e. branch.height.sha).
+          if [ "$PACKAGE_FORMAT" = "apk" ]; then
+            stripped="${PACKAGE_VERSION#v}"
+            if printf '%s' "$stripped" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc|pre)[0-9]*)?$'; then
+              apk_version=$(printf '%s' "$stripped" \
+                | sed -e 's/-alpha/_alpha/g' \
+                      -e 's/-beta/_beta/g'   \
+                      -e 's/-rc/_rc/g'       \
+                      -e 's/-pre/_pre/g')-r0
+            else
+              build_nr=$(printf '%s' "$stripped" | sed -n 's/^[^.]*\.\([0-9][0-9]*\)\..*/\1/p')
+              if [ -n "$build_nr" ]; then
+                apk_version="0.0.0_git${build_nr}-r0"
+              else
+                apk_version="0.0.0-r0"
+              fi
+            fi
+            canonical="tollgate-wrt-${apk_version}.apk"
+            echo "ℹ️ Renaming for apk indexing: $PACKAGE_FILENAME -> $canonical"
+            mv "./custom-packages/$PACKAGE_FILENAME" "./custom-packages/$canonical"
+            PACKAGE_FILENAME="$canonical"
+          fi
+
           echo "TOLLGATE_WRT_PACKAGE_PATH=./custom-packages/$PACKAGE_FILENAME" >> $GITHUB_ENV
 
       - name: Build TollGateOS for ${{ matrix.device_id }}
@@ -380,6 +468,7 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: ${{ matrix.openwrt_version }}
+          package_format: ${{ matrix.format }}
           tollgate_os_version: ${{ needs.determine-versioning.outputs.os_version }}
           release_channel: ${{ needs.determine-versioning.outputs.release_channel }}
       
@@ -392,7 +481,7 @@ jobs:
 
       - name: GitHub Artifact upload
         if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.device_id }}-${{ matrix.compression }}
           path: ./artifacts/${{ env.FIRMWARE_FILENAME }}
@@ -410,7 +499,7 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.define-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
@@ -443,7 +532,7 @@ jobs:
 
       - name: Download artifact from GitHub
         if: ${{ env.ACT != 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: firmware-${{ matrix.device_id }}-${{ matrix.compression }}
           path: ./artifacts
