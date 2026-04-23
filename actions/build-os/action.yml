@@ -240,8 +240,13 @@ runs:
                 | grep "^Package:" | cut -d' ' -f2 || echo "")
               ;;
             *.apk)
-              # filename format: <pkgname>_<version>_<arch>[-<comp>].apk
-              pkg_name="${base%%_*}"
+              # apk file is renamed to canonical Alpine form
+              # '<name>-<version>.apk' before this step (see publish-os
+              # 'Fetch tollgate-wrt' step). Both <name> and <version>
+              # contain '-' so there's no robust way to split on the
+              # filename without parsing PKGINFO. We always pull a
+              # single 'tollgate-wrt' package, so just hardcode it.
+              pkg_name="tollgate-wrt"
               ;;
             *)
               pkg_name=""
