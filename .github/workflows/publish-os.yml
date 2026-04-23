@@ -394,6 +394,41 @@ jobs:
           fi
           
           echo "✅ Package downloaded and verified"
+
+          # apk-tools resolves index entries by the canonical Alpine
+          # filename "<name>-<version>.apk". basic-go names artifacts
+          # "<name>_<branch_version>_<arch>[-<comp>].apk", which the
+          # imagebuilder's mkndx step indexes by the package's internal
+          # version but then can't find on disk -> "package mentioned
+          # in index not found". Rename to canonical form here.
+          #
+          # Mirror basic-go/packaging/normalize-apk-version.sh:
+          #   release tag (vN.N.N[-(alpha|beta|rc|pre)N]) -> N.N.N[_xxx]-r0
+          #   anything else                                -> 0.0.0_git<HEIGHT>-r0
+          # where HEIGHT is the second dot-segment of PACKAGE_VERSION
+          # (i.e. branch.height.sha).
+          if [ "$PACKAGE_FORMAT" = "apk" ]; then
+            stripped="${PACKAGE_VERSION#v}"
+            if printf '%s' "$stripped" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc|pre)[0-9]*)?$'; then
+              apk_version=$(printf '%s' "$stripped" \
+                | sed -e 's/-alpha/_alpha/g' \
+                      -e 's/-beta/_beta/g'   \
+                      -e 's/-rc/_rc/g'       \
+                      -e 's/-pre/_pre/g')-r0
+            else
+              build_nr=$(printf '%s' "$stripped" | sed -n 's/^[^.]*\.\([0-9][0-9]*\)\..*/\1/p')
+              if [ -n "$build_nr" ]; then
+                apk_version="0.0.0_git${build_nr}-r0"
+              else
+                apk_version="0.0.0-r0"
+              fi
+            fi
+            canonical="tollgate-wrt-${apk_version}.apk"
+            echo "ℹ️ Renaming for apk indexing: $PACKAGE_FILENAME -> $canonical"
+            mv "./custom-packages/$PACKAGE_FILENAME" "./custom-packages/$canonical"
+            PACKAGE_FILENAME="$canonical"
+          fi
+
           echo "TOLLGATE_WRT_PACKAGE_PATH=./custom-packages/$PACKAGE_FILENAME" >> $GITHUB_ENV
 
       - name: Build TollGateOS for ${{ matrix.device_id }}
