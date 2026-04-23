@@ -144,7 +144,7 @@ runs:
     
     - name: Cache ImageBuilder
       id: cache-imagebuilder
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.BUILDDIR }}
         key: ${{ runner.os }}-imagebuilder-${{ env.IMAGEBUILDER_DOWNLOAD_URL }}
@@ -178,7 +178,19 @@ runs:
           cp -r ${{ inputs.os_files_path }}/* ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files/
         fi
 
-        packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        # ipk image builders: PACKAGE_DIR=$(TOPDIR)/packages, but custom
+        # ipks conventionally go under packages/local/ (own feed) so the
+        # main package list isn't shadowed. opkg picks them up via the
+        # generated Packages.gz that lives next to them.
+        # apk image builders: PACKAGE_DIR=$(TOPDIR)/packages directly,
+        # and `apk mkndx` runs in that directory looking for *.apk. There
+        # is no separate "local" subdir — the packages.adb index sits
+        # alongside upstream feeds at the top level.
+        if [ "${{ inputs.package_format }}" = "apk" ]; then
+          packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages"
+        else
+          packages_dir="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/packages/local"
+        fi
         mkdir -p "${packages_dir}"
         echo "PACKAGES_DIR=$packages_dir" >> $GITHUB_ENV
 
