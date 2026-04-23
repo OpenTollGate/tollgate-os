@@ -59,14 +59,27 @@ jobs:
             --tag v="$PACKAGE_VERSION" \
             $RELAYS | jq -s '.')
           
-          # Base device configurations
+          # Base device configurations.
+          #
+          # 'format' selects which basic-go artifact to install on top of
+          # the image:
+          #   ipk -> OpenWrt 24.x and older (opkg, tar-gz wrapper)
+          #   apk -> OpenWrt 25.x and newer (apk-tools v3, ADB format)
+          #
+          # apk coverage in basic-go today is mediatek-filogic only, so
+          # only the cortex-a53 devices have a 25.x row. Add other
+          # archs here once basic-go publishes apks for them.
           DEVICES='[
-            {"device_id": "glinet_gl-mt3000", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-mt6000", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-ar300m16", "openwrt_version": "24.10.4"},
-            {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4"},
-            {"device_id": "dlink_covr-x1860-a1", "openwrt_version": "24.10.4"},
-            {"device_id": "ubnt_unifiac-pro", "openwrt_version": "24.10.4"}
+            {"device_id": "glinet_gl-mt3000",     "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-mt6000",     "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-ar300m16",   "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "glinet_gl-ar300m-nor", "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "dlink_covr-x1860-a1",  "openwrt_version": "24.10.4", "format": "ipk"},
+            {"device_id": "ubnt_unifiac-pro",     "openwrt_version": "24.10.4", "format": "ipk"},
+
+            {"device_id": "glinet_gl-mt3000",     "openwrt_version": "25.12.2", "format": "apk"},
+            {"device_id": "glinet_gl-mt6000",     "openwrt_version": "25.12.2", "format": "apk"},
+            {"device_id": "comfast_cf-wr632ax",   "openwrt_version": "25.12.2", "format": "apk"}
           ]'
           
           # For each device, get its architecture and find available compressions
@@ -75,38 +88,51 @@ jobs:
           for device_json in $(echo "$DEVICES" | jq -c '.[]'); do
             DEVICE_ID=$(echo "$device_json" | jq -r '.device_id')
             OPENWRT_VERSION=$(echo "$device_json" | jq -r '.openwrt_version')
-            
-            echo "ℹ️ Processing device: $DEVICE_ID"
-            
+            FORMAT=$(echo "$device_json" | jq -r '.format')
+
+            echo "ℹ️ Processing device: $DEVICE_ID (OpenWrt $OPENWRT_VERSION, .$FORMAT)"
+
             # Get device architecture
             all_targets=$(curl -s "https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/.overview.json")
             current_target=$(echo "$all_targets" | jq -r --arg device "$DEVICE_ID" '.profiles[] | select(.id == $device) | .target')
-            
+
             if [ -z "$current_target" ] || [ "$current_target" = "null" ]; then
-              echo "⚠️  Device ID '$DEVICE_ID' not found, skipping"
+              echo "⚠️  Device ID '$DEVICE_ID' not found in OpenWrt $OPENWRT_VERSION overview, skipping"
               continue
             fi
-            
+
             target_profiles=$(curl -s "https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/${current_target}/profiles.json")
             architecture=$(echo "$target_profiles" | jq -r '.arch_packages')
-            
+
             echo "  Architecture: $architecture"
-            
-            # Find compressions available for this architecture
-            ARCH_COMPRESSIONS=$(echo "$EVENTS" | jq -r --arg arch "$architecture" '
-              [.[] | select(.tags[] | select(.[0] == "A" and .[1] == $arch)) | .tags[] | select(.[0] == "compression") | .[1]] | unique | .[]
+
+            # Find compressions available for this (architecture, format).
+            # Filter on both single-letter A (architecture) and multi-letter
+            # 'format' tags client-side — relays don't index multi-letter
+            # tag names per NIP-01.
+            ARCH_COMPRESSIONS=$(echo "$EVENTS" | jq -r --arg arch "$architecture" --arg fmt "$FORMAT" '
+              [ .[]
+                | select(.tags[] | select(.[0] == "A" and .[1] == $arch))
+                | select(.tags[] | select(.[0] == "format" and .[1] == $fmt))
+                | .tags[] | select(.[0] == "compression") | .[1]
+              ] | unique | .[]
             ')
-            
+
             if [ -z "$ARCH_COMPRESSIONS" ]; then
-              echo "  ⚠️  No packages found for architecture $architecture"
+              echo "  ⚠️  No .${FORMAT} packages found for architecture $architecture"
               continue
             fi
-            
-            echo "  Available compressions: $(echo "$ARCH_COMPRESSIONS" | tr '\n' ' ')"
-            
+
+            echo "  Available compressions (.${FORMAT}): $(echo "$ARCH_COMPRESSIONS" | tr '\n' ' ')"
+
             # Add device + compression combinations to matrix
             for compression in $ARCH_COMPRESSIONS; do
-              MATRIX_ITEMS=$(echo "$MATRIX_ITEMS" | jq --arg device "$DEVICE_ID" --arg version "$OPENWRT_VERSION" --arg comp "$compression" '. + [{device_id: $device, openwrt_version: $version, compression: $comp}]')
+              MATRIX_ITEMS=$(echo "$MATRIX_ITEMS" | jq \
+                --arg device "$DEVICE_ID" \
+                --arg version "$OPENWRT_VERSION" \
+                --arg fmt "$FORMAT" \
+                --arg comp "$compression" \
+                '. + [{device_id: $device, openwrt_version: $version, format: $fmt, compression: $comp}]')
             done
           done
           
@@ -295,13 +321,15 @@ jobs:
           PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
           PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
           PACKAGE_COMPRESSION="${{ matrix.compression }}"
+          PACKAGE_FORMAT="${{ matrix.format }}"
           ARCHITECTURE="${{ env.DEVICE_ARCHITECTURE }}"
-          
+
           echo "ℹ️ Searching for tollgate-wrt package:"
           echo "  Version: $PACKAGE_VERSION"
           echo "  Author: $PACKAGE_AUTHOR"
           echo "  Architecture: $ARCHITECTURE"
           echo "  Compression: $PACKAGE_COMPRESSION"
+          echo "  Format: .$PACKAGE_FORMAT"
           
           # Search for NIP-94 events with matching author, version, and architecture
           # Using kind 1063 (file metadata), filtering by package name, version, architecture, and author pubkey
@@ -322,20 +350,20 @@ jobs:
           
           # Post-receive filter for compression and format. Nostr relays
           # only index single-letter tag names (NIP-01) so 'compression'
-          # and 'format' must be filtered client-side. format=ipk is
-          # required because the basic-go pipeline now publishes both .ipk
-          # and .apk events for the same (arch, compression); the OpenWrt
-          # 24.x image builder used here consumes .ipk only, so without
-          # the filter the first matching event may be an .apk and the
-          # downstream 'extract package name' step fails.
-          FILTERED_EVENTS=$(echo "$EVENTS" | jq --arg comp "$PACKAGE_COMPRESSION" '
-            [ .[] |
-              select(.tags[] | select(.[0] == "compression" and .[1] == $comp)) |
-              select(.tags[] | select(.[0] == "format" and .[1] == "ipk"))
-            ]')
+          # and 'format' must be filtered client-side. The format choice
+          # comes from the matrix entry — ipk for OpenWrt 24.x devices,
+          # apk for 25.x — because basic-go publishes both for the same
+          # (arch, compression) and the image builder per OpenWrt version
+          # consumes only one.
+          FILTERED_EVENTS=$(echo "$EVENTS" \
+            | jq --arg comp "$PACKAGE_COMPRESSION" --arg fmt "$PACKAGE_FORMAT" '
+              [ .[] |
+                select(.tags[] | select(.[0] == "compression" and .[1] == $comp)) |
+                select(.tags[] | select(.[0] == "format" and .[1] == $fmt))
+              ]')
 
           if [ "$(echo "$FILTERED_EVENTS" | jq 'length')" -eq 0 ]; then
-            echo "❌ No .ipk package found with compression type: $PACKAGE_COMPRESSION"
+            echo "❌ No .$PACKAGE_FORMAT package found with compression type: $PACKAGE_COMPRESSION"
             echo "ℹ️ Available (compression, format) pairs for this version+arch:"
             echo "$EVENTS" | jq -r '.[] | [(.tags[] | select(.[0] == "compression") | .[1]), (.tags[] | select(.[0] == "format") | .[1]) // "unknown"] | "  - \(.[0]) (\(.[1]))"' | sort -u
             exit 1
@@ -380,6 +408,7 @@ jobs:
           nsecbech: ${{ secrets.NSECBECH }}
           nsec: ${{ secrets.NSEC }}
           openwrt_version: ${{ matrix.openwrt_version }}
+          package_format: ${{ matrix.format }}
           tollgate_os_version: ${{ needs.determine-versioning.outputs.os_version }}
           release_channel: ${{ needs.determine-versioning.outputs.release_channel }}
       

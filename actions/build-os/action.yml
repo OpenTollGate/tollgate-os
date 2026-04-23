@@ -13,6 +13,9 @@ inputs:
   openwrt_version:
     description: 'OpenWRT version'
     default: '23.05.3'
+  package_format:
+    description: 'Custom package format: ipk (OpenWrt 24.x) or apk (OpenWrt 25.x)'
+    default: 'ipk'
   tollgate_os_version:
     description: 'TollGate OS version'
     default: 'v0.0.0'
@@ -198,19 +201,38 @@ runs:
         echo "📋 Files copied to packages directory:"
         ls -lah "${{ env.PACKAGES_DIR }}"
         
-        # Extract package names by inspecting the .ipk files with tar
+        # Extract package names from each artifact.
+        #
+        # ipk: gzipped tar with debian-binary, control.tar.gz, data.tar.gz
+        #      at the top level. Read control.tar.gz/./control 'Package:'.
+        # apk: ADB (Alpine apk-tools v3) binary format. We don't ship a
+        #      v3 apk binary on the runner, so parse the package name out
+        #      of the filename instead — basic-go always names artifacts
+        #      <pkgname>_<version>_<arch>[-<compression>].apk.
         tollgate_custom_packages=""
-        for ipk in "${{ env.PACKAGES_DIR }}"/*; do
-          if [ -f "$ipk" ]; then
-            echo "ℹ️ Inspecting: $(basename "$ipk")"
-            # Extract control file to get package name
-            pkg_name=$(tar -xzOf "$ipk" ./control.tar.gz 2>/dev/null | tar -xzOf - ./control 2>/dev/null | grep "^Package:" | cut -d' ' -f2 || echo "")
-            if [ -n "$pkg_name" ]; then
-              tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
-              echo "✅ Found package: ${pkg_name}"
-            else
-              echo "⚠️  Could not extract package name from $(basename "$ipk")"
-            fi
+        for pkg in "${{ env.PACKAGES_DIR }}"/*; do
+          [ -f "$pkg" ] || continue
+          base=$(basename "$pkg")
+          echo "ℹ️ Inspecting: $base"
+          case "$base" in
+            *.ipk)
+              pkg_name=$(tar -xzOf "$pkg" ./control.tar.gz 2>/dev/null \
+                | tar -xzOf - ./control 2>/dev/null \
+                | grep "^Package:" | cut -d' ' -f2 || echo "")
+              ;;
+            *.apk)
+              # filename format: <pkgname>_<version>_<arch>[-<comp>].apk
+              pkg_name="${base%%_*}"
+              ;;
+            *)
+              pkg_name=""
+              ;;
+          esac
+          if [ -n "$pkg_name" ]; then
+            tollgate_custom_packages="${tollgate_custom_packages} ${pkg_name}"
+            echo "✅ Found package: ${pkg_name}"
+          else
+            echo "⚠️  Could not extract package name from $base"
           fi
         done
         
@@ -224,7 +246,13 @@ runs:
         
         echo "✅ Final package list: $tollgate_custom_packages"
 
-    - name: Generate Package Index
+    - name: Generate Package Index (ipk only)
+      # Skip on apk: the OpenWrt-25 image builder runs `apk mkndx
+      # --output packages.adb *.apk` automatically inside `make image`
+      # (see imagebuilder/Makefile package_index target). For ipk we
+      # still need ipkg-make-index.sh because the 24.x builder won't
+      # regenerate Packages on its own.
+      if: inputs.package_format != 'apk'
       shell: bash
       run: |
         cd ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}
