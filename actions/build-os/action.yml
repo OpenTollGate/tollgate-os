@@ -301,7 +301,17 @@ runs:
           PROFILE="${{ inputs.device_id }}" \
           PACKAGES="${combined_packages_normalized}" \
           FILES="${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/files"
-        
+
+        # Reclaim ownership of build_dir/. The OpenWrt-25 imagebuilder
+        # invokes apk under sudo and ends up writing root-owned files
+        # under build_dir/target-*-musl/root[.orig]-*/etc/. The post-job
+        # actions/cache step runs as 'runner' and bails on these:
+        #   tar: ...root.orig-mediatek/etc/shadow: Cannot open: Permission denied
+        # The tar errors don't fail the build but the cache never saves,
+        # so every run re-downloads the imagebuilder. Chown back so the
+        # cache step can read everything.
+        sudo chown -R "$(id -u):$(id -g)" "${{ env.BUILDDIR }}"
+
         # Check if build succeeded
         tollgate_os_firmware_path=$(find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | head -1)
         if find ${{ env.BUILDDIR }}/${{ env.IMAGEBUILDER_NAME }}/bin/targets/${PLATFORM}/${TYPE}/ -name "*sysupgrade.bin" -type f | grep -q .; then
