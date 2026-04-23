@@ -215,6 +215,13 @@ runs:
         
         # Extract package names from each artifact.
         #
+        # IMPORTANT: iterate the SOURCE dir (custom_packages_path), not
+        # PACKAGES_DIR. On apk builds PACKAGES_DIR is the imagebuilder's
+        # top-level packages/ which already contains upstream apks
+        # (base-files, kernel, libc, README.md, ...) that we must not
+        # treat as custom dependencies — apk would reject names like
+        # "base-files-1699~f505120278.apk" as invalid world specs.
+        #
         # ipk: gzipped tar with debian-binary, control.tar.gz, data.tar.gz
         #      at the top level. Read control.tar.gz/./control 'Package:'.
         # apk: ADB (Alpine apk-tools v3) binary format. We don't ship a
@@ -222,7 +229,7 @@ runs:
         #      of the filename instead — basic-go always names artifacts
         #      <pkgname>_<version>_<arch>[-<compression>].apk.
         tollgate_custom_packages=""
-        for pkg in "${{ env.PACKAGES_DIR }}"/*; do
+        for pkg in "${{ inputs.custom_packages_path }}"/*; do
           [ -f "$pkg" ] || continue
           base=$(basename "$pkg")
           echo "ℹ️ Inspecting: $base"
