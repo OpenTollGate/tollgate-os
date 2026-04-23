@@ -11,6 +11,10 @@ on:
         description: 'Author pubkey override tollgate-wrt package'
         required: false
         type: string
+      full_compression:
+        description: 'Build all UPX compression variants (overrides the branch gate)'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [build-os]
   # push:
@@ -137,10 +141,31 @@ jobs:
           done
           
           MATRIX=$(echo "{\"include\": $MATRIX_ITEMS}")
-          
-          echo "ℹ️ Generated matrix:"
+
+          # Compression gate (mirrors basic-go's gate). UPX variants are
+          # expensive — each compressed cell builds a full firmware. Keep
+          # them on shipped artifacts only:
+          #   - push to main
+          #   - tags matching v*
+          #   - any pull_request event
+          #   - workflow_dispatch with full_compression=true
+          # Branch pushes get only the uncompressed (compression=none)
+          # cells. The override_tollgate_wrt_version input is unaffected:
+          # it picks which basic-go version to install, not how many OS
+          # firmware variants to produce.
+          if [[ "${{ github.event.inputs.full_compression }}" == "true" ]]; then
+            echo "ℹ️ full_compression=true — keeping all variants."
+          elif [[ "$GITHUB_REF" != "refs/heads/main" \
+               && "$GITHUB_REF" != refs/tags/v* \
+               && "$GITHUB_EVENT_NAME" != "pull_request" \
+               && "$GITHUB_EVENT_NAME" != "repository_dispatch" ]]; then
+            echo "ℹ️ Non-release ref ($GITHUB_REF, event=$GITHUB_EVENT_NAME) — dropping compression variants."
+            MATRIX=$(echo "$MATRIX" | jq '{include: [.include[] | select(.compression == "none")]}')
+          fi
+
+          echo "ℹ️ Final matrix:"
           echo "$MATRIX" | jq .
-          
+
           # Create a properly escaped JSON for GitHub output
           echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
 
