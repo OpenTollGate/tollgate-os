@@ -606,8 +606,10 @@ jobs:
             exit 1
           fi
           
-          # Construct Blossom URL
-          BLOSSOM_URL="$BLOSSOM_SERVER/$FILE_HASH"
+          # Construct Blossom URL with .bin suffix so browsers save the
+          # firmware with the correct extension (Blossom servers ignore the
+          # suffix and resolve by sha256 hash per BUD-01).
+          BLOSSOM_URL="$BLOSSOM_SERVER/$FILE_HASH.bin"
           
           echo "url=$BLOSSOM_URL" >> $GITHUB_OUTPUT
           echo "hash=$FILE_HASH" >> $GITHUB_OUTPUT
