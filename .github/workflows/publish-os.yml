@@ -46,7 +46,7 @@ jobs:
       - id: set-matrix
         shell: bash
         env:
-          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me wss://relay1.orangesync.tech wss://relay2.orangesync.tech"
         run: |
           # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
           : ${GITHUB_OUTPUT:=/tmp/github_output}
@@ -341,7 +341,7 @@ jobs:
       - name: Fetch tollgate-wrt package from Nostr
         shell: bash
         env:
-          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me wss://relay1.orangesync.tech wss://relay2.orangesync.tech"
         run: |
           PACKAGE_VERSION="${{ needs.determine-versioning.outputs.tollgate_wrt_version }}"
           PACKAGE_AUTHOR="${{ needs.determine-versioning.outputs.tollgate_wrt_author }}"
@@ -397,28 +397,54 @@ jobs:
           # Get the first matching event
           EVENT=$(echo "$FILTERED_EVENTS" | jq '.[0]')
           
-          # Extract download URL and hash
-          PACKAGE_URL=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "url") | .[1]')
+          # Extract download URL(s) and hash. The NIP-94 event may carry
+          # several `url` tags — one per Blossom mirror, canonical first. The
+          # blob is content-addressed (x = sha256), so any mirror serves the
+          # same bytes; we try each in order until one downloads and verifies.
           PACKAGE_HASH=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "x") | .[1]')
           PACKAGE_FILENAME=$(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "filename") | .[1]')
-          
+          mapfile -t PACKAGE_URLS < <(echo "$EVENT" | jq -r '.tags[] | select(.[0] == "url") | .[1]')
+
           echo "✅ Found package:"
-          echo "  URL: $PACKAGE_URL"
+          echo "  Mirrors: ${#PACKAGE_URLS[@]}"
+          printf '    %s\n' "${PACKAGE_URLS[@]}"
           echo "  Hash: $PACKAGE_HASH"
           echo "  Filename: $PACKAGE_FILENAME"
-          
-          # Download the package
+
+          # Download from the first mirror that succeeds AND matches the hash.
+          # Each mirror gets up to 3 attempts with exponential backoff (2s, 4s,
+          # 8s) before failing over to the next, matching the upload retry in
+          # tollgate-module-basic-go's publish step.
           mkdir -p ./custom-packages
-          curl -L -o "./custom-packages/$PACKAGE_FILENAME" "$PACKAGE_URL"
-          
-          # Verify hash
-          DOWNLOADED_HASH=$(sha256sum "./custom-packages/$PACKAGE_FILENAME" | cut -d' ' -f1)
-          if [ "$DOWNLOADED_HASH" != "$PACKAGE_HASH" ]; then
-            echo "❌ Hash mismatch! Expected: $PACKAGE_HASH, Got: $DOWNLOADED_HASH"
+          DEST="./custom-packages/$PACKAGE_FILENAME"
+          DOWNLOADED=0
+          for url in "${PACKAGE_URLS[@]}"; do
+            echo "  Trying $url ..."
+            attempt=1; delay=2
+            while [ $attempt -le 3 ]; do
+              if curl -fL -o "$DEST" "$url"; then
+                DOWNLOADED_HASH=$(sha256sum "$DEST" | cut -d' ' -f1)
+                if [ "$DOWNLOADED_HASH" = "$PACKAGE_HASH" ]; then
+                  echo "✅ Package downloaded and verified from $url"
+                  DOWNLOADED=1
+                  break
+                fi
+                # Hash mismatch is not transient for a content-addressed blob;
+                # don't retry this mirror, fail over to the next one.
+                echo "    hash mismatch (expected $PACKAGE_HASH, got $DOWNLOADED_HASH), trying next mirror"
+                break
+              fi
+              echo "    attempt ${attempt} failed for $url; retrying in ${delay}s..."
+              sleep $delay
+              delay=$((delay * 2))
+              attempt=$((attempt + 1))
+            done
+            [ "$DOWNLOADED" -eq 1 ] && break
+          done
+          if [ "$DOWNLOADED" -ne 1 ]; then
+            echo "❌ All ${#PACKAGE_URLS[@]} mirror(s) failed for $PACKAGE_FILENAME"
             exit 1
           fi
-          
-          echo "✅ Package downloaded and verified"
 
           # apk-tools resolves index entries by the canonical Alpine
           # filename "<name>-<version>.apk". basic-go names artifacts
@@ -589,46 +615,96 @@ jobs:
         id: blossom_upload
         shell: bash
         env:
-          BLOSSOM_SERVER: "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com"
+          # Blossom mirrors in preference order (canonical first). The firmware
+          # is uploaded to all of them; the step fails unless at least
+          # BLOSSOM_MIN_SUCCESS uploads succeed (content-addressed, so the
+          # sha256 is identical across mirrors).
+          BLOSSOM_SERVERS: "https://blossom.tollgate.me https://blossom.primal.net https://blossom1.orangesync.tech https://blossom2.orangesync.tech"
+          BLOSSOM_MIN_SUCCESS: "2"
           NSEC_HEX: ${{ secrets.NSEC }}
         run: |
-          # Upload file to Blossom using nak (redirect stdin from /dev/null to avoid pipe detection)
-          UPLOAD_RESPONSE=$(nak blossom upload --server "$BLOSSOM_SERVER" --sec "$NSEC_HEX" "${{ env.FIRMWARE_PATH }}" < /dev/null)
-          
-          echo "Upload response:"
-          echo "$UPLOAD_RESPONSE"
-          
-          # Extract sha256 hash from JSON response
-          FILE_HASH=$(echo "$UPLOAD_RESPONSE" | jq -r '.sha256')
-          
-          if [ -z "$FILE_HASH" ] || [ "$FILE_HASH" = "null" ]; then
-            echo "❌ Failed to extract hash from upload response"
+          set -euo pipefail
+
+          # Upload to one server with retry + backoff (2s, 4s, 8s).
+          # Echoes the sha256 on success; non-zero exit on failure.
+          upload_to_server() {
+            local file="$1" server="$2"
+            local attempt=1 delay=2 resp hash
+            while [ $attempt -le 3 ]; do
+              if resp=$(nak blossom upload --server "$server" --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
+                hash=$(printf '%s' "$resp" | jq -r '.sha256 // empty' 2>/dev/null || echo "")
+                if [ -n "$hash" ] && [ "$hash" != "null" ]; then
+                  printf '%s' "$hash"
+                  return 0
+                fi
+              fi
+              echo "    attempt ${attempt} to ${server} failed; retrying in ${delay}s..." >&2
+              echo "    response: $resp" >&2
+              sleep $delay
+              delay=$((delay * 2))
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+
+          FILE="${{ env.FIRMWARE_PATH }}"
+          FILE_HASH=""
+          ok=0
+          URLS=()
+          for server in $BLOSSOM_SERVERS; do
+            if srv_hash=$(upload_to_server "$FILE" "$server"); then
+              ok=$((ok + 1))
+              if [ -z "$FILE_HASH" ]; then FILE_HASH="$srv_hash"; fi
+              if [ "$srv_hash" != "$FILE_HASH" ]; then
+                echo "    WARNING: ${server} returned ${srv_hash}, expected ${FILE_HASH}" >&2
+              fi
+              # .bin suffix so browsers save firmware with the correct extension;
+              # Blossom resolves by sha256 per BUD-01 and ignores the suffix.
+              URLS+=("$server/$srv_hash.bin")
+              echo "    ok: $server"
+            else
+              echo "    FAILED: $server (after retries)" >&2
+            fi
+          done
+
+          total=$(echo $BLOSSOM_SERVERS | wc -w)
+          if [ "$ok" -lt "$BLOSSOM_MIN_SUCCESS" ]; then
+            echo "❌ only ${ok} of ${total} blossom uploads succeeded (need >= ${BLOSSOM_MIN_SUCCESS})"
             exit 1
           fi
-          
-          # Construct Blossom URL with .bin suffix so browsers save the
-          # firmware with the correct extension (Blossom servers ignore the
-          # suffix and resolve by sha256 hash per BUD-01).
-          BLOSSOM_URL="$BLOSSOM_SERVER/$FILE_HASH.bin"
-          
-          echo "url=$BLOSSOM_URL" >> $GITHUB_OUTPUT
+
+          # urls is a multiline output (one mirror URL per line, canonical first).
           echo "hash=$FILE_HASH" >> $GITHUB_OUTPUT
-          echo "✅ Uploaded to Blossom: $BLOSSOM_URL"
+          {
+            echo "urls<<URLS_EOF"
+            printf '%s\n' "${URLS[@]}"
+            echo "URLS_EOF"
+          } >> $GITHUB_OUTPUT
+          echo "✅ Uploaded to ${ok}/${total} Blossom mirrors (hash $FILE_HASH)"
+          printf '   %s\n' "${URLS[@]}"
 
       - name: Publish Firmware NIP-94 Metadata
         id: publish_firmware
         shell: bash
         env:
-          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me wss://relay1.orangesync.tech wss://relay2.orangesync.tech"
           NSEC_HEX: ${{ secrets.NSEC }}
         run: |
           set -e  # Exit on any error
           
+          # One url tag per Blossom mirror (canonical first). The blob is
+          # content-addressed (x/ox = sha256), so every url serves the same
+          # bytes; consumers may fail over across them.
+          url_tags=()
+          while IFS= read -r u; do
+            [ -n "$u" ] && url_tags+=(--tag "url=$u")
+          done <<< "${{ steps.blossom_upload.outputs.urls }}"
+
           # Create NIP-94 event
           echo "Creating NIP-94 event..."
           nak event --sec "$NSEC_HEX" -k 1063 \
             -c "TollGate OS Firmware for ${{ matrix.device_id }} (${{ env.COMPRESSION_TYPE }} compression)" \
-            --tag url="${{ steps.blossom_upload.outputs.url }}" \
+            "${url_tags[@]}" \
             --tag m="application/octet-stream" \
             --tag x="${{ steps.blossom_upload.outputs.hash }}" \
             --tag ox="${{ steps.blossom_upload.outputs.hash }}" \
@@ -694,7 +770,7 @@ jobs:
         if: ${{ steps.publish_firmware.outputs.eventId != '' }}
         env:
           EVENT_ID: ${{ steps.publish_firmware.outputs.eventId }}
-          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me wss://relay1.orangesync.tech wss://relay2.orangesync.tech"
         run: |
           echo "Verifying event $EVENT_ID on relays..."
           FOUND=0
