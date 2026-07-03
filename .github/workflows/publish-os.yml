@@ -619,7 +619,7 @@ jobs:
           # is uploaded to all of them; the step fails unless at least
           # BLOSSOM_MIN_SUCCESS uploads succeed (content-addressed, so the
           # sha256 is identical across mirrors).
-          BLOSSOM_SERVERS: "https://blossom.tollgate.me https://blossom.primal.net https://blossom1.orangesync.tech https://blossom2.orangesync.tech"
+          BLOSSOM_SERVERS: "https://blossom.tollgate.me https://blossom.primal.net https://blossom1.orangesync.tech https://blossom2.orangesync.tech https://blossom.psbt.me https://drive.cashu.email"
           BLOSSOM_MIN_SUCCESS: "2"
           NSEC_HEX: ${{ secrets.NSEC }}
         run: |
