@@ -1,0 +1,355 @@
+name: Build OpenWRT Firmware (Simplified)
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: 'Override OpenWRT version (leave empty for latest)'
+        required: false
+        type: string
+  schedule:
+    - cron: '0 0 * * *'  # Run at midnight UTC every day
+
+jobs:
+  # Step 1: Determine the OpenWRT version to use
+  check-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      openwrt_version: ${{ steps.get-version.outputs.version }}
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      # Set version based on run type and available overrides
+      - name: Get OpenWRT version
+        id: get-version
+        run: |
+          # Start with hardcoded stable version as default
+          OPENWRT_VERSION="23.05.5"
+          
+          # Check for manual override
+          if [ -n "${{ github.event.inputs.openwrt_version }}" ]; then
+            OPENWRT_VERSION="${{ github.event.inputs.openwrt_version }}"
+            echo "Using manual override version: $OPENWRT_VERSION"
+          fi
+          
+          # Output the final VERSION
+          echo "version=$OPENWRT_VERSION" >> $GITHUB_OUTPUT
+          echo "🔧 Using OpenWRT version: $OPENWRT_VERSION"
+
+  # Step 2: Build firmware for each router model
+  build:
+    needs: [check-versions]
+    strategy:
+      matrix:
+        model: [
+          # D-Link models
+          'dlink_covr-x1860-a1',
+          
+          # GL.iNet models
+          'glinet_gl-mt3000',
+          'glinet_gl-mt6000',
+          'glinet_gl-ar300m-nand'
+        ]
+      fail-fast: true
+      max-parallel: 1
+
+    runs-on: ubuntu-latest
+    name: Build ${{ matrix.model }}
+    env:
+      # Default packages to include in all firmware builds
+      BASE_PACKAGES: >-
+        base-files busybox ca-bundle dnsmasq dropbear firewall4 fstools 
+        kmod-gpio-button-hotplug kmod-leds-gpio kmod-nft-offload libc libgcc 
+        libustream-mbedtls logd mtd netifd nftables odhcp6c opkg ppp 
+        ppp-mod-pppoe procd procd-seccomp procd-ujail swconfig uci 
+        uclient-fetch urandom-seed urngd openssh-sftp-server nodogsplash
+      # Nostr relay configuration
+      NOSTR_RELAYS: 'wss://relay.damus.io,wss://nos.lol,wss://nostr.mom'
+      # Default removed packages
+      REMOVED_PACKAGES: -odhcpd -odhcpd-ipv6only -wpad-basic-wolfssl -wpad-basic-mbedtls -wpad-mini
+      # Force flag to bypass distutils check on newer Ubuntu runners
+      FORCE: 1
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Set up Python for package operations
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      # Install critical build dependencies first
+      - name: Install Critical Build Dependencies
+        run: |
+          echo "📦 Installing critical build dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y gawk build-essential curl zstd libssl-dev jq
+          python -m pip install setuptools nostr
+      
+      # Use the openwrt-info action to get router details
+      - name: Get Router Info
+        id: router-info
+        uses: ./actions/openwrt-info
+        with:
+          router_id: ${{ matrix.model }}
+          openwrt_version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      - name: Set Build Variables
+        id: vars
+        run: |
+          # Extract target and split into platform/type
+          TARGET="${{ steps.router-info.outputs.target }}"
+          PLATFORM=$(echo "$TARGET" | cut -d'/' -f1)
+          TYPE=$(echo "$TARGET" | cut -d'/' -f2)
+          PROFILE="${{ matrix.model }}"
+          
+          # Create build directory
+          BUILDDIR="/tmp/openwrt-build"
+          sudo mkdir -p $BUILDDIR
+          sudo chown $USER:$USER $BUILDDIR
+          
+          # Define the imagebuilder name
+          if [ "${PLATFORM}" = "ath79" ] && [ "${TYPE}" = "nand" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-ath79-nand.Linux-x86_64"
+          else
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}.Linux-x86_64"
+          fi
+          
+          # For snapshots, always use tar.zst, otherwise use tar.xz for stable versions
+          if [ "${{ needs.check-versions.outputs.openwrt_version }}" = "snapshot" ]; then
+            IMAGEBUILDER_NAME="openwrt-imagebuilder-${PLATFORM}-${TYPE}.Linux-x86_64"
+            DOWNLOAD_URL="https://downloads.openwrt.org/snapshots/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.zst"
+            ARCHIVE_EXT="tar.zst"
+          else
+            DOWNLOAD_URL="https://downloads.openwrt.org/releases/${{ needs.check-versions.outputs.openwrt_version }}/targets/${PLATFORM}/${TYPE}/${IMAGEBUILDER_NAME}.tar.xz"
+            ARCHIVE_EXT="tar.xz"
+          fi
+          
+          # Get architecture from router-info
+          ARCH_PACKAGES="${{ steps.router-info.outputs.arch_packages }}"
+          
+          # Map to Blossom architecture using architecture_mapping.json
+          ARCH_MAPPING_PATH="./files/etc/tollgate/architecture_mapping.json"
+          if [ -f "${ARCH_MAPPING_PATH}" ]; then
+            # First try direct mapping from architecture name
+            BLOSSOM_ARCH=$(jq -r --arg arch "${ARCH_PACKAGES}" '.mappings[$arch] // ""' "${ARCH_MAPPING_PATH}")
+            
+            # If not found, use platform mapping
+            if [ -z "${BLOSSOM_ARCH}" ] || [ "${BLOSSOM_ARCH}" = "null" ]; then
+              PLATFORM_TYPE="${PLATFORM}_${TYPE}"
+              BLOSSOM_ARCH=$(jq -r --arg platform "${PLATFORM_TYPE}" '.platform_mappings[$platform] // .default' "${ARCH_MAPPING_PATH}")
+            fi
+          else
+            # Fallback mapping if file not found
+            case "${ARCH_PACKAGES}" in
+              "mipsel_24kc") BLOSSOM_ARCH="mips_24kc" ;;
+              *) BLOSSOM_ARCH="${ARCH_PACKAGES}" ;;
+            esac
+          fi
+          
+          # Parse device packages
+          DEVICE_PACKAGES=$(echo "${{ steps.router-info.outputs.device_packages }}" | tr ',' ' ')
+          
+          # Special case for U-Boot config
+          if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
+            DEVICE_PACKAGES="uboot-envtools ${DEVICE_PACKAGES}"
+          fi
+          
+          # Set cache key for imagebuilder
+          CACHE_KEY="openwrt-v2-${{ needs.check-versions.outputs.openwrt_version }}-${PLATFORM}-${TYPE}"
+          
+          # Export all variables
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
+          echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+          echo "TYPE=$TYPE" >> $GITHUB_ENV
+          echo "PROFILE=$PROFILE" >> $GITHUB_ENV
+          echo "BUILDDIR=$BUILDDIR" >> $GITHUB_ENV
+          echo "IMAGEBUILDER_NAME=$IMAGEBUILDER_NAME" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+          echo "ARCHIVE_EXT=$ARCHIVE_EXT" >> $GITHUB_ENV
+          echo "BLOSSOM_ARCH=$BLOSSOM_ARCH" >> $GITHUB_ENV
+          echo "DEVICE_PACKAGES=$DEVICE_PACKAGES" >> $GITHUB_ENV
+          echo "CACHE_KEY=$CACHE_KEY" >> $GITHUB_ENV
+      
+      # Try to restore from cache
+      - name: Restore ImageBuilder Setup from Cache
+        id: cache-imagebuilder
+        uses: actions/cache/restore@v3
+        with:
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}-setup-complete
+      
+      # Download and Extract ImageBuilder if cache miss
+      - name: Download and Extract ImageBuilder
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        run: |
+          cd $BUILDDIR
+          
+          echo "🔄 Downloading OpenWRT ImageBuilder from $DOWNLOAD_URL"
+          curl -L -O "$DOWNLOAD_URL"
+          
+          echo "📦 Extracting OpenWRT ImageBuilder"
+          if [[ "$ARCHIVE_EXT" == "tar.zst" ]]; then
+            tar --zstd -xf "$(basename $DOWNLOAD_URL)"
+          else
+            tar xfJ "$(basename $DOWNLOAD_URL)"
+          fi
+          
+          if [ ! -d "$IMAGEBUILDER_NAME" ]; then
+            echo "❌ Failed to extract ImageBuilder"
+            exit 1
+          fi
+
+      # Setup Custom Files and Packages
+      - name: Setup Custom Files and Packages
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        run: |
+          # Copy files directory
+          mkdir -p $BUILDDIR/$IMAGEBUILDER_NAME/files
+          cp -r ./files/* $BUILDDIR/$IMAGEBUILDER_NAME/files/
+          
+          # Create packages directory
+          PACKAGES_DIR="$BUILDDIR/$IMAGEBUILDER_NAME/packages/local"
+          mkdir -p "$PACKAGES_DIR"
+          
+          # Add U-Boot config for supported devices
+          if [[ "${{ matrix.model }}" == *"gl-mt3000"* || "${{ matrix.model }}" == *"gl-mt6000"* ]]; then
+            mkdir -p $BUILDDIR/$IMAGEBUILDER_NAME/files/etc
+            echo "/dev/mtd1 0x0 0x1000 0x10000" > $BUILDDIR/$IMAGEBUILDER_NAME/files/etc/fw_env.config
+          fi
+          
+          # Download TollGate packages
+          touch "$PACKAGES_DIR/Packages"
+          
+          DOWNLOADED_PACKAGES=""
+          for MODULE_NAME in $(jq -r '.modules[].name' files/etc/tollgate/release.json); do
+            PACKAGE_URL=$(jq -r --arg module "$MODULE_NAME" --arg arch "$BLOSSOM_ARCH" \
+              '.modules[] | select(.name == $module) | .versions[0].architectures[$arch].url' \
+              files/etc/tollgate/release.json)
+            
+            if [[ -n "$PACKAGE_URL" && "$PACKAGE_URL" != "null" && "$PACKAGE_URL" != *"[HASH]"* ]]; then
+              echo "⬇️ Downloading $MODULE_NAME from $PACKAGE_URL"
+              
+              if curl -L -f --connect-timeout 30 --max-time 60 -o "$PACKAGES_DIR/${MODULE_NAME}-${BLOSSOM_ARCH}.ipk" "$PACKAGE_URL"; then
+                DOWNLOADED_PACKAGES="${DOWNLOADED_PACKAGES} ${MODULE_NAME}"
+              fi
+            fi
+          done
+          
+          echo "TOLLGATE_PACKAGES=$DOWNLOADED_PACKAGES" >> $GITHUB_ENV
+          echo "PACKAGES_DIR=$PACKAGES_DIR" >> $GITHUB_ENV
+
+      # Generate Package Index
+      - name: Generate Package Index
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        run: |
+          cd $BUILDDIR/$IMAGEBUILDER_NAME
+          sudo bash -c '
+            mkhash() { 
+              if [ "$1" = "sha256" ]; then 
+                sha256sum "$2" | cut -d" " -f1
+              else 
+                sha256sum "$1" | cut -d" " -f1
+              fi 
+            }
+            export -f mkhash
+            export MKHASH=mkhash
+            ./scripts/ipkg-make-index.sh packages/local > packages/local/Packages
+            gzip -9c packages/local/Packages > packages/local/Packages.gz
+          '
+      
+      # Save the setup to cache
+      - name: Save ImageBuilder Setup to Cache
+        if: steps.cache-imagebuilder.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.BUILDDIR }}
+          key: ${{ env.CACHE_KEY }}-setup-complete
+
+      # Build firmware with all packages
+      - name: Build Firmware
+        id: build
+        run: |
+          cd $BUILDDIR/$IMAGEBUILDER_NAME
+          
+          # Combine all packages
+          COMBINED_PACKAGES="${REMOVED_PACKAGES} ${BASE_PACKAGES} ${DEVICE_PACKAGES} ${TOLLGATE_PACKAGES}"
+          
+          echo "📦 Building firmware with packages: $COMBINED_PACKAGES"
+          
+          make image PROFILE="$PROFILE" \
+            PACKAGES="$COMBINED_PACKAGES" \
+            FILES="$BUILDDIR/$IMAGEBUILDER_NAME/files" \
+            FORCE=1
+          
+          # Check if build succeeded
+          if find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | grep -q .; then
+            echo "✅ Build succeeded!"
+            FIRMWARE_PATH=$(find bin/targets/$PLATFORM/$TYPE/ -name "*sysupgrade*.bin" | head -1)
+            FIRMWARE_NAME=$(basename $FIRMWARE_PATH)
+            
+            # Calculate firmware hash and size
+            FIRMWARE_HASH=$(sha256sum "$FIRMWARE_PATH" | cut -d' ' -f1)
+            FIRMWARE_SIZE=$(stat -c%s "$FIRMWARE_PATH")
+            
+            echo "firmware_path=$FIRMWARE_PATH" >> $GITHUB_OUTPUT
+            echo "firmware_name=$FIRMWARE_NAME" >> $GITHUB_OUTPUT
+            echo "firmware_hash=$FIRMWARE_HASH" >> $GITHUB_OUTPUT
+            echo "firmware_size=$FIRMWARE_SIZE" >> $GITHUB_OUTPUT
+            
+            echo "FIRMWARE_HASH=$FIRMWARE_HASH" >> $GITHUB_ENV
+            echo "FIRMWARE_SIZE=$FIRMWARE_SIZE" >> $GITHUB_ENV
+          else
+            echo "❌ Build failed"
+            exit 1
+          fi
+
+      # Save firmware as artifact
+      - name: Save Firmware as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.model }}
+          path: ${{ steps.build.outputs.firmware_path }}
+          retention-days: 10
+
+      # Upload firmware to Blossom
+      - name: Upload Firmware to Blossom
+        id: upload_firmware
+        uses: c03rad0r/cli-blossom-uploader-go@main
+        with:
+          host: "https://blossom.swissdash.site"
+          filePath: ${{ steps.build.outputs.firmware_path }}
+          nostrPrivateKey: ${{ secrets.NSECBECH }}
+
+      # Publish firmware metadata
+      - name: Publish Firmware NIP-94 Metadata
+        id: publish_firmware
+        uses: OpenTollGate/nostr-publish-file-metadata-action/python@main
+        with:
+          relays: ${{ env.NOSTR_RELAYS }}
+          url: ${{ steps.upload_firmware.outputs.url }}
+          mimeType: "application/octet-stream"
+          fileHash: ${{ steps.upload_firmware.outputs.hash }}
+          originalHash: ${{ env.FIRMWARE_HASH }}
+          filename: ${{ steps.build.outputs.firmware_name }}
+          content: "TollGate OS Firmware for ${{ matrix.model }}"
+          nsec: ${{ secrets.NSEC }}
+          size: ${{ env.FIRMWARE_SIZE }}
+          architecture: ${{ env.BLOSSOM_ARCH }}
+          model: ${{ matrix.model }}
+          version: ${{ needs.check-versions.outputs.openwrt_version }}
+      
+      # Verify publication
+      - name: Verify Firmware Publication
+        id: verify_firmware
+        uses: OpenTollGate/nostr-publish-file-metadata-action/python/verify@main
+        with:
+          eventId: ${{ steps.publish_firmware.outputs.eventId }}
+          relays: ${{ env.NOSTR_RELAYS }}

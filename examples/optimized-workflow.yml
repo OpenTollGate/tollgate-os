@@ -1,0 +1,73 @@
+name: 'Optimized Router Data Workflow'
+description: 'Example workflow using the optimized router data management system'
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'OpenWRT version to use'
+        required: true
+        default: '23.05.5'
+      router-id:
+        description: 'Router ID to look up (e.g., glinet_gl-mt3000)'
+        required: true
+
+jobs:
+  router-lookup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 1: Fetch the overview data only once
+      - name: Fetch OpenWRT overview
+        id: fetch-overview
+        uses: ./actions/manage-router-data
+        with:
+          operation: 'fetch-overview'
+          version: ${{ github.event.inputs.version }}
+      
+      # Step 2: Generate the unified router database 
+      - name: Generate Router Database
+        id: generate-db
+        uses: ./actions/manage-router-data
+        with:
+          operation: 'generate-database'
+          version: ${{ github.event.inputs.version }}
+      
+      # Step 3: Look up the specific router (now using the efficient database)
+      - name: Look up Router
+        id: lookup
+        uses: ./actions/manage-router-data
+        with:
+          operation: 'lookup-router'
+          version: ${{ github.event.inputs.version }}
+          router-id: ${{ github.event.inputs.router-id }}
+      
+      # Step 4: Only fetch the specific profile we need
+      - name: Fetch Router Profile
+        id: fetch-profile
+        if: steps.lookup.outputs.found == 'true'
+        uses: ./actions/manage-router-data
+        with:
+          operation: 'fetch-profiles'
+          version: ${{ github.event.inputs.version }}
+          platform: ${{ steps.lookup.outputs.target }}
+      
+      # Output the results
+      - name: Display Router Information
+        if: steps.lookup.outputs.found == 'true'
+        run: |
+          echo "Router Information:"
+          echo "-------------------"
+          echo "ID:           ${{ github.event.inputs.router-id }}"
+          echo "Name:         ${{ steps.lookup.outputs.full-name }}"
+          echo "Vendor:       ${{ steps.lookup.outputs.vendor }}"
+          echo "Model:        ${{ steps.lookup.outputs.model }}"
+          echo "Target:       ${{ steps.lookup.outputs.target }}"
+          echo "Devices in target platform: ${{ steps.fetch-profile.outputs.device-count }}"
+          echo ""
+          echo "Router data available in:"
+          echo "Database:     ${{ steps.generate-db.outputs.database-path }}"
+          echo "CSV:          ${{ steps.generate-db.outputs.csv-path }}"
+          echo "Profile:      ${{ steps.fetch-profile.outputs.profile-path }}"
