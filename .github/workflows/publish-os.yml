@@ -541,6 +541,8 @@ jobs:
             --tag c="${{ needs.determine-versioning.outputs.release_channel }}" \
             --tag n="tollgate-os" \
             --tag compression="${{ env.COMPRESSION_TYPE }}" \
+            --tag t="tollgate" \
+            --tag t="tollgate-os" \
             > event.json 2> event.err
           
           NAK_EXIT=$?
