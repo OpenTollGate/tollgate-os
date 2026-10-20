@@ -2,6 +2,9 @@
   "packages": {
     "tollgate-wrt": {
       "author": "5075e61f0b048148b60105c1dd72bbeae1957336ae5824087e52efa374f8416a",
+      "author_fallbacks": [
+        "6cfc53c04bda7d58dd4dd0471d66f6a4ea7d3e123e78006e0e0c1abc1208ac0d"
+      ],
       "version": "v0.3.2",
       "compression": "none"
     }

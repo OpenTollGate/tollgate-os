@@ -42,7 +42,7 @@ jobs:
       - id: set-matrix
         shell: bash
         env:
-          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+          RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay2.orangesync.tech"
         run: |
           # Set GITHUB_OUTPUT to a temp file if not running in GitHub Actions
           : ${GITHUB_OUTPUT:=/tmp/github_output}
@@ -52,9 +52,18 @@ jobs:
           
           echo "ℹ️ Discovering available packages for version $PACKAGE_VERSION"
           
-          # Fetch all packages for this version and author
+          # Author resolution: the pinned author signed releases until org-wide
+          # GitHub Actions died on 2026-08-27; the ngit-ci release lane signs
+          # with a different key (packages.json author_fallbacks). Query all of
+          # them — an event signed by EITHER key is a valid package source.
+          AUTHOR_ARGS=()
+          for a in "$PACKAGE_AUTHOR" $(jq -r '.packages."tollgate-wrt".author_fallbacks[]?' packages.json); do
+            AUTHOR_ARGS+=(-a "$a")
+          done
+          
+          # Fetch all packages for this version and author(s)
           EVENTS=$(nak req -k 1063 \
-            -a "$PACKAGE_AUTHOR" \
+            "${AUTHOR_ARGS[@]}" \
             --tag n=tollgate-wrt \
             --tag v="$PACKAGE_VERSION" \
             $RELAYS | jq -s '.')
